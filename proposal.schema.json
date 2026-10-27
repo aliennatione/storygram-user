@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storygram.local/schema/proposal.schema.json",
+  "title": "Storygram Proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "status", "created_at", "updated_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^proposal:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "type": {"const": "Proposal"},
+    "status": {"type": "string", "enum": ["draft", "proposed", "under_review", "approved", "rejected", "merged", "archived"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "target_ids": {"type": "array", "items": {"type": "string"}},
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "rationale": {"type": "string"},
+    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "approval_state": {"type": "string"},
+    "notes": {"type": "string"}
+  }
+}

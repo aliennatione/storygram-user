@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storygram.local/schema/organization.schema.json",
+  "title": "Storygram Organization",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "status", "created_at", "updated_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^organization:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "type": {"const": "Organization"},
+    "name": {"type": "string"},
+    "status": {"type": "string", "enum": ["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "visibility": {"type": "string", "enum": ["private", "restricted", "family", "public"]},
+    "notes": {"type": "string"}
+  }
+}

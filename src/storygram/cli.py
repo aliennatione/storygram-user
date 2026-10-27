@@ -321,3 +321,23 @@ def conflicts(status: str | None, as_json: bool):
             click.echo(f"{c.get('id')} [{c.get('status')}]")
         if not res:
             click.echo("[]")
+
+
+@main.command()
+@click.option("--format", "fmt", type=click.Choice(["json", "jsonld"]), default="json")
+@click.option("--visibility", multiple=True, help="Filter by visibility")
+@click.option("--json", "as_json", is_flag=True)
+def export(fmt: str, visibility: tuple, as_json: bool):
+    from . import export as export_mod
+
+    vis = set(visibility) if visibility else None
+    root = Path.cwd()
+    if fmt == "jsonld":
+        res = export_mod.export_jsonld(root, vis)
+        click.echo(json.dumps(res, indent=2))
+    else:
+        res = export_mod.export_json(root, vis)
+        if as_json or fmt == "json":
+            click.echo(json.dumps(res, indent=2))
+        else:
+            click.echo(json.dumps(res, indent=2))

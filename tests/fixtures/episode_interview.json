@@ -1,0 +1,15 @@
+{
+  "id": "episode:interview_01",
+  "type": "Episode",
+  "episode_type": "interview",
+  "title": "Interview with Mario Rossi",
+  "description": "Oral history interview.",
+  "status": "reported",
+  "created_at": "2026-10-07T10:00:00+02:00",
+  "updated_at": "2026-10-07T10:00:00+02:00",
+  "captured_at": "2026-01-12",
+  "participants": ["person:mario_rossi"],
+  "source_ids": ["source:interview_transcript_01"],
+  "visibility": "family",
+  "tags": ["oral-history", "family"]
+}

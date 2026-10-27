@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storygram.local/schema/episode.schema.json",
+  "title": "Storygram Episode",
+  "description": "An immutable or append-only information-bearing capture or import. An Episode is not automatically a fact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "episode_type", "status", "created_at", "updated_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^episode:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "type": {"const": "Episode"},
+    "episode_type": {"type": "string", "enum": ["interview", "memory", "letter", "photograph", "audio", "video", "document", "observation", "import", "narrative_revision", "other"]},
+    "title": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "status": {"type": "string", "enum": ["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]},
+    "created_at": {"$ref": "#/$defs/dateTime"},
+    "updated_at": {"$ref": "#/$defs/dateTime"},
+    "captured_at": {"$ref": "#/$defs/dateTimeOrDate"},
+    "captured_until": {"$ref": "#/$defs/dateTimeOrDate"},
+    "recorded_by": {"$ref": "#/$defs/entityRef"},
+    "created_by": {"$ref": "#/$defs/entityRef"},
+    "participants": {"type": "array", "items": {"$ref": "#/$defs/entityRef"}, "uniqueItems": true},
+    "source_ids": {"type": "array", "items": {"$ref": "#/$defs/sourceRef"}, "uniqueItems": true},
+    "media_asset_ids": {"type": "array", "items": {"$ref": "#/$defs/mediaRef"}, "uniqueItems": true},
+    "transcript_id": {"$ref": "#/$defs/sourceRef"},
+    "content": {"type": "object", "additionalProperties": false, "properties": {"text": {"type": "string"}, "uri": {"type": "string", "minLength": 1}, "mime_type": {"type": "string"}}},
+    "checksum": {"type": "object", "additionalProperties": false, "required": ["algorithm", "value"], "properties": {"algorithm": {"const": "sha256"}, "value": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"}}},
+    "visibility": {"type": "string", "enum": ["private", "restricted", "family", "public"]},
+    "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "supersedes": {"type": "array", "items": {"$ref": "#/$defs/episodeRef"}, "uniqueItems": true},
+    "notes": {"type": "string"}
+  },
+  "$defs": {
+    "dateTime": {"type": "string", "format": "date-time"},
+    "dateTimeOrDate": {"type": "string", "anyOf": [{"format": "date-time"}, {"format": "date"}, {"pattern": "^[0-9]{4}$"}]},
+    "entityRef": {"type": "string", "pattern": "^(person|organization|place|period|event|relationship|source|media|episode|assertion|annotation|narrative|collection|proposal):[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "sourceRef": {"type": "string", "pattern": "^source:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "mediaRef": {"type": "string", "pattern": "^media:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "episodeRef": {"type": "string", "pattern": "^episode:[A-Za-z0-9][A-Za-z0-9._~-]*$"}
+  }
+}

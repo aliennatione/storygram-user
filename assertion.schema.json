@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storygram.local/schema/assertion.schema.json",
+  "title": "Storygram Assertion",
+  "description": "A proposition about Storygram entities, events or relationships, with evidence and bitemporal metadata.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "subject", "predicate", "status", "transaction_time", "created_at", "updated_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^assertion:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "type": {"const": "Assertion"},
+    "subject": {"$ref": "#/$defs/entityRef"},
+    "predicate": {"type": "string", "pattern": "^relation:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "object": {"$ref": "#/$defs/entityRef"},
+    "value": {},
+    "status": {"type": "string", "enum": ["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "superseded", "archived"]},
+    "certainty": {"type": "string", "enum": ["unknown", "possible", "probable", "reported", "confirmed", "disputed", "rejected"]},
+    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "source_quality": {"type": "string", "enum": ["unknown", "low", "medium", "high"]},
+    "valid_time": {"$ref": "#/$defs/validTime"},
+    "transaction_time": {"$ref": "#/$defs/transactionTime"},
+    "asserted_by": {"type": "array", "items": {"$ref": "#/$defs/entityRef"}, "uniqueItems": true},
+    "produced_by": {"type": "array", "items": {"$ref": "#/$defs/episodeRef"}, "uniqueItems": true},
+    "supported_by": {"type": "array", "items": {"$ref": "#/$defs/sourceRef"}, "uniqueItems": true},
+    "annotations": {"type": "array", "items": {"$ref": "#/$defs/annotationRef"}, "uniqueItems": true},
+    "supersedes": {"type": "array", "items": {"$ref": "#/$defs/assertionRef"}, "uniqueItems": true},
+    "revises": {"type": "array", "items": {"$ref": "#/$defs/assertionRef"}, "uniqueItems": true},
+    "contradicts": {"type": "array", "items": {"$ref": "#/$defs/assertionRef"}, "uniqueItems": true},
+    "corroborates": {"type": "array", "items": {"$ref": "#/$defs/assertionRef"}, "uniqueItems": true},
+    "review": {"type": "object", "additionalProperties": false, "properties": {"reviewer": {"$ref": "#/$defs/entityRef"}, "reviewed_at": {"type": "string", "format": "date-time"}, "rationale": {"type": "string"}, "decision": {"type": "string"}}},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "visibility": {"type": "string", "enum": ["private", "restricted", "family", "public"]},
+    "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "notes": {"type": "string"}
+  },
+  "$defs": {
+    "entityRef": {"type": "string", "pattern": "^(person|organization|place|period|event|relationship|source|media|episode|assertion|annotation|narrative|collection|proposal):[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "sourceRef": {"type": "string", "pattern": "^source:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "episodeRef": {"type": "string", "pattern": "^episode:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "assertionRef": {"type": "string", "pattern": "^assertion:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "annotationRef": {"type": "string", "pattern": "^annotation:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "validTime": {"type": "object", "additionalProperties": false, "properties": {"start": {"type": "string"}, "end": {"type": "string"}, "precision": {"type": "string", "enum": ["day", "month", "year", "decade", "approximate", "unknown"]}, "expression": {"type": "string"}, "calendar": {"type": "string"}}},
+    "transactionTime": {"type": "object", "additionalProperties": false, "required": ["recorded_at"], "properties": {"recorded_at": {"type": "string", "format": "date-time"}, "recorded_until": {"type": ["string", "null"], "format": "date-time"}}}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "superseded"}}}, "then": {"required": ["supersedes"]}},
+    {"if": {"properties": {"object": {"const": null}}}, "then": {"required": ["value"]}}
+  ]
+}

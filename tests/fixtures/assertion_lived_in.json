@@ -1,0 +1,24 @@
+{
+  "id": "assertion:01",
+  "type": "Assertion",
+  "subject": "person:mario_rossi",
+  "predicate": "relation:lived_in",
+  "object": "place:brescia",
+  "status": "reported",
+  "certainty": "reported",
+  "confidence": "medium",
+  "valid_time": {
+    "start": "1987",
+    "end": "1995",
+    "precision": "year"
+  },
+  "transaction_time": {
+    "recorded_at": "2026-01-12T16:00:00+01:00",
+    "recorded_until": null
+  },
+  "produced_by": ["episode:interview_01"],
+  "supported_by": ["source:interview_transcript_01"],
+  "created_at": "2026-01-12T16:00:00+01:00",
+  "updated_at": "2026-01-12T16:00:00+01:00",
+  "visibility": "family"
+}

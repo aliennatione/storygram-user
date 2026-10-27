@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storygram.local/schema/narrative.schema.json",
+  "title": "Storygram Narrative",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "status", "created_at", "updated_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^narrative:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "type": {"const": "Narrative"},
+    "status": {"type": "string", "enum": ["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "author": {"type": "string"},
+    "language": {"type": "string"},
+    "perspective": {"type": "string"},
+    "related_ids": {"type": "array", "items": {"type": "string"}},
+    "source_ids": {"type": "array", "items": {"type": "string", "pattern": "^source:[A-Za-z0-9][A-Za-z0-9._~-]*$"}},
+    "content_location": {"type": "string"},
+    "visibility": {"type": "string", "enum": ["private", "restricted", "family", "public"]},
+    "notes": {"type": "string"}
+  }
+}

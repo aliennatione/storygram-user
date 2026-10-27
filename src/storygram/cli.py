@@ -200,3 +200,51 @@ def export(fmt: str, as_json: bool):
         click.echo("[]")
     else:
         click.echo("{}")
+
+
+@main.command()
+@click.argument("base", required=False)
+@click.option("--json", "as_json", is_flag=True)
+def git_check_cmd(base: str | None, as_json: bool):
+    """Check git changes for invalid canonical data."""
+    from . import gitcheck
+
+    result = gitcheck.git_check(Path.cwd(), base)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        if result["ok"]:
+            click.echo("OK")
+        else:
+            click.echo("INVALID")
+            for err in result.get("errors", []):
+                click.echo(f"- {err}")
+        if result.get("warnings"):
+            for w in result.get("warnings", []):
+                click.echo(f"WARNING: {w}")
+    if not result["ok"]:
+        sys.exit(1)
+
+
+# Alias
+@main.command(name="git-check")
+@click.argument("base", required=False)
+@click.option("--json", "as_json", is_flag=True)
+def git_check_alias(base: str | None, as_json: bool):
+    from . import gitcheck
+
+    result = gitcheck.git_check(Path.cwd(), base)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        if result["ok"]:
+            click.echo("OK")
+        else:
+            click.echo("INVALID")
+            for err in result.get("errors", []):
+                click.echo(f"- {err}")
+        if result.get("warnings"):
+            for w in result.get("warnings", []):
+                click.echo(f"WARNING: {w}")
+    if not result["ok"]:
+        sys.exit(1)

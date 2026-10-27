@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storygram.local/schema/source.schema.json",
+  "title": "Storygram Source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "title", "status", "created_at", "updated_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^source:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "type": {"const": "Source"},
+    "title": {"type": "string", "minLength": 1},
+    "source_type": {"type": "string", "enum": ["oral", "written", "archival", "registry", "photograph", "audio", "video", "website", "other"]},
+    "status": {"type": "string", "enum": ["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "visibility": {"type": "string", "enum": ["private", "restricted", "family", "public"]},
+    "notes": {"type": "string"}
+  }
+}

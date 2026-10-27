@@ -200,3 +200,144 @@ def export(fmt: str, as_json: bool):
         click.echo("[]")
     else:
         click.echo("{}")
+
+
+@main.command()
+@click.argument("base", required=False)
+@click.option("--json", "as_json", is_flag=True)
+def git_check_cmd(base: str | None, as_json: bool):
+    """Check git changes for invalid canonical data."""
+    from . import gitcheck
+
+    result = gitcheck.git_check(Path.cwd(), base)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        if result["ok"]:
+            click.echo("OK")
+        else:
+            click.echo("INVALID")
+            for err in result.get("errors", []):
+                click.echo(f"- {err}")
+        if result.get("warnings"):
+            for w in result.get("warnings", []):
+                click.echo(f"WARNING: {w}")
+    if not result["ok"]:
+        sys.exit(1)
+
+
+# Alias
+@main.command(name="git-check")
+@click.argument("base", required=False)
+@click.option("--json", "as_json", is_flag=True)
+def git_check_alias(base: str | None, as_json: bool):
+    from . import gitcheck
+
+    result = gitcheck.git_check(Path.cwd(), base)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        if result["ok"]:
+            click.echo("OK")
+        else:
+            click.echo("INVALID")
+            for err in result.get("errors", []):
+                click.echo(f"- {err}")
+        if result.get("warnings"):
+            for w in result.get("warnings", []):
+                click.echo(f"WARNING: {w}")
+    if not result["ok"]:
+        sys.exit(1)
+
+
+@main.command()
+@click.argument("path", type=click.Path(exists=True), required=False)
+@click.option("--json", "as_json", is_flag=True)
+def rebuild(path: str | None, as_json: bool):  # override
+    root = Path(path) if path else Path.cwd()
+    (root / "generated").mkdir(parents=True, exist_ok=True)
+    from . import index
+
+    index.build_index(root)
+    click.echo("Rebuilt derived views")
+
+
+@main.command()
+@click.argument("query")
+@click.option("--json", "as_json", is_flag=True)
+def search(query: str, as_json: bool):  # override
+    from . import index
+
+    results = index.search(Path.cwd(), query)
+    if as_json:
+        click.echo(json.dumps(results, indent=2))
+    else:
+        for r in results:
+            click.echo(f"{r['id']} [{r['type']}]")
+        if not results:
+            click.echo("[]")
+
+
+@main.command()
+@click.argument("id")
+@click.option("--json", "as_json", is_flag=True)
+def timeline(id: str, as_json: bool):  # override
+    from .timeline import build_timeline
+
+    res = build_timeline(Path.cwd(), id)
+    if as_json:
+        click.echo(json.dumps(res, indent=2))
+    else:
+        if not res:
+            click.echo("Timeline not found")
+        else:
+            click.echo(json.dumps(res, indent=2))
+
+
+@main.command()
+@click.argument("id")
+@click.option("--json", "as_json", is_flag=True)
+def genogram(id: str, as_json: bool):
+    from .genogram import build_genogram
+
+    res = build_genogram(Path.cwd(), id)
+    if as_json:
+        click.echo(json.dumps(res, indent=2))
+    else:
+        click.echo(json.dumps(res, indent=2))
+
+
+@main.command()
+@click.option("--status", default=None)
+@click.option("--json", "as_json", is_flag=True)
+def conflicts(status: str | None, as_json: bool):
+    from .conflicts import list_conflicts
+
+    res = list_conflicts(Path.cwd(), status)
+    if as_json:
+        click.echo(json.dumps(res, indent=2))
+    else:
+        for c in res:
+            click.echo(f"{c.get('id')} [{c.get('status')}]")
+        if not res:
+            click.echo("[]")
+
+
+@main.command()
+@click.option("--format", "fmt", type=click.Choice(["json", "jsonld"]), default="json")
+@click.option("--visibility", multiple=True, help="Filter by visibility")
+@click.option("--json", "as_json", is_flag=True)
+def export(fmt: str, visibility: tuple, as_json: bool):
+    from . import export as export_mod
+
+    vis = set(visibility) if visibility else None
+    root = Path.cwd()
+    if fmt == "jsonld":
+        res = export_mod.export_jsonld(root, vis)
+        click.echo(json.dumps(res, indent=2))
+    else:
+        res = export_mod.export_json(root, vis)
+        if as_json or fmt == "json":
+            click.echo(json.dumps(res, indent=2))
+        else:
+            click.echo(json.dumps(res, indent=2))

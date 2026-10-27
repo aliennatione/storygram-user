@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storygram.local/schema/relationship.schema.json",
+  "title": "Storygram Relationship",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "status", "created_at", "updated_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^relationship:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "type": {"const": "Relationship"},
+    "status": {"type": "string", "enum": ["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "visibility": {"type": "string", "enum": ["private", "restricted", "family", "public"]},
+    "notes": {"type": "string"}
+  }
+}

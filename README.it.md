@@ -2,8 +2,6 @@
 
 Archivio locale, versionabile e interoperabile per episodi, fonti, persone, luoghi, eventi, relazioni, asserzioni, conflitti e narrazioni. Il nucleo funziona offline senza LLM.
 
-[English version](README.md)
-
 ## Struttura
 - `data/` - record canonici revisionati
 - `inbox/` - import non revisionati
@@ -17,11 +15,17 @@ Archivio locale, versionabile e interoperabile per episodi, fonti, persone, luog
 pip install -e ".[dev]"
 storygram init ./archive
 storygram validate ./archive
+PYTHONPATH=/data/src python -m pytest -v
 ```
+
+## Documentazione
+- [Documentazione inglese](docs/en/)
+- [Documentazione italiana](docs/it/)
+- [README (English)](README.md)
 
 ## Filosofia
 - Separazione tra episodio e fatto
-- Bitemporalità (valid time / transaction time)
+- Bitemporalità (`valid_time` / `transaction_time`)
 - Conflitti espliciti, mai risolti automaticamente
 - Storia delle correzioni preservata (supersession)
-- Funzionamento senza AI
+- Nucleo deterministico senza AI

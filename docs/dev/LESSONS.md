@@ -26,3 +26,7 @@
 - Generated proposals are normalized to `proposed` and get fresh timestamps, so a model cannot self-approve or backdate.
 - Unknown model fields are dropped before schema validation, keeping provider noise out of the proposal contract.
 - Ollama is called with `format: "json"` and `stream: false`; parsing still tolerates fenced JSON for other providers.
+- Installed wheels must not depend on `Path(__file__).parents[2]` alone for schemas; `$STORYGRAM_SCHEMA_DIR` makes packaged/container initialization reliable.
+- The container entrypoint initializes `/data` and Git only when needed, preserving existing archives and avoiding Docker-in-Docker requirements.
+- The entrypoint can be smoke-tested outside Docker with a temporary `$STORYGRAM_DATA_DIR` and an installed wheel; this verifies init, Git and idempotence without Docker.
+- Docker artifacts are intentionally not executed in this Alpine development container; validate runtime/volume behavior on a Docker-capable host.

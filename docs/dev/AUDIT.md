@@ -64,3 +64,28 @@ Close the adapter milestone, then update docs and package the tested surface wit
 2. Keep the default image offline-capable; Ollama belongs to an optional Compose profile.
 3. Re-run Python and browser checks inside the packaged setup.
 4. Update README/docs only with commands that were actually executed.
+
+## 2026-10-30 - final package and docs
+
+### Final objective
+
+Deliver a deterministic, local-first Storygram with proposal review, optional LLM generation that cannot self-apply, bilingual docs and a container path with optional local Ollama.
+
+### Current objective
+
+Package the tested surface without pretending Docker runtime was verified inside the Alpine development container.
+
+### Point of the situation
+
+- Proposal engine, CLI, web UI, Playwright flows and LLM adapter are implemented and tested.
+- Schema discovery now works for archive-local, repository, package and `$STORYGRAM_SCHEMA_DIR` layouts.
+- A wheel builds and initializes a fresh archive with 15 schemas.
+- Dockerfile, entrypoint and Compose files exist and pass static checks only; Docker was intentionally not run here.
+- Bilingual README/docs now describe the shipped workflow and clearly mark container runtime verification as pending.
+- Repository artifacts (`archive/`, session notes, `chatgpt.md`) remain untracked and outside the application.
+
+### Calibration
+
+1. Verify Docker on a capable host before calling the container deliverable verified.
+2. Keep the human approval gate and Ollama optionality intact in any packaging change.
+3. Do not broaden scope into editing/API work before the current documentation commit is complete.

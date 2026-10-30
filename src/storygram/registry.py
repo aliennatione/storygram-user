@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -169,21 +171,37 @@ def type_for_id(record_id: str) -> RecordType | None:
     return next((rt for rt in RECORD_TYPES if rt.id_prefix == prefix), None)
 
 
-def schema_paths(root: Any, record_type: RecordType) -> list[Any]:
+def schema_directories() -> list[Path]:
+    """Return schema directories outside the archive root."""
+    candidates = []
+    configured = os.environ.get("STORYGRAM_SCHEMA_DIR")
+    if configured:
+        candidates.append(Path(configured))
+    here = Path(__file__).resolve()
+    candidates.extend([here.parent / "schema", here.parents[2] / "schema", Path.cwd() / "schema"])
+    unique: list[Path] = []
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in unique:
+            unique.append(resolved)
+    return unique
+
+
+def schema_paths(root: Any, record_type: RecordType) -> list[Path]:
     """Return schema lookup paths for an archive root.
 
     Archives initialized by Storygram contain a local ``schema/`` directory.
-    Tests and ad-hoc archives may rely on the repository copy instead.
+    Tests and packaged/container deployments can use the repository, package or
+    ``STORYGRAM_SCHEMA_DIR`` copy instead.
     """
-    from pathlib import Path
-
     root_path = Path(root)
-    repo_schema = Path(__file__).resolve().parents[2] / "schema"
-    return [
-        root_path / "schema" / record_type.schema_file,
-        root_path / record_type.schema_file,
-        repo_schema / record_type.schema_file,
-    ]
+    paths = [root_path / "schema" / record_type.schema_file, root_path / record_type.schema_file]
+    paths.extend(directory / record_type.schema_file for directory in schema_directories())
+    return paths
+
+
+def find_schema(root: Any, record_type: RecordType) -> Path | None:
+    return next((path for path in schema_paths(root, record_type) if path.exists()), None)
 
 
 def iter_reference_strings(

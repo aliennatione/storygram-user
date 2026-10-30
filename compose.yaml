@@ -1,0 +1,25 @@
+name: storygram
+
+services:
+  storygram:
+    build: .
+    image: storygram:local
+    ports:
+      - "${STORYGRAM_PORT:-8080}:8080"
+    volumes:
+      - storygram-data:/data
+    environment:
+      STORYGRAM_OLLAMA_URL: "http://ollama:11434"
+      STORYGRAM_OLLAMA_MODEL: "${STORYGRAM_OLLAMA_MODEL:-llama3.2}"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["llm"]
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  storygram-data:
+  ollama-models:

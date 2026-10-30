@@ -13,7 +13,7 @@ import click
 from . import __version__
 from . import proposals as proposals_mod
 from . import validate as validate_mod
-from .registry import RECORD_TYPES, TYPE_BY_NAME, schema_paths
+from .registry import RECORD_TYPES, TYPE_BY_NAME, find_schema
 
 
 def _root(path: str | None) -> Path:
@@ -53,14 +53,13 @@ def init(path: str) -> None:
     for directory in ("inbox", "proposals", "generated", "media-manifest", "schema"):
         (root / directory).mkdir(parents=True, exist_ok=True)
 
-    repo_root = Path(__file__).resolve().parents[2]
     copied = 0
     for record_type in RECORD_TYPES:
-        for candidate in schema_paths(repo_root, record_type):
-            if candidate.exists():
-                shutil.copy(candidate, root / "schema" / record_type.schema_file)
-                copied += 1
-                break
+        destination = root / "schema" / record_type.schema_file
+        candidate = find_schema(root, record_type)
+        if candidate is not None and candidate.resolve() != destination.resolve():
+            shutil.copy(candidate, destination)
+            copied += 1
     click.echo(f"Initialized Storygram archive at {root} ({copied} schemas)")
 
 

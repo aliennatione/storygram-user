@@ -178,3 +178,13 @@ def test_generate_without_save_writes_nothing(tmp_path: Path, monkeypatch) -> No
 
     assert result.exit_code == 0, result.output
     assert not list((tmp_path / "proposals").glob("*.json"))
+
+
+def test_init_uses_configured_schema_dir(tmp_path: Path, monkeypatch) -> None:
+    archive = tmp_path / "archive"
+    monkeypatch.setenv("STORYGRAM_SCHEMA_DIR", str(Path("schema").resolve()))
+    result = CliRunner().invoke(main, ["init", str(archive)])
+
+    assert result.exit_code == 0, result.output
+    assert (archive / "schema" / "proposal.schema.json").exists()
+    assert len(list((archive / "schema").glob("*.schema.json"))) == 15

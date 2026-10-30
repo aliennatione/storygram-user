@@ -63,3 +63,6 @@
 - Compose should offer an optional local Ollama profile/service for the LLM adapter.
 - The web UI remains exposed on port 8080 with `/data` persisted via a volume/bind mount.
 - Containerization comes after Playwright and the LLM adapter so the packaged surface is already tested.
+- The runtime image is non-root, offline-capable and has no Chromium/Node; browser tooling stays in development.
+- The entrypoint may auto-initialize an empty `/data` and Git repository, but never auto-approves records.
+- Ollama is an optional Compose profile; the app still runs and validates without it.

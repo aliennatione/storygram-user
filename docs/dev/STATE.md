@@ -5,9 +5,9 @@ Last updated: 2026-10-30
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Latest commit: `36ab3e7 test(e2e): add Playwright web flows`
-- Next commit: provider-agnostic LLM adapter.
-- Proposal engine, CLI, local web UI, Playwright e2e tests and the LLM adapter are implemented and tested locally.
+- Latest commit: `14eeec1 feat(agent): add provider-agnostic proposal adapter`
+- Final container/documentation work is present and pending commit.
+- Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present. Python and browser checks pass locally; Docker itself was not run in this session.
 
 ## Environment
 
@@ -46,32 +46,44 @@ Last updated: 2026-10-30
 - Adapter always forces `type=Proposal`, `status=proposed` and fresh timestamps; unknown model fields are dropped.
 - `proposal generate`: CLI command using local Ollama; supports `--file`, `--text`, `--model`, `--ollama-url`, `--no-save`, `--json`, `$STORYGRAM_OLLAMA_MODEL`, `$STORYGRAM_OLLAMA_URL`.
 - `tests/integration/test_llm_adapter.py`: generation, fenced JSON, unknown-field removal, pending-only writes, duplicate rejection, invalid/empty input, Ollama request shape.
-- `tests/integration/test_cli_proposals.py`: CLI generation saves pending only and `--no-save` writes nothing.
+- `tests/integration/test_cli_proposals.py`: CLI generation saves pending only, `--no-save` writes nothing, and `init` honors `$STORYGRAM_SCHEMA_DIR`.
+- Schema lookup now supports archive-local schemas, `$STORYGRAM_SCHEMA_DIR`, repository/package paths and the current directory. This fixes packaged/container `init`.
+- `Dockerfile`: multi-stage Python 3.12 Alpine image, non-root user, Git plus tini, schemas copied to `/app/schema`, healthcheck on port 8080.
+- `docker-entrypoint.sh`: optional auto-init of `/data` and Git, initial schema commit, Git safe-directory config, then exec the CLI.
+- `compose.yaml`: persistent `storygram-data`, port 8080, optional `llm` profile with Ollama and persistent models.
+- `.dockerignore`: excludes repository-local data, generated output, caches, tests and development artifacts.
+- Bilingual README/docs rewritten around proposals, UI, adapter, tests and container usage; proposal contract lives in `docs/en/` and `docs/it/`.
+- Packaged wheel was built, installed in a temporary venv and exercised via `storygram init` with `$STORYGRAM_SCHEMA_DIR`.
 
 ## Active
 
-- Final milestone: bilingual docs update and containerization with optional local Ollama Compose profile.
+- Commit the final container/documentation work.
+- Docker image/Compose runtime verification remains for a Docker-capable host.
 
 ## Next Steps
 
-1. Update bilingual README/docs for proposals, UI, adapter, Playwright and local-only security assumptions.
-2. Add a Dockerfile using Python plus system Chromium/Node only where needed; keep the runtime image usable offline without Ollama.
-3. Add Compose with `/data` persistence, port 8080 and an optional Ollama profile using `STORYGRAM_OLLAMA_URL=http://ollama:11434`.
-4. Document model selection, first-run model pull, resource caveats and the fact that generation never applies automatically.
-5. Decide whether to add an edit action for pending proposals and an API surface for external agents.
+1. Build and smoke-test the Dockerfile/Compose on a Docker-capable host; verify named-volume ownership, auto-init, healthcheck and optional Ollama profile.
+2. Decide whether to expose adapter generation in the web UI.
+3. Decide whether to add pending-proposal editing and an external agent API.
+4. Clean up leftover `export`/`ingest` stubs and refresh `PRD.md`/`PLAN.md` if they should describe the shipped workflow.
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `41 passed`.
+- `PYTHONPATH=/data/src python -m pytest -q`: `42 passed`.
 - `npm run test:e2e`: Playwright approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
 - `mypy src`: passed.
+- `python -m pip wheel --no-deps .`: passed; installed wheel initializes an archive with 15 schemas.
+- `sh -n docker-entrypoint.sh`: passed.
+- Entrypoint smoke test outside Docker: fresh archive, Git init, initial schema commit, idempotent second run.
+- `compose.yaml` parsed with PyYAML; Docker runtime not tested.
 
 ## Known Limitations
 
 - The adapter CLI requires a running Ollama server; the test suite uses a callable mock and never needs network.
 - The web UI does not expose generation yet; generated proposals arrive through `proposal generate`.
+- Docker artifacts were syntax-checked and parsed but not built or run in this session.
 - `apply_proposal` commit message is `feat(proposal): apply <id>`.
 - The archived proposal records `applied_at`, but not the resulting commit hash, to keep the archive and data commit atomic.
 - Conflict detection is deliberately conservative and year-based; it is not a complete temporal reasoner.

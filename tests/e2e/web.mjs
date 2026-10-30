@@ -89,6 +89,9 @@ try {
   const page = await browser.newPage();
   await page.goto(server.base);
   assert.match(await page.locator("h1").innerText(), /Storygram/);
+  await page.getByRole("link", { name: "Generate", exact: true }).click();
+  await page.waitForSelector('textarea[name="source"]');
+  assert.match(await page.locator("h1").innerText(), /Generate proposal/);
 
   await page.goto(`${server.base}proposals/new`);
   await page.locator('textarea[name="json"]').fill(

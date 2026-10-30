@@ -37,7 +37,7 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-La UI web usa lo stesso motore:
+La UI web usa lo stesso motore, inclusa una pagina **Generate** per Ollama locale:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
@@ -65,7 +65,7 @@ ollama pull llama3.2
 storygram proposal generate --text "Un ricordo..." --model llama3.2 --archive ./archive
 ```
 
-L'adapter forza `status=proposed`, scarta i campi sconosciuti e salva solo in `proposals/`. Non può approvare, applicare o modificare record canonici. Usa `--no-save` per controllare senza scrivere.
+L'adapter forza `status=proposed`, scarta i campi sconosciuti e salva solo in `proposals/`. Non può approvare, applicare o modificare record canonici. Usa `--no-save` per controllare senza scrivere. La pagina **Generate** della UI usa lo stesso adapter; gli errori del provider vengono mostrati senza scrivere nulla.
 
 ## Test
 

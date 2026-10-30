@@ -35,9 +35,10 @@ Last updated: 2026-10-30
   - `proposal new|list|show|approve|reject` implemented.
   - `approve` supports `--dry-run`, `--no-commit` and scoped Git commits.
 - `tests/integration/test_cli_proposals.py`: CLI coverage for init, proposal lifecycle, dry-run, no-commit, commit, reject and invalid input.
-- `src/storygram/web.py`: stdlib HTTP UI with home, proposal list, JSON create form, dry-run preview, approve (commit/no-commit) and reject.
+- `src/storygram/web.py`: stdlib HTTP UI with home, proposal list, JSON create form, Ollama Generate page, dry-run preview, approve (commit/no-commit) and reject.
 - `src/storygram/cli.py`: `web` command serving the UI on `0.0.0.0:8080` by default.
-- `tests/integration/test_web.py`: HTTP tests for home, create, preview, approve, reject and invalid JSON.
+- `tests/integration/test_web.py`: HTTP tests for home, create, preview, approve, reject, invalid JSON, Ollama generation, empty source and provider errors.
+- Web generation uses an injectable provider factory for tests; production uses `OllamaProvider` with form/env model and URL.
 - Documentation audit added in `docs/dev/AUDIT.md`.
 - `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, create, preview, approve without commit, reject.
 - `package.json` / `package-lock.json`: Playwright Node dependency and `npm run test:e2e`.
@@ -57,19 +58,18 @@ Last updated: 2026-10-30
 
 ## Active
 
-- Commit the final container/documentation work.
+- Commit the web-generation work and prepare the session handoff.
 - Docker image/Compose runtime verification remains for a Docker-capable host.
 
 ## Next Steps
 
 1. Build and smoke-test the Dockerfile/Compose on a Docker-capable host; verify named-volume ownership, auto-init, healthcheck and optional Ollama profile.
-2. Decide whether to expose adapter generation in the web UI.
-3. Decide whether to add pending-proposal editing and an external agent API.
-4. Clean up leftover `export`/`ingest` stubs and refresh `PRD.md`/`PLAN.md` if they should describe the shipped workflow.
+2. Decide whether to add pending-proposal editing and an external agent API.
+3. Clean up leftover `export`/`ingest` stubs and refresh `PRD.md`/`PLAN.md` if they should describe the shipped workflow.
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `42 passed`.
+- `PYTHONPATH=/data/src python -m pytest -q`: `45 passed`.
 - `npm run test:e2e`: Playwright approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -82,7 +82,6 @@ Last updated: 2026-10-30
 ## Known Limitations
 
 - The adapter CLI requires a running Ollama server; the test suite uses a callable mock and never needs network.
-- The web UI does not expose generation yet; generated proposals arrive through `proposal generate`.
 - Docker artifacts were syntax-checked and parsed but not built or run in this session.
 - `apply_proposal` commit message is `feat(proposal): apply <id>`.
 - The archived proposal records `applied_at`, but not the resulting commit hash, to keep the archive and data commit atomic.

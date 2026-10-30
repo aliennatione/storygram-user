@@ -15,7 +15,7 @@ storygram validate ./archive
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
 ```
 
-Apri `http://localhost:8080`, incolla una proposta JSON e controlla il dry-run prima di approvare. L'approvazione è l'unico percorso verso `data/`.
+Apri `http://localhost:8080`, incolla o genera una proposta e controlla il dry-run prima di approvare. L'approvazione è l'unico percorso verso `data/`.
 
 ## Flusso delle proposte
 
@@ -34,7 +34,7 @@ storygram proposal reject proposal:example-1 --reason "manca evidenza"
 
 ## LLM locale opzionale
 
-L'adapter può solo creare proposte pendenti. Non può approvare né scrivere dati canonici.
+L'adapter può solo creare proposte pendenti. Non può approvare né scrivere dati canonici. Usa la pagina **Generate** nella UI web o la CLI.
 
 ```bash
 ollama serve
@@ -43,7 +43,7 @@ storygram proposal generate --text "Nonna diceva che viveva vicino alla stazione
 storygram proposal generate --file intervista.txt --json
 ```
 
-Configurazione: `--ollama-url`, `--model`, `$STORYGRAM_OLLAMA_URL`, `$STORYGRAM_OLLAMA_MODEL`.
+Configurazione: `--ollama-url`, `--model`, `$STORYGRAM_OLLAMA_URL`, `$STORYGRAM_OLLAMA_MODEL`. Gli errori del provider non toccano i dati canonici e vengono mostrati nella UI.
 
 ## Container
 

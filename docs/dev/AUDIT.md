@@ -89,3 +89,27 @@ Package the tested surface without pretending Docker runtime was verified inside
 1. Verify Docker on a capable host before calling the container deliverable verified.
 2. Keep the human approval gate and Ollama optionality intact in any packaging change.
 3. Do not broaden scope into editing/API work before the current documentation commit is complete.
+
+## 2026-10-30 - pre-export web generation
+
+### Final objective
+
+A local-first Storygram with reviewable agent proposals, optional local LLM generation, atomic human approval and a container path with optional Ollama.
+
+### Current objective
+
+Close the last user-facing gap before export: generate proposals from the web UI without weakening the approval gate.
+
+### Point of situation
+
+- The web UI now has a Generate page backed by the same adapter and pending-save path as the CLI.
+- Tests cover generation, empty input and provider failure; E2E covers navigation and form rendering.
+- Generated proposals remain pending only; canonical data is unchanged until approval.
+- Full Python, lint, format, mypy and browser checks pass.
+- Docker runtime remains unverified, as requested in this development container.
+
+### Calibration
+
+1. Commit this feature before exporting the session.
+2. Hand off Docker runtime verification and optional editing/API work.
+3. Do not claim browser-side Ollama success; only the injected provider path is tested.

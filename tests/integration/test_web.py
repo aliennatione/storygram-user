@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 from click.testing import CliRunner
 
 from storygram.cli import main
+from storygram.llm import CallableProvider, LLMAdapterError
 from storygram.web import create_server
 
 NOW = "2026-10-30T12:00:00+00:00"
@@ -40,10 +41,10 @@ def proposal(proposal_id: str = "proposal:web-1") -> dict:
     }
 
 
-def start(tmp_path: Path):
+def start(tmp_path: Path, provider_factory=None):
     result = CliRunner().invoke(main, ["init", str(tmp_path)])
     assert result.exit_code == 0, result.output
-    server = create_server(tmp_path, host="127.0.0.1", port=0)
+    server = create_server(tmp_path, host="127.0.0.1", port=0, provider_factory=provider_factory)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread, f"http://127.0.0.1:{server.server_port}"
@@ -120,6 +121,83 @@ def test_web_rejects_invalid_json(tmp_path: Path) -> None:
         status, body = post(base + "/proposals/new", {"json": "{not json"})
         assert status == 400
         assert "Invalid JSON" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_generate_creates_pending_only(tmp_path: Path) -> None:
+    captured = {}
+
+    def factory(model: str, ollama_url: str):
+        captured["model"] = model
+        captured["url"] = ollama_url
+
+        def complete(prompt: str) -> str:
+            captured["prompt"] = prompt
+            return json.dumps(proposal("proposal:ignored"))
+
+        return CallableProvider(complete)
+
+    server, thread, base = start(tmp_path, factory)
+    try:
+        status, body = get(base + "/proposals/generate")
+        assert status == 200
+        assert 'name="source"' in body
+
+        status, body = post(
+            base + "/proposals/generate",
+            {
+                "source": "Nonna said she lived near the station.",
+                "model": "test-model",
+                "ollama_url": "http://test-ollama:11434",
+            },
+        )
+
+        assert status == 200
+        assert "Dry-run preview" in body
+        assert captured["model"] == "test-model"
+        assert captured["url"] == "http://test-ollama:11434"
+        assert "Nonna said" in captured["prompt"]
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        assert not (tmp_path / "data" / "episodes" / "episode_web-note.json").exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_generate_rejects_empty_source(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = post(base + "/proposals/generate", {"source": "   "})
+        assert status == 400
+        assert "Source text is empty" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_generate_surfaces_provider_error(tmp_path: Path) -> None:
+    def factory(model: str, ollama_url: str):
+        def complete(prompt: str) -> str:
+            raise LLMAdapterError("model offline")
+
+        return CallableProvider(complete)
+
+    server, thread, base = start(tmp_path, factory)
+    try:
+        status, body = post(
+            base + "/proposals/generate",
+            {"source": "A memory", "model": "missing", "ollama_url": "http://missing"},
+        )
+        assert status == 502
+        assert "model offline" in body
         assert not list((tmp_path / "proposals").glob("*.json"))
     finally:
         server.shutdown()

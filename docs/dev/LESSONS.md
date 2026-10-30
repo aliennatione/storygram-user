@@ -22,6 +22,8 @@
 - Node Playwright works on Alpine with system Chromium:
   `apk add chromium nodejs npm`; `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install`; launch with `executablePath: "/usr/bin/chromium"`.
 - `npm run test:e2e` starts the real Python web server on port 0 and drives it with Chromium; no mocks.
+- The web UI accepts an injectable `provider_factory`; HTTP tests use a callable mock, while production builds an `OllamaProvider` from the form/env.
+- UI provider failures return 502 and keep source text in the form; empty source returns 400. Neither writes a proposal.
 - The LLM adapter separates generation from persistence: `LLMAdapter.generate` returns memory only; `save_pending` writes only `proposals/`.
 - Generated proposals are normalized to `proposed` and get fresh timestamps, so a model cannot self-approve or backdate.
 - Unknown model fields are dropped before schema validation, keeping provider noise out of the proposal contract.

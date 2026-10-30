@@ -124,5 +124,6 @@ All validation errors are collected before writing. Nothing is written when plan
 - Adapters may only create `proposed` proposals; they cannot approve, apply or archive.
 - Storygram normalizes adapter output: `type` is `Proposal`, `status` is `proposed`, timestamps are fresh, and unknown top-level fields are dropped.
 - `save_pending` validates against the proposal schema and writes only to `proposals/`.
+- The web Generate page and CLI call the same adapter and save path; provider failures never touch canonical data.
 - The core apply engine remains the only path to canonical data, and it still requires explicit human approval.
 - Providers are pluggable. The default Ollama provider calls `/api/generate` with `stream: false` and `format: "json"`.

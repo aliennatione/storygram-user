@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import html
 import json
+import os
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
@@ -11,6 +13,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from . import proposals as proposals_mod
 from . import validate as validate_mod
+from .llm import LLMAdapter, LLMAdapterError, OllamaProvider, Provider, save_pending
 from .registry import RECORD_TYPES, TYPE_BY_NAME
 
 MAX_BODY = 4 * 1024 * 1024
@@ -63,6 +66,7 @@ button.primary {{ background:var(--accent); color:white; border-color:var(--acce
   <nav>
     <a href="/">Home</a><a href="/proposals">Proposals</a>
     <a href="/proposals/new">New proposal</a>
+    <a href="/proposals/generate">Generate</a>
   </nav>
 </header>
 <main>{body}</main>
@@ -128,6 +132,7 @@ def render_home(root: Path) -> str:
 <tbody><tr><td>{len(pending)}</td><td>{len(applied)}</td><td>{len(records)}</td></tr></tbody></table>
 <p>
   <a class="button primary" href="/proposals/new">Create proposal</a>
+  <a class="button" href="/proposals/generate">Generate with Ollama</a>
   <a class="button" href="/proposals">View proposals</a>
 </p>
 <h2>Record counts</h2><ul>{"".join(counts)}</ul>
@@ -138,7 +143,8 @@ def render_home(root: Path) -> str:
 def render_list(root: Path) -> str:
     body = (
         "<h1>Proposals</h1>"
-        '<p><a class="button primary" href="/proposals/new">New proposal</a></p>'
+        '<p><a class="button primary" href="/proposals/new">New proposal</a> '
+        '<a class="button" href="/proposals/generate">Generate with Ollama</a></p>'
         f"{_proposal_rows(root)}"
     )
     return _layout("Proposals", body)
@@ -160,6 +166,36 @@ Paste a proposal JSON object. It is saved as pending only; approval is a separat
 </form>
 """
     return _layout("New proposal", body)
+
+
+def render_generate_form(
+    source: str = "",
+    errors: list[str] | None = None,
+    model: str | None = None,
+    ollama_url: str | None = None,
+) -> str:
+    model_value = model or os.environ.get("STORYGRAM_OLLAMA_MODEL", "llama3.2")
+    url_value = ollama_url or os.environ.get("STORYGRAM_OLLAMA_URL", "http://127.0.0.1:11434")
+    body = f"""
+<h1>Generate proposal</h1>
+<p class="muted">
+A local Ollama model turns source text into a pending proposal. It cannot approve or
+write canonical data; review the dry-run first.
+</p>
+{_errors_block(errors or [])}
+<form method="post" action="/proposals/generate">
+<textarea name="source" spellcheck="false"
+ placeholder="Paste an interview, note or memory...">{_esc(source)}</textarea>
+<p><label>Model <input name="model" value="{_esc(model_value)}" style="padding:6px"></label>
+<label>Ollama URL
+<input name="ollama_url" value="{_esc(url_value)}" style="padding:6px; width:20rem"></label></p>
+<p>
+  <button class="primary" type="submit">Generate pending proposal</button>
+  <a class="button" href="/proposals">Cancel</a>
+</p>
+</form>
+"""
+    return _layout("Generate proposal", body)
 
 
 def _status_is_open(status: Any) -> bool:
@@ -225,6 +261,7 @@ def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None)
 class StorygramServer(ThreadingHTTPServer):
     daemon_threads = True
     archive_root: Path
+    provider_factory: Callable[[str, str], Provider] | None = None
 
 
 class StorygramHandler(BaseHTTPRequestHandler):
@@ -270,6 +307,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/proposals/new":
             self._send(200, _new_form())
             return
+        if path == "/proposals/generate":
+            self._send(200, render_generate_form())
+            return
         if path.startswith("/proposals/"):
             proposal_id = path.removeprefix("/proposals/").strip("/")
             status, body = render_detail(self.root, proposal_id)
@@ -284,6 +324,38 @@ class StorygramHandler(BaseHTTPRequestHandler):
             form = self._read_form()
         except ValueError as exc:
             self._send(413, _layout("Bad request", _errors_block([str(exc)])))
+            return
+
+        if path == "/proposals/generate":
+            source = (form.get("source") or [""])[0]
+            model = (form.get("model") or [""])[0].strip() or os.environ.get(
+                "STORYGRAM_OLLAMA_MODEL", "llama3.2"
+            )
+            ollama_url = (form.get("ollama_url") or [""])[0].strip() or os.environ.get(
+                "STORYGRAM_OLLAMA_URL", "http://127.0.0.1:11434"
+            )
+            if not source.strip():
+                self._send(
+                    400, render_generate_form(source, ["Source text is empty"], model, ollama_url)
+                )
+                return
+            factory = cast(StorygramServer, self.server).provider_factory
+            provider = (
+                factory(model, ollama_url)
+                if factory is not None
+                else OllamaProvider(model=model, base_url=ollama_url)
+            )
+            try:
+                data = LLMAdapter(provider).generate(self.root, source)
+                save_pending(self.root, data)
+            except LLMAdapterError as exc:
+                self._send(
+                    502,
+                    render_generate_form(source, [str(exc)], model, ollama_url),
+                )
+                return
+            generated_id = str(data["id"])
+            self._redirect(f"/proposals/{quote(generated_id, safe='')}")
             return
 
         if path == "/proposals/new":
@@ -341,9 +413,15 @@ class StorygramHandler(BaseHTTPRequestHandler):
         self._send(404, _layout("Not found", "<h1>Not found</h1>"))
 
 
-def create_server(root: Path, host: str = "0.0.0.0", port: int = 8080) -> StorygramServer:
+def create_server(
+    root: Path,
+    host: str = "0.0.0.0",
+    port: int = 8080,
+    provider_factory: Callable[[str, str], Provider] | None = None,
+) -> StorygramServer:
     server = StorygramServer((host, port), StorygramHandler)
     server.archive_root = Path(root)
+    server.provider_factory = provider_factory
     return server
 
 

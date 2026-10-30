@@ -15,7 +15,7 @@ storygram validate ./archive
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
 ```
 
-Open `http://localhost:8080`, paste a proposal JSON object and review the dry-run before approving. Approval is the only path into `data/`.
+Open `http://localhost:8080`, paste or generate a proposal and review the dry-run before approving. Approval is the only path into `data/`.
 
 ## Proposal Workflow
 
@@ -34,7 +34,7 @@ storygram proposal reject proposal:example-1 --reason "needs evidence"
 
 ## Optional Local LLM
 
-The adapter can only create pending proposals. It cannot approve or write canonical data.
+The adapter can only create pending proposals. It cannot approve or write canonical data. Use the **Generate** page in the web UI or the CLI.
 
 ```bash
 ollama serve
@@ -43,7 +43,7 @@ storygram proposal generate --text "Nonna said she lived near the station." --mo
 storygram proposal generate --file interview.txt --json
 ```
 
-Configuration: `--ollama-url`, `--model`, `$STORYGRAM_OLLAMA_URL`, `$STORYGRAM_OLLAMA_MODEL`.
+Configuration: `--ollama-url`, `--model`, `$STORYGRAM_OLLAMA_URL`, `$STORYGRAM_OLLAMA_MODEL`. Provider failures leave canonical data untouched and show the error in the UI.
 
 ## Container
 

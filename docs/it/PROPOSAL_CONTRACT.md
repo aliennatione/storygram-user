@@ -124,5 +124,6 @@ Tutti gli errori di validazione vengono raccolti prima di scrivere. Se la pianif
 - Gli adapter possono creare solo proposte `proposed`; non possono approvare, applicare o archiviare.
 - Storygram normalizza l'output: `type` è `Proposal`, `status` è `proposed`, i timestamp sono nuovi e i campi top-level sconosciuti vengono scartati.
 - `save_pending` valida lo schema della proposta e scrive solo in `proposals/`.
+- La pagina Generate della UI e la CLI usano lo stesso adapter e lo stesso percorso di salvataggio; gli errori del provider non toccano mai i dati canonici.
 - Il motore di apply resta l'unico percorso verso i dati canonici e richiede sempre un'approvazione umana esplicita.
 - I provider sono sostituibili. Il provider Ollama predefinito chiama `/api/generate` con `stream: false` e `format: "json"`.

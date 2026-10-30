@@ -27,6 +27,7 @@ ENV/
 .venv
 
 # Testing
+node_modules/
 .pytest_cache/
 .coverage
 htmlcov/

@@ -6,7 +6,7 @@ Last updated: 2026-10-30
 
 - Branch: `feature/agent-proposal-flow`
 - Last committed baseline: `cf6cf94 docs: clarify repo-specific agent guidance`
-- Proposal engine, CLI and local web UI are implemented and tested locally.
+- Proposal engine, CLI, local web UI and Playwright e2e tests are implemented and tested locally.
 
 ## Environment
 
@@ -38,21 +38,24 @@ Last updated: 2026-10-30
 - `src/storygram/cli.py`: `web` command serving the UI on `0.0.0.0:8080` by default.
 - `tests/integration/test_web.py`: HTTP tests for home, create, preview, approve, reject and invalid JSON.
 - Documentation audit added in `docs/dev/AUDIT.md`.
+- `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, create, preview, approve without commit, reject.
+- `package.json` / `package-lock.json`: Playwright Node dependency and `npm run test:e2e`.
+- `.gitignore`: `node_modules/` ignored.
 
 ## Active
 
-- Next milestone: Playwright end-to-end tests against the real web server.
-- Then the provider-agnostic LLM adapter.
+- Next milestone: provider-agnostic LLM adapter that can only create pending proposals.
 
 ## Next Steps
 
-1. Install Playwright and Chromium, then add a smoke test for home and a full create -> preview -> approve flow.
-2. Test that the UI and CLI share identical plan errors, especially evidence and conflict errors.
-3. Add the provider-agnostic LLM adapter.
+1. Add the provider-agnostic LLM adapter.
    - Interface accepts source text and returns a pending Proposal only.
    - Mock provider for tests; no network in the test suite.
    - Never mutates canonical data.
-4. Update bilingual README/docs for proposals, UI, adapter and local-only security assumptions.
+   - Optional Ollama provider uses the same interface.
+2. Add tests that an adapter cannot write canonical data or approve proposals.
+3. Add a UI/CLI surface for adapter-generated proposals if needed.
+4. Update bilingual README/docs for proposals, UI, adapter, Playwright and local-only security assumptions.
 5. Decide whether to add an edit action for pending proposals and an API surface for external agents.
 6. Containerize the application and add a Compose profile that optionally starts a local Ollama service.
    - Keep the default image usable without Ollama.
@@ -62,7 +65,8 @@ Last updated: 2026-10-30
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `32 passed` after adding the web tests.
+- `PYTHONPATH=/data/src python -m pytest -q`: `32 passed`.
+- `npm run test:e2e`: Playwright approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
 - `mypy src`: passed.
@@ -71,12 +75,12 @@ Last updated: 2026-10-30
 
 ## Known Limitations
 
-- The LLM adapter and Playwright tests do not exist yet.
+- The LLM adapter does not exist yet.
 - `apply_proposal` commit message is `feat(proposal): apply <id>`.
 - The archived proposal records `applied_at`, but not the resulting commit hash, to keep the archive and data commit atomic.
 - Conflict detection is deliberately conservative and year-based; it is not a complete temporal reasoner.
 - Working-tree cleanliness checks tracked files only, so ignored pending proposals do not block approval.
 - Pending proposals remain local and ignored by Git; only merged proposals are archived and committed.
 - `export` and `ingest` still need the planned cleanup; `ingest` still only copies files.
-- Playwright/browser dependencies are not installed yet.
+- Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
 - The web UI has no authentication and binds to `0.0.0.0`; use only in the controlled container/host mapping.

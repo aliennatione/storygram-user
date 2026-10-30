@@ -19,3 +19,7 @@
 - Running `ruff format src tests` plus `ruff check --fix` cleared the inherited formatting/import debt; `mypy` is now clean too.
 - HTTP tests use `create_server(..., port=0)` and `urllib` with `HTTPError` handling so 4xx responses can be asserted.
 - The final packaging step is containerization with an optional local Ollama service in Compose; do not make Ollama a default runtime dependency.
+- Python Playwright wheels are manylinux-only and the bundled glibc Node driver does not run on Alpine musl, even with `gcompat`.
+- Node Playwright works on Alpine with system Chromium:
+  `apk add chromium nodejs npm`; `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install`; launch with `executablePath: "/usr/bin/chromium"`.
+- `npm run test:e2e` starts the real Python web server on port 0 and drives it with Chromium; no mocks.

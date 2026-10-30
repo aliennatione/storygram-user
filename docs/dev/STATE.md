@@ -5,7 +5,7 @@ Last updated: 2026-10-30
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Latest commit: `9e56f2d feat(web): generate pending proposals with Ollama`
+- Latest commit: `38cdb70 feat: add pending proposal editing and agent API`
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present. Python and browser checks pass locally; Docker itself was not run in this session.
 
@@ -61,7 +61,7 @@ Last updated: 2026-10-30
 
 ## Active
 
-- Pending-edit and agent-API work is implemented and tested; final commit/handoff pending.
+- Session ready for export/handoff. No uncommitted application work.
 - Docker image/Compose runtime verification remains for a Docker-capable host.
 
 ## Next Steps

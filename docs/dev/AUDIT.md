@@ -38,3 +38,29 @@ Finish the user-facing loop: local web review UI, Playwright end-to-end coverage
 4. Then update bilingual docs and README commands.
 5. Finally containerize the application and add an optional local Ollama Compose profile, keeping the offline core usable without it.
 6. Keep `STATE.md`, `DECISIONS.md`, `LESSONS.md` and this audit current with each milestone.
+
+## 2026-10-30 - after Playwright and adapter
+
+### Final objective
+
+Ship a local-first, deterministic Storygram with an agent proposal -> human review -> atomic merge loop, optional LLM generation that cannot self-apply, and a containerizable deployment with optional local Ollama.
+
+### Current objective
+
+Close the adapter milestone, then update docs and package the tested surface without making Ollama mandatory.
+
+### Point of the situation
+
+- The browser loop is covered by real Playwright against the real web server on a temporary archive.
+- The LLM adapter exists with a mock provider and an Ollama provider; generation returns memory only and persistence is pending-only.
+- CLI `proposal generate` is wired to the adapter and supports `--no-save`.
+- Tests use no network and assert generated proposals never write canonical records before approval.
+- Full suite is green, lint/format/mypy are clean, and browser e2e passes.
+- Remaining work is documentation and containerization.
+
+### Calibration
+
+1. Do not let container convenience weaken the human approval gate.
+2. Keep the default image offline-capable; Ollama belongs to an optional Compose profile.
+3. Re-run Python and browser checks inside the packaged setup.
+4. Update README/docs only with commands that were actually executed.

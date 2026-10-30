@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any, NoReturn
@@ -294,6 +295,53 @@ def proposal_new(file_: str, archive_path: str | None, as_json: bool) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     _emit({"ok": True, "proposal_id": proposal_id, "path": str(destination)}, as_json)
+
+
+@proposal.command("generate")
+@click.option("--file", "file_", type=click.Path(exists=True), default=None)
+@click.option("--text", default=None)
+@click.option(
+    "--model",
+    default=lambda: os.environ.get("STORYGRAM_OLLAMA_MODEL", "llama3.2"),
+    show_default="llama3.2 or $STORYGRAM_OLLAMA_MODEL",
+)
+@click.option(
+    "--ollama-url",
+    default=lambda: os.environ.get("STORYGRAM_OLLAMA_URL", "http://127.0.0.1:11434"),
+    show_default="http://127.0.0.1:11434 or $STORYGRAM_OLLAMA_URL",
+)
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--no-save", is_flag=True, help="Print the proposal without saving it")
+@click.option("--json", "as_json", is_flag=True)
+def proposal_generate(
+    file_: str | None,
+    text: str | None,
+    model: str,
+    ollama_url: str,
+    archive_path: str | None,
+    no_save: bool,
+    as_json: bool,
+) -> None:
+    """Generate a pending proposal with a local Ollama model."""
+    from .llm import LLMAdapter, LLMAdapterError, OllamaProvider, save_pending
+
+    if file_ and text:
+        _fail("Use either --file or --text, not both", as_json)
+    if file_:
+        source = Path(file_).read_text(encoding="utf-8")
+    elif text:
+        source = text
+    else:
+        _fail("Provide --file or --text", as_json)
+    root = _root(archive_path)
+    adapter = LLMAdapter(OllamaProvider(model=model, base_url=ollama_url))
+    try:
+        proposal_data = adapter.generate(root, source)
+        path = None if no_save else save_pending(root, proposal_data)
+    except LLMAdapterError as exc:
+        _fail(str(exc), as_json)
+    output = {"ok": True, "proposal": proposal_data, "path": str(path) if path else None}
+    _emit(output, as_json)
 
 
 @proposal.command("list")

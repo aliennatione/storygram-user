@@ -1,6 +1,6 @@
 # Proposal Contract v1
 
-This contract is shared by the CLI, the local web UI, external agents and the future LLM adapter.
+This contract is shared by the CLI, the local web UI, external agents and the LLM adapter.
 
 ## Files and Directories
 
@@ -117,3 +117,12 @@ A successful approval returns:
 ```
 
 All validation errors are collected before writing. Nothing is written when planning fails.
+
+## Adapter Boundary
+
+- Adapters receive source text plus optional known canonical IDs and return one proposal.
+- Adapters may only create `proposed` proposals; they cannot approve, apply or archive.
+- Storygram normalizes adapter output: `type` is `Proposal`, `status` is `proposed`, timestamps are fresh, and unknown top-level fields are dropped.
+- `save_pending` validates against the proposal schema and writes only to `proposals/`.
+- The core apply engine remains the only path to canonical data, and it still requires explicit human approval.
+- Providers are pluggable. The default Ollama provider calls `/api/generate` with `stream: false` and `format: "json"`.

@@ -5,8 +5,9 @@ Last updated: 2026-10-30
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Last committed baseline: `cf6cf94 docs: clarify repo-specific agent guidance`
-- Proposal engine, CLI, local web UI and Playwright e2e tests are implemented and tested locally.
+- Latest commit: `36ab3e7 test(e2e): add Playwright web flows`
+- Next commit: provider-agnostic LLM adapter.
+- Proposal engine, CLI, local web UI, Playwright e2e tests and the LLM adapter are implemented and tested locally.
 
 ## Environment
 
@@ -41,41 +42,36 @@ Last updated: 2026-10-30
 - `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, create, preview, approve without commit, reject.
 - `package.json` / `package-lock.json`: Playwright Node dependency and `npm run test:e2e`.
 - `.gitignore`: `node_modules/` ignored.
+- `src/storygram/llm.py`: provider-agnostic adapter, callable mock provider, stdlib Ollama provider, prompt builder, JSON extraction, normalization, pending-only save.
+- Adapter always forces `type=Proposal`, `status=proposed` and fresh timestamps; unknown model fields are dropped.
+- `proposal generate`: CLI command using local Ollama; supports `--file`, `--text`, `--model`, `--ollama-url`, `--no-save`, `--json`, `$STORYGRAM_OLLAMA_MODEL`, `$STORYGRAM_OLLAMA_URL`.
+- `tests/integration/test_llm_adapter.py`: generation, fenced JSON, unknown-field removal, pending-only writes, duplicate rejection, invalid/empty input, Ollama request shape.
+- `tests/integration/test_cli_proposals.py`: CLI generation saves pending only and `--no-save` writes nothing.
 
 ## Active
 
-- Next milestone: provider-agnostic LLM adapter that can only create pending proposals.
+- Final milestone: bilingual docs update and containerization with optional local Ollama Compose profile.
 
 ## Next Steps
 
-1. Add the provider-agnostic LLM adapter.
-   - Interface accepts source text and returns a pending Proposal only.
-   - Mock provider for tests; no network in the test suite.
-   - Never mutates canonical data.
-   - Optional Ollama provider uses the same interface.
-2. Add tests that an adapter cannot write canonical data or approve proposals.
-3. Add a UI/CLI surface for adapter-generated proposals if needed.
-4. Update bilingual README/docs for proposals, UI, adapter, Playwright and local-only security assumptions.
+1. Update bilingual README/docs for proposals, UI, adapter, Playwright and local-only security assumptions.
+2. Add a Dockerfile using Python plus system Chromium/Node only where needed; keep the runtime image usable offline without Ollama.
+3. Add Compose with `/data` persistence, port 8080 and an optional Ollama profile using `STORYGRAM_OLLAMA_URL=http://ollama:11434`.
+4. Document model selection, first-run model pull, resource caveats and the fact that generation never applies automatically.
 5. Decide whether to add an edit action for pending proposals and an API surface for external agents.
-6. Containerize the application and add a Compose profile that optionally starts a local Ollama service.
-   - Keep the default image usable without Ollama.
-   - Expose the UI on `0.0.0.0:8080`.
-   - Persist `/data` and generated state through volumes.
-   - Document the Ollama profile, model selection and resource caveats.
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `32 passed`.
+- `PYTHONPATH=/data/src python -m pytest -q`: `41 passed`.
 - `npm run test:e2e`: Playwright approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
 - `mypy src`: passed.
-- `ruff check src/storygram/registry.py src/storygram/validate.py`: passed.
-- `ruff check src/storygram/proposals.py tests/unit/test_schemas.py tests/integration/test_proposal_engine.py`: passed.
 
 ## Known Limitations
 
-- The LLM adapter does not exist yet.
+- The adapter CLI requires a running Ollama server; the test suite uses a callable mock and never needs network.
+- The web UI does not expose generation yet; generated proposals arrive through `proposal generate`.
 - `apply_proposal` commit message is `feat(proposal): apply <id>`.
 - The archived proposal records `applied_at`, but not the resulting commit hash, to keep the archive and data commit atomic.
 - Conflict detection is deliberately conservative and year-based; it is not a complete temporal reasoner.

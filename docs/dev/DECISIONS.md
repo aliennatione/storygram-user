@@ -6,6 +6,8 @@
 - First vertical slice: agent/CLI proposal -> human review -> atomic merge.
 - CLI comes before the web UI. The UI is local and served on `0.0.0.0:8080`.
 - The LLM adapter comes after the UI and must only produce reviewable proposals.
+- The adapter is provider-agnostic: a callable mock for tests and a stdlib Ollama provider for local use.
+- Generation and persistence are separate; only `save_pending` touches disk, and only `proposals/`.
 - The core remains deterministic and usable offline without an LLM.
 
 ## Proposal Model

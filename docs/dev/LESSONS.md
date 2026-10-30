@@ -12,7 +12,6 @@
 - `apply_proposal` rejects a dirty tracked tree before writing. Commit application code in the main repository before manually approving proposals there.
 - Atomic writes use same-directory temp files and `os.replace`; rollback restores prior bytes or removes newly created files.
 - The archive commit is path-scoped, so unrelated untracked files are not included.
-- Playwright and browser binaries are not installed yet.
 - The CLI previously defined `rebuild`, `search`, `timeline`, `genogram`, `conflicts` and `export` twice. The rewrite keeps one definition per command.
 - `click.testing.CliRunner` works with `monkeypatch.chdir(tmp_path)` for CLI tests; commit tests still need a real temporary Git repo.
 - `init` now copies schemas by iterating the registry, so new record types are picked up automatically.
@@ -23,3 +22,7 @@
 - Node Playwright works on Alpine with system Chromium:
   `apk add chromium nodejs npm`; `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install`; launch with `executablePath: "/usr/bin/chromium"`.
 - `npm run test:e2e` starts the real Python web server on port 0 and drives it with Chromium; no mocks.
+- The LLM adapter separates generation from persistence: `LLMAdapter.generate` returns memory only; `save_pending` writes only `proposals/`.
+- Generated proposals are normalized to `proposed` and get fresh timestamps, so a model cannot self-approve or backdate.
+- Unknown model fields are dropped before schema validation, keeping provider noise out of the proposal contract.
+- Ollama is called with `format: "json"` and `stream: false`; parsing still tolerates fenced JSON for other providers.

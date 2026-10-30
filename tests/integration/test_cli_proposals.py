@@ -140,3 +140,41 @@ def test_new_rejects_invalid_proposal(tmp_path: Path, monkeypatch) -> None:
 
     assert result.exit_code != 0
     assert "required property" in result.output
+
+
+def test_generate_saves_pending_only(tmp_path: Path, monkeypatch) -> None:
+    init_archive(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    def fake_complete(self, prompt: str) -> str:
+        return json.dumps(proposal("proposal:generated"))
+
+    monkeypatch.setattr("storygram.llm.OllamaProvider.complete", fake_complete)
+    result = CliRunner().invoke(
+        main,
+        ["proposal", "generate", "--text", "a memory", "--model", "test", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    output = json.loads(result.output)
+    assert output["proposal"]["status"] == "proposed"
+    assert output["proposal"]["id"].startswith("proposal:")
+    assert Path(output["path"]).exists()
+    assert not (tmp_path / "data" / "episodes" / "episode_cli-note.json").exists()
+
+
+def test_generate_without_save_writes_nothing(tmp_path: Path, monkeypatch) -> None:
+    init_archive(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    def fake_complete(self, prompt: str) -> str:
+        return json.dumps(proposal("proposal:generated"))
+
+    monkeypatch.setattr("storygram.llm.OllamaProvider.complete", fake_complete)
+    result = CliRunner().invoke(
+        main,
+        ["proposal", "generate", "--text", "a memory", "--model", "test", "--no-save"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert not list((tmp_path / "proposals").glob("*.json"))

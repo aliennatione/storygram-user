@@ -53,3 +53,11 @@
 - Keep this support documentation current and commit it with the work it describes.
 - Prefer subagents for inventory/research and direct edits for tightly coupled implementation.
 - Do not claim a check passed unless it actually ran in this environment.
+
+## Deployment
+
+- The final deliverable must be containerizable.
+- The default container must work fully offline and without Ollama.
+- Compose should offer an optional local Ollama profile/service for the LLM adapter.
+- The web UI remains exposed on port 8080 with `/data` persisted via a volume/bind mount.
+- Containerization comes after Playwright and the LLM adapter so the packaged surface is already tested.

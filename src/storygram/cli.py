@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import click
 
@@ -28,7 +28,7 @@ def _emit(data: Any, as_json: bool, plain: str | None = None) -> None:
         click.echo(json.dumps(data, indent=2))
 
 
-def _fail(message: str, as_json: bool = False) -> None:
+def _fail(message: str, as_json: bool = False) -> NoReturn:
     if as_json:
         click.echo(json.dumps({"ok": False, "errors": [message]}, indent=2))
     else:
@@ -250,6 +250,17 @@ def export(fmt: str, visibility: tuple[str, ...], as_json: bool) -> None:
     _emit(result, as_json)
 
 
+@main.command()
+@click.option("--host", default="0.0.0.0", show_default=True)
+@click.option("--port", default=8080, type=int, show_default=True)
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+def web(host: str, port: int, archive_path: str | None) -> None:
+    """Serve the local proposal review UI."""
+    from .web import serve
+
+    serve(_root(archive_path), host, port)
+
+
 @main.group()
 def proposal() -> None:
     """Create, inspect, approve or reject proposals."""
@@ -275,6 +286,8 @@ def proposal_new(file_: str, archive_path: str | None, as_json: bool) -> None:
         errors.append("Proposal id must start with proposal:")
     if errors:
         _fail("; ".join(errors), as_json)
+    if not isinstance(proposal_id, str):
+        _fail("Proposal id is required", as_json)
     if proposals_mod.find_proposal(root, proposal_id, include_applied=True):
         _fail(f"Proposal already exists: {proposal_id}", as_json)
     destination = proposals_mod.pending_dir(root) / proposals_mod.safe_filename(proposal_id)

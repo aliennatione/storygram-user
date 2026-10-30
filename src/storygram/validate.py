@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +13,9 @@ try:
     from jsonschema import FormatChecker, ValidationError
     from jsonschema import validate as json_validate
 except Exception:  # pragma: no cover - dependency is optional at runtime
-    FormatChecker = None
-    json_validate = None
-    ValidationError = Exception
+    FormatChecker = None  # type: ignore[assignment,misc]
+    json_validate = None  # type: ignore[assignment]
+    ValidationError = Exception  # type: ignore[assignment,misc]
 
 
 def load_schema(schema_path: Path) -> dict[str, Any] | None:
@@ -90,7 +91,9 @@ def validate_instance(root: Path, data: dict[str, Any], record_type: RecordType)
     return _validate_instance(root, data, record_type)
 
 
-def validate_items(root: Path, items: list[tuple[Path | str, dict[str, Any]]]) -> dict[str, Any]:
+def validate_items(
+    root: Path, items: Sequence[tuple[Path | str, dict[str, Any]]]
+) -> dict[str, Any]:
     """Validate an in-memory set of records, including duplicate IDs and references."""
     root = Path(root)
     errors: list[str] = []

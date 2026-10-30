@@ -16,3 +16,6 @@
 - The CLI previously defined `rebuild`, `search`, `timeline`, `genogram`, `conflicts` and `export` twice. The rewrite keeps one definition per command.
 - `click.testing.CliRunner` works with `monkeypatch.chdir(tmp_path)` for CLI tests; commit tests still need a real temporary Git repo.
 - `init` now copies schemas by iterating the registry, so new record types are picked up automatically.
+- Running `ruff format src tests` plus `ruff check --fix` cleared the inherited formatting/import debt; `mypy` is now clean too.
+- HTTP tests use `create_server(..., port=0)` and `urllib` with `HTTPError` handling so 4xx responses can be asserted.
+- The final packaging step is containerization with an optional local Ollama service in Compose; do not make Ollama a default runtime dependency.

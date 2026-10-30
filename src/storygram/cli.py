@@ -1,343 +1,383 @@
 """Storygram CLI."""
+
 from __future__ import annotations
 
 import json
-import sys
+import shutil
 from pathlib import Path
+from typing import Any
 
 import click
 
 from . import __version__
+from . import proposals as proposals_mod
 from . import validate as validate_mod
+from .registry import RECORD_TYPES, TYPE_BY_NAME, schema_paths
+
+
+def _root(path: str | None) -> Path:
+    return Path(path) if path else Path.cwd()
+
+
+def _emit(data: Any, as_json: bool, plain: str | None = None) -> None:
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+    elif plain is not None:
+        click.echo(plain)
+    else:
+        click.echo(json.dumps(data, indent=2))
+
+
+def _fail(message: str, as_json: bool = False) -> None:
+    if as_json:
+        click.echo(json.dumps({"ok": False, "errors": [message]}, indent=2))
+    else:
+        click.echo(message, err=True)
+    raise SystemExit(1)
 
 
 @click.group()
 @click.version_option(version=__version__)
-def main():
+def main() -> None:
     """Storygram CLI - local-first archive for life stories."""
-    pass
 
 
 @main.command()
 @click.argument("path", type=click.Path())
-def init(path: str):
+def init(path: str) -> None:
     """Initialize a new Storygram archive."""
     root = Path(path)
-    dirs = [
-        "data/episodes",
-        "data/people",
-        "data/organizations",
-        "data/places",
-        "data/periods",
-        "data/events",
-        "data/relationships",
-        "data/sources",
-        "data/media-assets",
-        "data/assertions",
-        "data/annotations",
-        "data/narratives",
-        "data/conflicts",
-        "inbox",
-        "proposals",
-        "generated",
-        "media-manifest",
-        "schema",
-    ]
-    for d in dirs:
-        (root / d).mkdir(parents=True, exist_ok=True)
-    # copy schemas if they exist in package data? also copy from repo
-    try:
-        import shutil
+    for record_type in RECORD_TYPES:
+        (root / "data" / record_type.directory).mkdir(parents=True, exist_ok=True)
+    for directory in ("inbox", "proposals", "generated", "media-manifest", "schema"):
+        (root / directory).mkdir(parents=True, exist_ok=True)
 
-        repo_root = Path(__file__).parent.parent.parent
-        for s in ["episode.schema.json", "assertion.schema.json"]:
-            src = repo_root / "schema" / s
-            if src.exists():
-                shutil.copy(src, root / "schema" / s)
-            elif (repo_root / s).exists():
-                shutil.copy(repo_root / s, root / "schema" / s)
-    except Exception:
-        pass
-    click.echo(f"Initialized Storygram archive at {root}")
+    repo_root = Path(__file__).resolve().parents[2]
+    copied = 0
+    for record_type in RECORD_TYPES:
+        for candidate in schema_paths(repo_root, record_type):
+            if candidate.exists():
+                shutil.copy(candidate, root / "schema" / record_type.schema_file)
+                copied += 1
+                break
+    click.echo(f"Initialized Storygram archive at {root} ({copied} schemas)")
 
 
 @main.command()
 @click.argument("path", type=click.Path(exists=True), required=False)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def validate(path: str | None, as_json: bool):
+def validate(path: str | None, as_json: bool) -> None:
     """Validate canonical archive."""
-    root = Path(path) if path else Path.cwd()
-    result = validate_mod.validate_archive(root)
+    result = validate_mod.validate_archive(_root(path))
     if as_json:
         click.echo(json.dumps(result, indent=2))
+    elif result["ok"]:
+        click.echo("OK")
     else:
-        if result["ok"]:
-            click.echo("OK")
-        else:
-            click.echo("INVALID")
-            for err in result.get("errors", []):
-                click.echo(f"- {err}")
-        if result.get("warnings"):
-            for w in result.get("warnings", []):
-                click.echo(f"WARNING: {w}")
+        click.echo("INVALID")
+        for error in result.get("errors", []):
+            click.echo(f"- {error}")
+    if result.get("warnings"):
+        for warning in result["warnings"]:
+            click.echo(f"WARNING: {warning}")
     if not result["ok"]:
-        sys.exit(1)
+        raise SystemExit(1)
 
 
 @main.command()
 @click.argument("path", type=click.Path(exists=True), required=False)
 @click.option("--json", "as_json", is_flag=True)
-def rebuild(path: str | None, as_json: bool):
-    """Rebuild derived views."""
-    root = Path(path) if path else Path.cwd()
-    (root / "generated").mkdir(parents=True, exist_ok=True)
-    click.echo("Rebuilt derived views")
+def rebuild(path: str | None, as_json: bool) -> None:
+    """Rebuild derived views and the search index."""
+    from . import index
+
+    root = _root(path)
+    db_path = index.build_index(root)
+    _emit({"ok": True, "index": str(db_path)}, as_json, f"Rebuilt index at {db_path}")
 
 
-@main.command()
+@main.command(name="git-check")
 @click.argument("base", required=False)
 @click.option("--json", "as_json", is_flag=True)
-def git_check(base: str | None, as_json: bool):
-    """Check git changes for invalid canonical data."""
-    result = {"ok": True, "errors": [], "warnings": []}
+def git_check(base: str | None, as_json: bool) -> None:
+    """Check canonical records for missing or broken references."""
+    from . import gitcheck
+
+    result = gitcheck.git_check(Path.cwd(), base)
     if as_json:
         click.echo(json.dumps(result, indent=2))
-    else:
+    elif result["ok"]:
         click.echo("OK")
-
-
-if __name__ == "__main__":
-    main()
+    else:
+        click.echo("INVALID")
+        for error in result.get("errors", []):
+            click.echo(f"- {error}")
+    if result.get("warnings"):
+        for warning in result["warnings"]:
+            click.echo(f"WARNING: {warning}")
+    if not result["ok"]:
+        raise SystemExit(1)
 
 
 @main.command()
 @click.argument("file", type=click.Path(exists=True))
 @click.option("--inbox/--data", default=True, help="Ingest to inbox (default) or directly to data")
-@click.pass_context
-def ingest(ctx, file: str, inbox: bool):
-    """Ingest an episode - registers episode without confirming facts."""
-    import shutil
-    from pathlib import Path
-
+def ingest(file: str, inbox: bool) -> None:
+    """Ingest an episode - registers the capture without confirming facts."""
     root = Path.cwd()
-    dest_dir = root / ("inbox" if inbox else "data/episodes")
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    src = Path(file)
-    dst = dest_dir / src.name
-    shutil.copy(src, dst)
-    click.echo(f"Ingested {src.name} to {dst}")
+    destination = root / ("inbox" if inbox else "data/episodes")
+    destination.mkdir(parents=True, exist_ok=True)
+    source = Path(file)
+    shutil.copy(source, destination / source.name)
+    click.echo(f"Ingested {source.name} to {destination}")
+
+
+def _canonical_records(root: Path) -> list[dict[str, Any]]:
+    items, errors = validate_mod.load_records(root)
+    if errors:
+        raise click.ClickException("; ".join(errors))
+    return [data for _, data in items]
 
 
 @main.command()
-@click.argument("id")
+@click.argument("record_id")
 @click.option("--json", "as_json", is_flag=True)
-def get(id: str, as_json: bool):
-    """Get a record by ID."""
-    click.echo(f"Not found: {id}")
+def get(record_id: str, as_json: bool) -> None:
+    """Get a canonical record by ID."""
+    for record in _canonical_records(Path.cwd()):
+        if record.get("id") == record_id:
+            _emit(record, as_json)
+            return
+    _fail(f"Not found: {record_id}", as_json)
 
 
 @main.command(name="list")
 @click.option("--type", "type_", help="Filter by type")
 @click.option("--json", "as_json", is_flag=True)
-def list_cmd(type_: str | None, as_json: bool):
-    """List records."""
+def list_cmd(type_: str | None, as_json: bool) -> None:
+    """List canonical records."""
+    records = _canonical_records(Path.cwd())
+    if type_:
+        wanted = type_.lower()
+        records = [
+            record
+            for record in records
+            if str(record.get("type", "")).lower() == wanted
+            or str(record.get("type", "")).lower().replace("asset", "-asset") == wanted
+        ]
     if as_json:
-        click.echo("[]")
-    else:
+        click.echo(json.dumps(records, indent=2))
+        return
+    for record in records:
+        click.echo(f"{record.get('id')} [{record.get('type')}]")
+    if not records:
         click.echo("[]")
 
 
 @main.command()
 @click.argument("query")
 @click.option("--json", "as_json", is_flag=True)
-def search(query: str, as_json: bool):
-    """Search records."""
-    if as_json:
-        click.echo("[]")
-    else:
-        click.echo("[]")
-
-
-@main.command()
-@click.argument("id")
-@click.option("--json", "as_json", is_flag=True)
-def timeline(id: str, as_json: bool):
-    """Generate timeline for an entity."""
-    if as_json:
-        click.echo("{}")
-    else:
-        click.echo("Timeline not found")
-
-
-@main.command()
-@click.argument("id")
-@click.option("--json", "as_json", is_flag=True)
-def genogram(id: str, as_json: bool):
-    """Generate genogram for a person."""
-    if as_json:
-        click.echo("{}")
-    else:
-        click.echo("Genogram not found")
-
-
-@main.command()
-@click.option("--status", default=None)
-@click.option("--json", "as_json", is_flag=True)
-def conflicts(status: str | None, as_json: bool):
-    """List conflicts."""
-    if as_json:
-        click.echo("[]")
-    else:
-        click.echo("[]")
-
-
-@main.command()
-@click.option("--format", "fmt", type=click.Choice(["json", "jsonld"]), default="json")
-@click.option("--json", "as_json", is_flag=True)
-def export(fmt: str, as_json: bool):
-    """Export records."""
-    if as_json or fmt == "json":
-        click.echo("[]")
-    else:
-        click.echo("{}")
-
-
-@main.command()
-@click.argument("base", required=False)
-@click.option("--json", "as_json", is_flag=True)
-def git_check_cmd(base: str | None, as_json: bool):
-    """Check git changes for invalid canonical data."""
-    from . import gitcheck
-
-    result = gitcheck.git_check(Path.cwd(), base)
-    if as_json:
-        click.echo(json.dumps(result, indent=2))
-    else:
-        if result["ok"]:
-            click.echo("OK")
-        else:
-            click.echo("INVALID")
-            for err in result.get("errors", []):
-                click.echo(f"- {err}")
-        if result.get("warnings"):
-            for w in result.get("warnings", []):
-                click.echo(f"WARNING: {w}")
-    if not result["ok"]:
-        sys.exit(1)
-
-
-# Alias
-@main.command(name="git-check")
-@click.argument("base", required=False)
-@click.option("--json", "as_json", is_flag=True)
-def git_check_alias(base: str | None, as_json: bool):
-    from . import gitcheck
-
-    result = gitcheck.git_check(Path.cwd(), base)
-    if as_json:
-        click.echo(json.dumps(result, indent=2))
-    else:
-        if result["ok"]:
-            click.echo("OK")
-        else:
-            click.echo("INVALID")
-            for err in result.get("errors", []):
-                click.echo(f"- {err}")
-        if result.get("warnings"):
-            for w in result.get("warnings", []):
-                click.echo(f"WARNING: {w}")
-    if not result["ok"]:
-        sys.exit(1)
-
-
-@main.command()
-@click.argument("path", type=click.Path(exists=True), required=False)
-@click.option("--json", "as_json", is_flag=True)
-def rebuild(path: str | None, as_json: bool):  # override
-    root = Path(path) if path else Path.cwd()
-    (root / "generated").mkdir(parents=True, exist_ok=True)
-    from . import index
-
-    index.build_index(root)
-    click.echo("Rebuilt derived views")
-
-
-@main.command()
-@click.argument("query")
-@click.option("--json", "as_json", is_flag=True)
-def search(query: str, as_json: bool):  # override
+def search(query: str, as_json: bool) -> None:
+    """Search canonical records."""
     from . import index
 
     results = index.search(Path.cwd(), query)
     if as_json:
         click.echo(json.dumps(results, indent=2))
-    else:
-        for r in results:
-            click.echo(f"{r['id']} [{r['type']}]")
-        if not results:
-            click.echo("[]")
+        return
+    for result in results:
+        click.echo(f"{result['id']} [{result['type']}]")
+    if not results:
+        click.echo("[]")
 
 
 @main.command()
-@click.argument("id")
+@click.argument("record_id")
 @click.option("--json", "as_json", is_flag=True)
-def timeline(id: str, as_json: bool):  # override
+def timeline(record_id: str, as_json: bool) -> None:
+    """Generate a timeline for an entity."""
     from .timeline import build_timeline
 
-    res = build_timeline(Path.cwd(), id)
-    if as_json:
-        click.echo(json.dumps(res, indent=2))
-    else:
-        if not res:
-            click.echo("Timeline not found")
-        else:
-            click.echo(json.dumps(res, indent=2))
+    result = build_timeline(Path.cwd(), record_id)
+    if not result and not as_json:
+        click.echo("Timeline not found")
+        return
+    _emit(result, as_json)
 
 
 @main.command()
-@click.argument("id")
+@click.argument("record_id")
 @click.option("--json", "as_json", is_flag=True)
-def genogram(id: str, as_json: bool):
+def genogram(record_id: str, as_json: bool) -> None:
+    """Generate a genogram for a person."""
     from .genogram import build_genogram
 
-    res = build_genogram(Path.cwd(), id)
-    if as_json:
-        click.echo(json.dumps(res, indent=2))
-    else:
-        click.echo(json.dumps(res, indent=2))
+    _emit(build_genogram(Path.cwd(), record_id), as_json)
 
 
 @main.command()
 @click.option("--status", default=None)
 @click.option("--json", "as_json", is_flag=True)
-def conflicts(status: str | None, as_json: bool):
+def conflicts(status: str | None, as_json: bool) -> None:
+    """List conflicts."""
     from .conflicts import list_conflicts
 
-    res = list_conflicts(Path.cwd(), status)
+    results = list_conflicts(Path.cwd(), status)
     if as_json:
-        click.echo(json.dumps(res, indent=2))
-    else:
-        for c in res:
-            click.echo(f"{c.get('id')} [{c.get('status')}]")
-        if not res:
-            click.echo("[]")
+        click.echo(json.dumps(results, indent=2))
+        return
+    for conflict in results:
+        click.echo(f"{conflict.get('id')} [{conflict.get('status')}]")
+    if not results:
+        click.echo("[]")
 
 
 @main.command()
 @click.option("--format", "fmt", type=click.Choice(["json", "jsonld"]), default="json")
 @click.option("--visibility", multiple=True, help="Filter by visibility")
 @click.option("--json", "as_json", is_flag=True)
-def export(fmt: str, visibility: tuple, as_json: bool):
+def export(fmt: str, visibility: tuple[str, ...], as_json: bool) -> None:
+    """Export canonical records."""
     from . import export as export_mod
 
-    vis = set(visibility) if visibility else None
+    filters = set(visibility) if visibility else None
     root = Path.cwd()
-    if fmt == "jsonld":
-        res = export_mod.export_jsonld(root, vis)
-        click.echo(json.dumps(res, indent=2))
+    result = (
+        export_mod.export_jsonld(root, filters)
+        if fmt == "jsonld"
+        else export_mod.export_json(root, filters)
+    )
+    _emit(result, as_json)
+
+
+@main.group()
+def proposal() -> None:
+    """Create, inspect, approve or reject proposals."""
+
+
+@proposal.command("new")
+@click.option("--file", "file_", type=click.Path(exists=True), required=True)
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--json", "as_json", is_flag=True)
+def proposal_new(file_: str, archive_path: str | None, as_json: bool) -> None:
+    """Register a pending proposal from a JSON file."""
+    root = _root(archive_path)
+    try:
+        data = json.loads(Path(file_).read_text(encoding="utf-8"))
+    except Exception as exc:
+        _fail(f"Cannot read proposal: {exc}", as_json)
+    if not isinstance(data, dict):
+        _fail("Proposal must be a JSON object", as_json)
+    proposal_type = TYPE_BY_NAME["Proposal"]
+    errors = validate_mod.validate_instance(root, data, proposal_type)
+    proposal_id = data.get("id")
+    if not isinstance(proposal_id, str) or not proposal_id.startswith("proposal:"):
+        errors.append("Proposal id must start with proposal:")
+    if errors:
+        _fail("; ".join(errors), as_json)
+    if proposals_mod.find_proposal(root, proposal_id, include_applied=True):
+        _fail(f"Proposal already exists: {proposal_id}", as_json)
+    destination = proposals_mod.pending_dir(root) / proposals_mod.safe_filename(proposal_id)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    _emit({"ok": True, "proposal_id": proposal_id, "path": str(destination)}, as_json)
+
+
+@proposal.command("list")
+@click.option("--all", "include_applied", is_flag=True, help="Include merged/archive proposals")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--json", "as_json", is_flag=True)
+def proposal_list(include_applied: bool, archive_path: str | None, as_json: bool) -> None:
+    """List pending proposals."""
+    root = _root(archive_path)
+    entries = []
+    for path, data in proposals_mod.list_proposals(root, include_applied=include_applied):
+        try:
+            label = str(path.relative_to(root))
+        except ValueError:
+            label = str(path)
+        entries.append(
+            {
+                "id": data.get("id"),
+                "status": data.get("status"),
+                "title": data.get("title"),
+                "operations": len(data.get("operations") or []),
+                "path": label,
+            }
+        )
+    if as_json:
+        click.echo(json.dumps(entries, indent=2))
+        return
+    for entry in entries:
+        click.echo(f"{entry['id']} [{entry['status']}] {entry['operations']} op(s) {entry['path']}")
+    if not entries:
+        click.echo("[]")
+
+
+@proposal.command("show")
+@click.argument("proposal_id")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+def proposal_show(proposal_id: str, archive_path: str | None) -> None:
+    """Show a pending or applied proposal."""
+    root = _root(archive_path)
+    path = proposals_mod.find_proposal(root, proposal_id, include_applied=True)
+    if path is None:
+        _fail(f"Proposal not found: {proposal_id}")
+    click.echo(path.read_text(encoding="utf-8"))
+
+
+@proposal.command("approve")
+@click.argument("proposal_id")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--dry-run", is_flag=True, help="Plan only; write nothing")
+@click.option("--no-commit", is_flag=True, help="Write canonical data without Git commit")
+@click.option("--json", "as_json", is_flag=True)
+def proposal_approve(
+    proposal_id: str, archive_path: str | None, dry_run: bool, no_commit: bool, as_json: bool
+) -> None:
+    """Validate and apply a proposal atomically."""
+    try:
+        result = proposals_mod.apply_proposal(
+            _root(archive_path),
+            proposal_id,
+            dry_run=dry_run,
+            commit=not no_commit,
+        )
+    except proposals_mod.ProposalError as exc:
+        _fail("; ".join(exc.errors), as_json)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+    if dry_run:
+        click.echo(f"DRY RUN {proposal_id}")
     else:
-        res = export_mod.export_json(root, vis)
-        if as_json or fmt == "json":
-            click.echo(json.dumps(res, indent=2))
-        else:
-            click.echo(json.dumps(res, indent=2))
+        click.echo(f"Applied {proposal_id}")
+    for operation in result["operations"]:
+        click.echo(
+            f"- {operation['op']} {operation['record_type']} "
+            f"{operation.get('record_id') or operation.get('target_id') or ''}".rstrip()
+        )
+    for path in result["files"]:
+        click.echo(f"  {path}")
+    if result.get("commit"):
+        click.echo(f"Committed {result['commit']}")
+
+
+@proposal.command("reject")
+@click.argument("proposal_id")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--reason", default=None)
+@click.option("--json", "as_json", is_flag=True)
+def proposal_reject(
+    proposal_id: str, archive_path: str | None, reason: str | None, as_json: bool
+) -> None:
+    """Reject a pending proposal without changing canonical data."""
+    try:
+        result = proposals_mod.reject_proposal(_root(archive_path), proposal_id, reason)
+    except proposals_mod.ProposalError as exc:
+        _fail("; ".join(exc.errors), as_json)
+    _emit(result, as_json, f"Rejected {proposal_id}")
+
+
+if __name__ == "__main__":
+    main()

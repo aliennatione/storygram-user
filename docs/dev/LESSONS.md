@@ -13,3 +13,6 @@
 - Atomic writes use same-directory temp files and `os.replace`; rollback restores prior bytes or removes newly created files.
 - The archive commit is path-scoped, so unrelated untracked files are not included.
 - Playwright and browser binaries are not installed yet.
+- The CLI previously defined `rebuild`, `search`, `timeline`, `genogram`, `conflicts` and `export` twice. The rewrite keeps one definition per command.
+- `click.testing.CliRunner` works with `monkeypatch.chdir(tmp_path)` for CLI tests; commit tests still need a real temporary Git repo.
+- `init` now copies schemas by iterating the registry, so new record types are picked up automatically.

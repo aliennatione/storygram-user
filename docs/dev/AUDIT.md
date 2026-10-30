@@ -110,6 +110,6 @@ Close the last user-facing gap before export: generate proposals from the web UI
 
 ### Calibration
 
-1. Commit this feature before exporting the session.
+1. The web-generation feature is committed; the session is ready for export.
 2. Hand off Docker runtime verification and optional editing/API work.
 3. Do not claim browser-side Ollama success; only the injected provider path is tested.

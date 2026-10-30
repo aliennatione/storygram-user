@@ -5,8 +5,8 @@ Last updated: 2026-10-30
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Latest commit: `14eeec1 feat(agent): add provider-agnostic proposal adapter`
-- Final container/documentation work is present and pending commit.
+- Latest commit: `9e56f2d feat(web): generate pending proposals with Ollama`
+- Web generation, container files and bilingual docs are committed.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present. Python and browser checks pass locally; Docker itself was not run in this session.
 
 ## Environment
@@ -58,7 +58,7 @@ Last updated: 2026-10-30
 
 ## Active
 
-- Commit the web-generation work and prepare the session handoff.
+- Session ready for export/handoff. No uncommitted application work.
 - Docker image/Compose runtime verification remains for a Docker-capable host.
 
 ## Next Steps

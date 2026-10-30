@@ -37,7 +37,7 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-The web UI exposes the same engine, including a **Generate** page for local Ollama:
+The web UI exposes the same engine, including a **Generate** page for local Ollama and an edit link for pending proposals:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
@@ -56,6 +56,16 @@ The UI is unauthenticated and intended for a controlled local network or contain
 - Approval is atomic, with rollback on write/commit failure.
 
 See `PROPOSAL_CONTRACT.md` in this directory for the full contract.
+
+## JSON API
+
+External agents can create, list, read and update pending proposals over HTTP. They cannot approve them. See [API.md](API.md).
+
+```bash
+curl -X POST http://localhost:8080/api/proposals \
+  -H 'Content-Type: application/json' \
+  --data @proposal.json
+```
 
 ## Optional LLM generation
 

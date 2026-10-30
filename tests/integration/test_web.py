@@ -78,6 +78,7 @@ def test_home_and_new_proposal(tmp_path: Path) -> None:
         assert "proposal:web-1" in body
         assert "Dry-run preview" in body
         assert (tmp_path / "proposals" / "proposal_web-1.json").exists()
+        assert "Edit pending proposal" in body
         status, body = get(base + "/proposals")
         assert "proposal:web-1" in body
     finally:
@@ -199,6 +200,64 @@ def test_web_generate_surfaces_provider_error(tmp_path: Path) -> None:
         assert status == 502
         assert "model offline" in body
         assert not list((tmp_path / "proposals").glob("*.json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_edits_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        post(base + "/proposals/new", {"json": json.dumps(proposal())})
+        status, body = get(base + f"/proposals/{quote('proposal:web-1', safe='')}/edit")
+        assert status == 200
+        assert "Edit proposal" in body
+        assert 'name="json"' in body
+
+        edited = proposal()
+        edited["title"] = "Edited title"
+        status, body = post(
+            base + f"/proposals/{quote('proposal:web-1', safe='')}/edit",
+            {"json": json.dumps(edited)},
+        )
+        assert status == 200
+        assert "Edited title" in body
+        saved = json.loads((tmp_path / "proposals" / "proposal_web-1.json").read_text())
+        assert saved["title"] == "Edited title"
+        assert saved["created_at"] == NOW
+
+        changed_id = proposal("proposal:web-other")
+        status, body = post(
+            base + f"/proposals/{quote('proposal:web-1', safe='')}/edit",
+            {"json": json.dumps(changed_id)},
+        )
+        assert status == 400
+        assert "id cannot change" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_cannot_edit_applied_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        post(base + "/proposals/new", {"json": json.dumps(proposal())})
+        post(
+            base + f"/proposals/{quote('proposal:web-1', safe='')}/approve",
+            {"commit": "no"},
+        )
+        status, body = get(base + f"/proposals/{quote('proposal:web-1', safe='')}/edit")
+        assert status == 409
+        assert "Cannot edit applied proposal" in body
+
+        status, body = post(
+            base + f"/proposals/{quote('proposal:web-1', safe='')}/edit",
+            {"json": json.dumps(proposal())},
+        )
+        assert status == 409
+        assert "already applied" in body
     finally:
         server.shutdown()
         server.server_close()

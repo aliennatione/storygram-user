@@ -6,7 +6,7 @@ Last updated: 2026-10-30
 
 - Branch: `feature/agent-proposal-flow`
 - Latest commit: `9e56f2d feat(web): generate pending proposals with Ollama`
-- Web generation, container files and bilingual docs are committed.
+- Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present. Python and browser checks pass locally; Docker itself was not run in this session.
 
 ## Environment
@@ -27,6 +27,7 @@ Last updated: 2026-10-30
 - `schema/proposal.schema.json` v1 with explicit operations and conditional shapes; root duplicate kept in sync.
 - `schema/assertion.schema.json`: corrected supersession rule. A superseded assertion must now close `transaction_time.recorded_until`; it no longer incorrectly requires `supersedes` on the old record.
 - `src/storygram/proposals.py`: proposal discovery, planning, dry-run, evidence checks, metadata policy, supersession, archive, conflict blocking, atomic writes, rollback, Git commit, rejection.
+- Pending proposal helpers: `create_pending` and `update_pending`, with atomic writes, ID immutability, created_at preservation and closed/applied guards.
 - `tests/integration/test_proposal_engine.py`: engine coverage for dry-run, apply, metadata policy, supersession, unmodelled/modelled conflicts, evidence, archive policy, Git commit, dirty tree and rejection.
 - `src/storygram/cli.py` rewritten without duplicate registrations.
   - `init` creates every registry directory and copies all 15 schemas.
@@ -35,12 +36,14 @@ Last updated: 2026-10-30
   - `proposal new|list|show|approve|reject` implemented.
   - `approve` supports `--dry-run`, `--no-commit` and scoped Git commits.
 - `tests/integration/test_cli_proposals.py`: CLI coverage for init, proposal lifecycle, dry-run, no-commit, commit, reject and invalid input.
-- `src/storygram/web.py`: stdlib HTTP UI with home, proposal list, JSON create form, Ollama Generate page, dry-run preview, approve (commit/no-commit) and reject.
+- `src/storygram/web.py`: stdlib HTTP UI with home, proposal list, JSON create form, Ollama Generate page, pending edit page, dry-run preview, approve (commit/no-commit) and reject.
+- JSON API: `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`; no approve endpoint.
 - `src/storygram/cli.py`: `web` command serving the UI on `0.0.0.0:8080` by default.
-- `tests/integration/test_web.py`: HTTP tests for home, create, preview, approve, reject, invalid JSON, Ollama generation, empty source and provider errors.
+- `tests/integration/test_web.py`: HTTP tests for home, create, edit, preview, approve, reject, invalid JSON, Ollama generation, empty source and provider errors.
+- `tests/integration/test_api.py`: agent API create/read/update/list, duplicate/closed/applied guards, error codes and absence of approve endpoint.
 - Web generation uses an injectable provider factory for tests; production uses `OllamaProvider` with form/env model and URL.
 - Documentation audit added in `docs/dev/AUDIT.md`.
-- `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, create, preview, approve without commit, reject.
+- `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, generate form, create, edit pending, approve without commit, reject.
 - `package.json` / `package-lock.json`: Playwright Node dependency and `npm run test:e2e`.
 - `.gitignore`: `node_modules/` ignored.
 - `src/storygram/llm.py`: provider-agnostic adapter, callable mock provider, stdlib Ollama provider, prompt builder, JSON extraction, normalization, pending-only save.
@@ -58,19 +61,19 @@ Last updated: 2026-10-30
 
 ## Active
 
-- Session ready for export/handoff. No uncommitted application work.
+- Pending-edit and agent-API work is implemented and tested; final commit/handoff pending.
 - Docker image/Compose runtime verification remains for a Docker-capable host.
 
 ## Next Steps
 
 1. Build and smoke-test the Dockerfile/Compose on a Docker-capable host; verify named-volume ownership, auto-init, healthcheck and optional Ollama profile.
-2. Decide whether to add pending-proposal editing and an external agent API.
-3. Clean up leftover `export`/`ingest` stubs and refresh `PRD.md`/`PLAN.md` if they should describe the shipped workflow.
+2. Clean up leftover `export`/`ingest` stubs and refresh `PRD.md`/`PLAN.md` if they should describe the shipped workflow.
+3. Decide whether agents need withdraw/reject or generation endpoints beyond create/read/update.
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `45 passed`.
-- `npm run test:e2e`: Playwright approve and reject flows passed.
+- `PYTHONPATH=/data/src python -m pytest -q`: `51 passed`.
+- `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
 - `mypy src`: passed.
@@ -90,4 +93,5 @@ Last updated: 2026-10-30
 - Pending proposals remain local and ignored by Git; only merged proposals are archived and committed.
 - `export` and `ingest` still need the planned cleanup; `ingest` still only copies files.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
-- The web UI has no authentication and binds to `0.0.0.0`; use only in the controlled container/host mapping.
+- The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping.
+- The API cannot approve; approval remains UI/CLI only.

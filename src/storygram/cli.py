@@ -13,7 +13,7 @@ import click
 from . import __version__
 from . import proposals as proposals_mod
 from . import validate as validate_mod
-from .registry import RECORD_TYPES, TYPE_BY_NAME, find_schema
+from .registry import RECORD_TYPES, find_schema
 
 
 def _root(path: str | None) -> Path:
@@ -279,21 +279,14 @@ def proposal_new(file_: str, archive_path: str | None, as_json: bool) -> None:
         _fail(f"Cannot read proposal: {exc}", as_json)
     if not isinstance(data, dict):
         _fail("Proposal must be a JSON object", as_json)
-    proposal_type = TYPE_BY_NAME["Proposal"]
-    errors = validate_mod.validate_instance(root, data, proposal_type)
-    proposal_id = data.get("id")
-    if not isinstance(proposal_id, str) or not proposal_id.startswith("proposal:"):
-        errors.append("Proposal id must start with proposal:")
-    if errors:
-        _fail("; ".join(errors), as_json)
-    if not isinstance(proposal_id, str):
-        _fail("Proposal id is required", as_json)
-    if proposals_mod.find_proposal(root, proposal_id, include_applied=True):
-        _fail(f"Proposal already exists: {proposal_id}", as_json)
-    destination = proposals_mod.pending_dir(root) / proposals_mod.safe_filename(proposal_id)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    _emit({"ok": True, "proposal_id": proposal_id, "path": str(destination)}, as_json)
+    try:
+        destination = proposals_mod.create_pending(root, data)
+    except proposals_mod.ProposalError as exc:
+        _fail("; ".join(exc.errors), as_json)
+    _emit(
+        {"ok": True, "proposal_id": data["id"], "path": str(destination)},
+        as_json,
+    )
 
 
 @proposal.command("generate")

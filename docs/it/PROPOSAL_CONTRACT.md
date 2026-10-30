@@ -118,6 +118,22 @@ Un'approvazione riuscita restituisce:
 
 Tutti gli errori di validazione vengono raccolti prima di scrivere. Se la pianificazione fallisce, non viene scritto nulla.
 
+## Modifica delle proposte pendenti
+
+- Si possono modificare solo proposte pendenti con stato `draft`, `proposed`, `under_review` o `approved`.
+- La modifica sostituisce il JSON pendente, conserva `created_at`, aggiorna `updated_at` e non può cambiare l'ID.
+- Le proposte applicate, merged, rejected e archived sono in sola lettura.
+- La pagina di modifica web, `PUT /api/proposals/<id>` e l'helper di update usano la stessa validazione e la stessa scrittura atomica.
+
+## Confine dell'API JSON
+
+- `POST /api/proposals` crea una proposta pendente.
+- `GET /api/proposals` elenca le proposte pendenti; `?include_applied=1` include anche l'archivio merged.
+- `GET /api/proposals/<id>` restituisce la proposta e, per quelle pendenti, una preview di validazione dry-run.
+- `PUT /api/proposals/<id>` modifica una proposta pendente.
+- Non esiste un endpoint di approvazione. Solo UI/CLI umane possono applicare una proposta.
+- L'API è locale e senza autenticazione; esponila solo su una rete controllata.
+
 ## Confine dell'adapter
 
 - Gli adapter ricevono testo sorgente e, opzionalmente, ID canonici noti, e restituiscono una sola proposta.

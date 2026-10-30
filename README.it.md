@@ -32,6 +32,20 @@ storygram proposal reject proposal:example-1 --reason "manca evidenza"
 
 `approve` scrive in modo atomico e crea un commit Git limitato ai file applicati. Usa `--no-commit` per saltare Git. L'archivio deve essere un repository Git con working tree tracciato pulito. Regole complete nel [contratto delle proposte](docs/it/PROPOSAL_CONTRACT.md).
 
+Le proposte pendenti si possono modificare dalla pagina di dettaglio della UI web. Le proposte applicate, merged, rejected o archived sono in sola lettura.
+
+## API JSON per agenti
+
+Gli agenti esterni possono creare, elencare, leggere e modificare proposte pendenti tramite l'API JSON locale. Non esiste intenzionalmente un endpoint di approvazione: serve la revisione umana.
+
+```bash
+curl -X POST http://localhost:8080/api/proposals \
+  -H 'Content-Type: application/json' \
+  --data @proposta.json
+```
+
+Vedi la [guida API JSON](docs/it/API.md) per endpoint, codici di stato ed esempi.
+
 ## LLM locale opzionale
 
 L'adapter può solo creare proposte pendenti. Non può approvare né scrivere dati canonici. Usa la pagina **Generate** nella UI web o la CLI.
@@ -84,6 +98,7 @@ I test browser usano Node Playwright con Chromium di sistema. Su Alpine: `apk ad
 ## Documentazione
 
 - [Guida italiana](docs/it/README.md)
+- [API JSON](docs/it/API.md)
 - [English guide](docs/en/README.md)
 - [README (English)](README.md)
 

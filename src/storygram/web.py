@@ -14,9 +14,16 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from . import proposals as proposals_mod
 from . import validate as validate_mod
 from .llm import LLMAdapter, LLMAdapterError, OllamaProvider, Provider, save_pending
-from .registry import RECORD_TYPES, TYPE_BY_NAME
+from .registry import RECORD_TYPES
 
 MAX_BODY = 4 * 1024 * 1024
+
+
+class APIRequestError(Exception):
+    def __init__(self, status: int, message: str):
+        self.status = status
+        self.message = message
+        super().__init__(message)
 
 
 def _esc(value: Any) -> str:
@@ -168,6 +175,24 @@ Paste a proposal JSON object. It is saved as pending only; approval is a separat
     return _layout("New proposal", body)
 
 
+def _edit_form(proposal_id: str, value: str = "", errors: list[str] | None = None) -> str:
+    body = f"""
+<h1>Edit proposal</h1>
+<p class="muted">
+Editing {_esc(proposal_id)}. The proposal ID cannot change; saving replaces the pending JSON.
+</p>
+{_errors_block(errors or [])}
+<form method="post" action="/proposals/{quote(proposal_id, safe="")}/edit">
+<textarea name="json" spellcheck="false">{_esc(value)}</textarea>
+<p>
+  <button class="primary" type="submit">Save pending proposal</button>
+  <a class="button" href="/proposals/{quote(proposal_id, safe="")}">Cancel</a>
+</p>
+</form>
+"""
+    return _layout(f"Edit {proposal_id}", body)
+
+
 def render_generate_form(
     source: str = "",
     errors: list[str] | None = None,
@@ -243,6 +268,13 @@ def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None)
         except proposals_mod.ProposalError as exc:
             plan_html = f"<h2>Dry-run preview</h2>{_errors_block(exc.errors)}"
 
+    edit_link = ""
+    if path.parent == proposals_mod.pending_dir(root) and _status_is_open(data.get("status")):
+        edit_link = (
+            f'<a class="button" href="/proposals/{quote(proposal_id, safe="")}/edit">'
+            "Edit pending proposal</a> "
+        )
+
     body = f"""
 <h1>{_esc(data.get("id"))}</h1>
 <p>
@@ -253,7 +285,7 @@ def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None)
 {plan_html}
 <h2>Proposal JSON</h2>
 <pre>{_esc(json.dumps(data, indent=2))}</pre>
-<p><a class="button" href="/proposals">Back</a></p>
+<p>{edit_link}<a class="button" href="/proposals">Back</a></p>
 """
     return 200, _layout(str(data.get("id")), body)
 
@@ -288,6 +320,159 @@ class StorygramHandler(BaseHTTPRequestHandler):
         self.send_header("Location", location)
         self.end_headers()
 
+    def _send_json(
+        self, status: int, payload: dict[str, Any], headers: dict[str, str] | None = None
+    ) -> None:
+        encoded = json.dumps(payload, indent=2).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def _read_json(self) -> dict[str, Any]:
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if content_type != "application/json":
+            raise APIRequestError(415, "Content-Type must be application/json")
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > MAX_BODY:
+            raise APIRequestError(413, "request body too large")
+        raw = self.rfile.read(length).decode("utf-8")
+        try:
+            data = json.loads(raw)
+        except Exception as exc:
+            raise APIRequestError(400, f"Invalid JSON: {exc}") from exc
+        if not isinstance(data, dict):
+            raise APIRequestError(400, "Request body must be a JSON object")
+        return data
+
+    def _api_error(self, status: int, message: str, headers: dict[str, str] | None = None) -> None:
+        self._send_json(status, {"ok": False, "errors": [message]}, headers)
+
+    def _api_list(self, query: dict[str, list[str]]) -> None:
+        include_applied = (query.get("include_applied") or ["0"])[0].lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        items = []
+        for path, data in proposals_mod.list_proposals(self.root, include_applied=include_applied):
+            items.append(
+                {
+                    "id": data.get("id"),
+                    "status": data.get("status"),
+                    "title": data.get("title"),
+                    "updated_at": data.get("updated_at"),
+                    "operation_count": len(data.get("operations") or []),
+                    "applied": path.parent == proposals_mod.applied_dir(self.root),
+                }
+            )
+        self._send_json(200, {"ok": True, "proposals": items})
+
+    def _api_get(self, proposal_id: str) -> None:
+        path = proposals_mod.find_proposal(self.root, proposal_id, include_applied=True)
+        if path is None:
+            self._api_error(404, f"proposal not found: {proposal_id}")
+            return
+        data = proposals_mod._load_json(path)
+        if data is None:
+            self._api_error(500, f"cannot read proposal: {proposal_id}")
+            return
+        applied = path.parent == proposals_mod.applied_dir(self.root)
+        errors: list[str] = []
+        preview: list[dict[str, Any]] = []
+        files: list[str] = []
+        if not applied:
+            try:
+                plan = proposals_mod.plan_apply(self.root, data)
+                preview = plan.preview
+                files = sorted(
+                    str(item.relative_to(self.root))
+                    for item in plan.writes
+                    if item.is_relative_to(self.root)
+                )
+            except proposals_mod.ProposalError as exc:
+                errors = exc.errors
+        self._send_json(
+            200,
+            {
+                "ok": True,
+                "applied": applied,
+                "proposal": data,
+                "validation": {"ok": not errors, "errors": errors},
+                "preview": preview,
+                "files": files,
+            },
+        )
+
+    def _api_create(self) -> None:
+        try:
+            data = self._read_json()
+            proposals_mod.create_pending(self.root, data)
+        except APIRequestError as exc:
+            self._api_error(exc.status, exc.message)
+            return
+        except proposals_mod.ProposalConflictError as exc:
+            self._api_error(409, "; ".join(exc.errors))
+            return
+        except proposals_mod.ProposalError as exc:
+            self._api_error(400, "; ".join(exc.errors))
+            return
+        proposal_id = str(data["id"])
+        location = f"/api/proposals/{quote(proposal_id, safe='')}"
+        self._send_json(
+            201, {"ok": True, "proposal": data, "location": location}, {"Location": location}
+        )
+
+    def _api_update(self, proposal_id: str) -> None:
+        try:
+            data = self._read_json()
+            path = proposals_mod.update_pending(self.root, proposal_id, data)
+        except APIRequestError as exc:
+            self._api_error(exc.status, exc.message)
+            return
+        except proposals_mod.ProposalNotFoundError as exc:
+            self._api_error(404, "; ".join(exc.errors))
+            return
+        except proposals_mod.ProposalConflictError as exc:
+            self._api_error(409, "; ".join(exc.errors))
+            return
+        except proposals_mod.ProposalError as exc:
+            self._api_error(400, "; ".join(exc.errors))
+            return
+        saved = proposals_mod._load_json(path) or data
+        self._send_json(200, {"ok": True, "proposal": saved})
+
+    def _handle_api(self, method: str, path: str, query: str) -> None:
+        segments = [unquote(part) for part in path.strip("/").split("/") if part]
+        if len(segments) < 2 or segments[0] != "api" or segments[1] != "proposals":
+            self._api_error(404, "API route not found")
+            return
+        if len(segments) == 2:
+            if method == "GET":
+                self._api_list(parse_qs(query, keep_blank_values=True))
+            elif method == "POST":
+                self._api_create()
+            else:
+                self._api_error(405, "method not allowed", {"Allow": "GET, POST"})
+            return
+        if len(segments) == 3:
+            proposal_id = segments[2]
+            if not proposal_id.startswith("proposal:"):
+                self._api_error(400, "proposal id must start with proposal:")
+                return
+            if method == "GET":
+                self._api_get(proposal_id)
+            elif method == "PUT":
+                self._api_update(proposal_id)
+            else:
+                self._api_error(405, "method not allowed", {"Allow": "GET, PUT"})
+            return
+        self._api_error(404, "API route not found")
+
     def _read_form(self) -> dict[str, list[str]]:
         length = int(self.headers.get("Content-Length", "0"))
         if length > MAX_BODY:
@@ -298,6 +483,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        if path.startswith("/api/"):
+            self._handle_api("GET", path, parsed.query)
+            return
         if path == "/":
             self._send(200, render_home(self.root))
             return
@@ -310,6 +498,36 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/proposals/generate":
             self._send(200, render_generate_form())
             return
+        if path.startswith("/proposals/") and path.endswith("/edit"):
+            proposal_id = path.removeprefix("/proposals/").removesuffix("/edit").strip("/")
+            pending = proposals_mod.find_proposal(self.root, proposal_id)
+            if pending is None:
+                applied = proposals_mod.find_applied_proposal(self.root, proposal_id)
+                if applied is not None:
+                    self._send(
+                        409,
+                        _layout(
+                            "Cannot edit",
+                            f"<h1>Cannot edit applied proposal</h1><p>{_esc(proposal_id)}</p>",
+                        ),
+                    )
+                else:
+                    self._send(
+                        404, _layout("Not found", f"<h1>Not found</h1><p>{_esc(proposal_id)}</p>")
+                    )
+                return
+            data = proposals_mod._load_json(pending)
+            if data is None or not _status_is_open(data.get("status")):
+                self._send(
+                    409,
+                    _layout(
+                        "Cannot edit",
+                        f"<h1>Proposal is not editable</h1><p>{_esc(proposal_id)}</p>",
+                    ),
+                )
+                return
+            self._send(200, _edit_form(proposal_id, json.dumps(data, indent=2)))
+            return
         if path.startswith("/proposals/"):
             proposal_id = path.removeprefix("/proposals/").strip("/")
             status, body = render_detail(self.root, proposal_id)
@@ -320,6 +538,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        if path.startswith("/api/"):
+            self._handle_api("POST", path, parsed.query)
+            return
         try:
             form = self._read_form()
         except ValueError as exc:
@@ -358,6 +579,28 @@ class StorygramHandler(BaseHTTPRequestHandler):
             self._redirect(f"/proposals/{quote(generated_id, safe='')}")
             return
 
+        if path.startswith("/proposals/") and path.endswith("/edit"):
+            edit_id = path.removeprefix("/proposals/").removesuffix("/edit").strip("/")
+            raw = (form.get("json") or [""])[0]
+            try:
+                data = json.loads(raw)
+            except Exception as exc:
+                self._send(400, _edit_form(edit_id, raw, [f"Invalid JSON: {exc}"]))
+                return
+            if not isinstance(data, dict):
+                self._send(400, _edit_form(edit_id, raw, ["Proposal must be a JSON object"]))
+                return
+            try:
+                proposals_mod.update_pending(self.root, edit_id, data)
+            except proposals_mod.ProposalConflictError as exc:
+                self._send(409, _edit_form(edit_id, raw, exc.errors))
+                return
+            except proposals_mod.ProposalError as exc:
+                self._send(400, _edit_form(edit_id, raw, exc.errors))
+                return
+            self._redirect(f"/proposals/{quote(edit_id, safe='')}")
+            return
+
         if path == "/proposals/new":
             raw = (form.get("json") or [""])[0]
             try:
@@ -368,21 +611,12 @@ class StorygramHandler(BaseHTTPRequestHandler):
             if not isinstance(data, dict):
                 self._send(400, _new_form(raw, ["Proposal must be a JSON object"]))
                 return
-            errors = validate_mod.validate_instance(self.root, data, TYPE_BY_NAME["Proposal"])
-            proposal_id = data.get("id")
-            if not isinstance(proposal_id, str) or not proposal_id.startswith("proposal:"):
-                errors.append("Proposal id must start with proposal:")
-            if errors or not isinstance(proposal_id, str):
-                self._send(400, _new_form(raw, errors))
+            try:
+                proposals_mod.create_pending(self.root, data)
+            except proposals_mod.ProposalError as exc:
+                self._send(400, _new_form(raw, exc.errors))
                 return
-            if proposals_mod.find_proposal(self.root, proposal_id, include_applied=True):
-                self._send(400, _new_form(raw, [f"Proposal already exists: {proposal_id}"]))
-                return
-            destination = proposals_mod.pending_dir(self.root) / proposals_mod.safe_filename(
-                proposal_id
-            )
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            proposal_id = str(data["id"])
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
             return
 
@@ -411,6 +645,14 @@ class StorygramHandler(BaseHTTPRequestHandler):
             return
 
         self._send(404, _layout("Not found", "<h1>Not found</h1>"))
+
+    def do_PUT(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        path = unquote(parsed.path)
+        if path.startswith("/api/"):
+            self._handle_api("PUT", path, parsed.query)
+            return
+        self._send(405, _layout("Method not allowed", "<h1>Method not allowed</h1>"))
 
 
 def create_server(

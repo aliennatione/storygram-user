@@ -118,6 +118,22 @@ A successful approval returns:
 
 All validation errors are collected before writing. Nothing is written when planning fails.
 
+## Editing Pending Proposals
+
+- Only pending proposals with status `draft`, `proposed`, `under_review` or `approved` can be edited.
+- Editing replaces the pending JSON, preserves `created_at`, refreshes `updated_at` and cannot change the proposal ID.
+- Applied, merged, rejected and archived proposals are read-only.
+- The web edit page, `PUT /api/proposals/<id>` and the pending-update helper all use the same validation and atomic write.
+
+## JSON API Boundary
+
+- `POST /api/proposals` creates a pending proposal.
+- `GET /api/proposals` lists pending proposals; `?include_applied=1` also lists the merged archive.
+- `GET /api/proposals/<id>` returns the proposal and, for pending proposals, a dry-run validation preview.
+- `PUT /api/proposals/<id>` edits a pending proposal.
+- There is no approve endpoint. Only the human UI/CLI can apply a proposal.
+- The API is local and unauthenticated; expose it only on a controlled network.
+
 ## Adapter Boundary
 
 - Adapters receive source text plus optional known canonical IDs and return one proposal.

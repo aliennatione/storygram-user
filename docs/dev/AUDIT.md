@@ -113,3 +113,28 @@ Close the last user-facing gap before export: generate proposals from the web UI
 1. The web-generation feature is committed; the session is ready for export.
 2. Hand off Docker runtime verification and optional editing/API work.
 3. Do not claim browser-side Ollama success; only the injected provider path is tested.
+
+## 2026-10-30 - pending editing and agent API
+
+### Final objective
+
+A local-first Storygram where humans and external agents submit reviewable proposals, humans keep final approval, and optional LLM generation still cannot mutate canonical data.
+
+### Current objective
+
+Close the two requested gaps: editing pending proposals and a JSON API for external agents.
+
+### Point of situation
+
+- Pending proposals can be edited in the web UI and via `PUT /api/proposals/<id>`.
+- Editing preserves `created_at`, refreshes `updated_at`, forbids ID changes and blocks applied/closed proposals.
+- External agents can list, create, read and update pending proposals over JSON.
+- No API approval endpoint exists; the human approval gate remains intact.
+- UI and API share the same engine helpers and atomic pending writes.
+- Python, lint, format, mypy and browser e2e pass.
+
+### Calibration
+
+1. Commit this work before export.
+2. Hand off only Docker runtime verification and optional legacy cleanup.
+3. Do not expose the unauthenticated API beyond a controlled local network.

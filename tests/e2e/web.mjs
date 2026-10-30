@@ -102,6 +102,17 @@ try {
   assert.match(page.url(), /proposal%3Ae2e-1/);
   assert.ok(existsSync(join(root, "proposals", "proposal_e2e-1.json")));
 
+  await page.getByRole("link", { name: "Edit pending proposal" }).click();
+  const draft = JSON.parse(await page.locator('textarea[name="json"]').inputValue());
+  draft.title = "Edited browser proposal";
+  await page.locator('textarea[name="json"]').fill(JSON.stringify(draft, null, 2));
+  await page.getByRole("button", { name: "Save pending proposal" }).click();
+  await page.waitForFunction(() => document.body.innerText.includes("Edited browser proposal"));
+  const edited = JSON.parse(
+    readFileSync(join(root, "proposals", "proposal_e2e-1.json"), "utf8"),
+  );
+  assert.equal(edited.title, "Edited browser proposal");
+
   await page.getByRole("button", { name: "Approve without commit" }).click();
   await page.waitForFunction(() => document.body.innerText.includes("merged"));
   assert.ok(existsSync(join(root, "data", "episodes", "episode_e2e-note.json")));
@@ -122,7 +133,7 @@ try {
   assert.equal(rejected.status, "rejected");
   assert.equal(rejected.notes, "duplicate");
 
-  console.log("Playwright e2e: approve and reject flows passed");
+  console.log("Playwright e2e: edit, approve and reject flows passed");
 } finally {
   if (browser) await browser.close();
   if (server?.child) server.child.kill("SIGTERM");

@@ -23,6 +23,14 @@
 - Applied proposals are archived under `data/proposals/` with status `merged`.
 - A potential conflict blocks apply unless the proposal creates or references an explicit Conflict containing both assertions.
 
+## Pending Editing and API
+
+- Pending edits replace the JSON while preserving `created_at` and the proposal ID.
+- Only open pending proposals are editable; applied/rejected/archived records are read-only.
+- External agents can create, list, read and update pending proposals.
+- There is intentionally no API approve endpoint; approval stays human UI/CLI.
+- The API is local, unauthenticated and documented as controlled-network only.
+
 ## Application and Git
 
 - `approve` applies and commits by default.

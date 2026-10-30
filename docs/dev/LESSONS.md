@@ -32,3 +32,7 @@
 - The container entrypoint initializes `/data` and Git only when needed, preserving existing archives and avoiding Docker-in-Docker requirements.
 - The entrypoint can be smoke-tested outside Docker with a temporary `$STORYGRAM_DATA_DIR` and an installed wheel; this verifies init, Git and idempotence without Docker.
 - Docker artifacts are intentionally not executed in this Alpine development container; validate runtime/volume behavior on a Docker-capable host.
+- Pending proposal edits must preserve the route/body ID and `created_at`; otherwise agents could retarget or backdate review.
+- `PUT` is used for full pending replacement, not PATCH; this keeps the schema validation simple.
+- API routes branch before form parsing in `do_POST`; HTML form parsing would corrupt JSON bodies.
+- The API intentionally lacks approve/reject: keeping the human gate at UI/CLI prevents external agents from self-applying changes.

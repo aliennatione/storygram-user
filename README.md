@@ -32,6 +32,20 @@ storygram proposal reject proposal:example-1 --reason "needs evidence"
 
 `approve` writes atomically and creates one scoped Git commit by default. Use `--no-commit` to skip Git. The archive must be a Git repository with a clean tracked tree. See [the proposal contract](docs/en/PROPOSAL_CONTRACT.md) for operations, evidence and conflict rules.
 
+Pending proposals can be edited from their detail page in the web UI. Applied, merged, rejected and archived proposals are read-only.
+
+## JSON API for Agents
+
+External agents can create, list, read and edit pending proposals through the local JSON API. There is intentionally no approve endpoint: a human must review and approve.
+
+```bash
+curl -X POST http://localhost:8080/api/proposals \
+  -H 'Content-Type: application/json' \
+  --data @proposal.json
+```
+
+See [the JSON API guide](docs/en/API.md) for endpoints, status codes and examples.
+
 ## Optional Local LLM
 
 The adapter can only create pending proposals. It cannot approve or write canonical data. Use the **Generate** page in the web UI or the CLI.
@@ -84,6 +98,7 @@ Browser tests use Node Playwright with system Chromium. On Alpine: `apk add chro
 ## Documentation
 
 - [English guide](docs/en/README.md)
+- [JSON API](docs/en/API.md)
 - [Guida italiana](docs/it/README.md)
 - [README (Italiano)](README.it.md)
 

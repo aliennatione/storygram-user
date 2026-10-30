@@ -32,6 +32,14 @@ class ProposalError(Exception):
         super().__init__("; ".join(errors))
 
 
+class ProposalNotFoundError(ProposalError):
+    """Raised when a requested proposal does not exist."""
+
+
+class ProposalConflictError(ProposalError):
+    """Raised when a proposal state forbids the requested change."""
+
+
 @dataclass
 class ApplyPlan:
     proposal: dict[str, Any]
@@ -68,18 +76,25 @@ def _load_json(path: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def find_proposal(root: Path, proposal_id: str, include_applied: bool = False) -> Path | None:
-    dirs = [pending_dir(root)]
-    if include_applied:
-        dirs.append(applied_dir(root))
-    for directory in dirs:
-        if not directory.exists():
-            continue
-        for path in sorted(directory.glob("*.json")):
-            data = _load_json(path)
-            if data and data.get("id") == proposal_id:
-                return path
+def _find_in(directory: Path, proposal_id: str) -> Path | None:
+    if not directory.exists():
+        return None
+    for path in sorted(directory.glob("*.json")):
+        data = _load_json(path)
+        if data and data.get("id") == proposal_id:
+            return path
     return None
+
+
+def find_proposal(root: Path, proposal_id: str, include_applied: bool = False) -> Path | None:
+    found = _find_in(pending_dir(root), proposal_id)
+    if found is None and include_applied:
+        return find_applied_proposal(root, proposal_id)
+    return found
+
+
+def find_applied_proposal(root: Path, proposal_id: str) -> Path | None:
+    return _find_in(applied_dir(root), proposal_id)
 
 
 def list_proposals(root: Path, include_applied: bool = False) -> list[tuple[Path, dict[str, Any]]]:
@@ -95,6 +110,74 @@ def list_proposals(root: Path, include_applied: bool = False) -> list[tuple[Path
             if data is not None:
                 results.append((path, data))
     return results
+
+
+def _write_json_atomic(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _pending_id(proposal: Any) -> str:
+    if not isinstance(proposal, dict):
+        raise ProposalError(["proposal must be a JSON object"])
+    proposal_id = proposal.get("id")
+    if not isinstance(proposal_id, str) or not proposal_id.startswith("proposal:"):
+        raise ProposalError(["proposal id must start with proposal:"])
+    return proposal_id
+
+
+def _validate_pending(root: Path, proposal: dict[str, Any]) -> None:
+    errors = validate.validate_instance(root, proposal, TYPE_BY_NAME["Proposal"])
+    if errors:
+        raise ProposalError(errors)
+    if proposal.get("status") in {"merged", "rejected", "archived"}:
+        raise ProposalConflictError(
+            [f"proposal status {proposal.get('status')} cannot be used for a pending proposal"]
+        )
+
+
+def create_pending(root: Path, proposal: dict[str, Any]) -> Path:
+    """Create a new pending proposal without touching canonical data."""
+    root = Path(root)
+    proposal_id = _pending_id(proposal)
+    if find_proposal(root, proposal_id, include_applied=True) is not None:
+        raise ProposalConflictError([f"proposal already exists: {proposal_id}"])
+    data = copy.deepcopy(proposal)
+    _validate_pending(root, data)
+    destination = pending_dir(root) / safe_filename(proposal_id)
+    _write_json_atomic(destination, data)
+    return destination
+
+
+def update_pending(
+    root: Path, proposal_id: str, proposal: dict[str, Any], now: str | None = None
+) -> Path:
+    """Replace the contents of an existing pending proposal."""
+    root = Path(root)
+    if find_applied_proposal(root, proposal_id) is not None:
+        raise ProposalConflictError([f"proposal is already applied: {proposal_id}"])
+    path = find_proposal(root, proposal_id)
+    if path is None:
+        raise ProposalNotFoundError([f"pending proposal not found: {proposal_id}"])
+    original = _load_json(path)
+    if original is None:
+        raise ProposalError([f"cannot read proposal: {_record_label(root, path)}"])
+    if original.get("status") in {"merged", "rejected", "archived"}:
+        raise ProposalConflictError(
+            [f"proposal is already {original.get('status')}: {proposal_id}"]
+        )
+    if not isinstance(proposal, dict):
+        raise ProposalError(["proposal must be a JSON object"])
+    if proposal.get("id") != proposal_id:
+        raise ProposalError(["proposal id cannot change while editing"])
+    data = copy.deepcopy(proposal)
+    data["created_at"] = original.get("created_at", data.get("created_at"))
+    data["updated_at"] = _now(now)
+    _validate_pending(root, data)
+    _write_json_atomic(path, data)
+    return path
 
 
 def _record_label(root: Path, path: Path) -> str:

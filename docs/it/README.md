@@ -37,7 +37,7 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-La UI web usa lo stesso motore, inclusa una pagina **Generate** per Ollama locale:
+La UI web usa lo stesso motore, inclusa una pagina **Generate** per Ollama locale e un link di modifica per le proposte pendenti:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
@@ -56,6 +56,16 @@ La UI non ha autenticazione ed è pensata per una rete locale controllata o un m
 - L'approvazione è atomica, con rollback in caso di errore di scrittura o commit.
 
 Il contratto completo è in `PROPOSAL_CONTRACT.md` in questa directory.
+
+## API JSON
+
+Gli agenti esterni possono creare, elencare, leggere e modificare proposte pendenti via HTTP. Non possono approvarle. Vedi [API.md](API.md).
+
+```bash
+curl -X POST http://localhost:8080/api/proposals \
+  -H 'Content-Type: application/json' \
+  --data @proposta.json
+```
 
 ## Generazione LLM opzionale
 

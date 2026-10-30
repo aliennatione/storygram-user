@@ -1,4 +1,5 @@
 """SQLite/FTS5 index for search."""
+
 from __future__ import annotations
 
 import json
@@ -21,10 +22,15 @@ def build_index(root: Path) -> Path:
             if isinstance(data, dict) and "id" in data:
                 rid = data["id"]
                 rtype = data.get("type", "")
-                cur.execute("REPLACE INTO records(id,type,data) VALUES(?,?,?)", (rid, rtype, json.dumps(data)))
+                cur.execute(
+                    "REPLACE INTO records(id,type,data) VALUES(?,?,?)",
+                    (rid, rtype, json.dumps(data)),
+                )
                 # content
                 content = json.dumps(data)
-                cur.execute("REPLACE INTO records_fts(id,type,content) VALUES(?,?,?)", (rid, rtype, content))
+                cur.execute(
+                    "REPLACE INTO records_fts(id,type,content) VALUES(?,?,?)", (rid, rtype, content)
+                )
         except Exception:
             continue
     conn.commit()
@@ -42,7 +48,10 @@ def search(root: Path, query: str) -> list[dict[str, Any]]:
         cur.execute("SELECT id,type FROM records_fts WHERE records_fts MATCH ? LIMIT 100", (query,))
         rows = cur.fetchall()
     except Exception:
-        cur.execute("SELECT id,type FROM records WHERE id LIKE ? OR type LIKE ? LIMIT 100", (f"%{query}%", f"%{query}%"))
+        cur.execute(
+            "SELECT id,type FROM records WHERE id LIKE ? OR type LIKE ? LIMIT 100",
+            (f"%{query}%", f"%{query}%"),
+        )
         rows = cur.fetchall()
     conn.close()
     return [{"id": r[0], "type": r[1]} for r in rows]

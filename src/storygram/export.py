@@ -1,4 +1,5 @@
 """Export functionality."""
+
 from __future__ import annotations
 
 import json
@@ -8,9 +9,22 @@ from typing import Any
 
 def export_json(root: Path, visibility_filter: set[str] | None = None) -> list[dict[str, Any]]:
     results = []
-    for sub in ["episodes", "people", "organizations", "places", "periods", "events",
-                "relationships", "sources", "media-assets", "assertions", "annotations",
-                "narratives", "conflicts", "collections"]:
+    for sub in [
+        "episodes",
+        "people",
+        "organizations",
+        "places",
+        "periods",
+        "events",
+        "relationships",
+        "sources",
+        "media-assets",
+        "assertions",
+        "annotations",
+        "narratives",
+        "conflicts",
+        "collections",
+    ]:
         for p in (root / "data" / sub).rglob("*.json"):
             try:
                 data = json.loads(p.read_text())

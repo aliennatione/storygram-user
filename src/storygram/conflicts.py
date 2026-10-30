@@ -1,4 +1,5 @@
 """Conflict listing."""
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,13 @@ def list_conflicts(root: Path, status: str | None = None) -> list[dict[str, Any]
             try:
                 data = json.loads(p.read_text())
                 if data.get("contradicts"):
-                    results.append({"id": f"from:{data['id']}", "assertions": [data["id"]] + data.get("contradicts", []), "status": "open"})
+                    results.append(
+                        {
+                            "id": f"from:{data['id']}",
+                            "assertions": [data["id"]] + data.get("contradicts", []),
+                            "status": "open",
+                        }
+                    )
             except Exception:
                 continue
     return results

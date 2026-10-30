@@ -1,4 +1,5 @@
 """Genogram generation."""
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,10 @@ def build_genogram(root: Path, person_id: str) -> dict[str, Any]:
     for p in (root / "data" / "assertions").rglob("*.json"):
         try:
             data = json.loads(p.read_text())
-            if data.get("predicate", "").startswith("relation:") and data.get("subject") == person_id:
+            if (
+                data.get("predicate", "").startswith("relation:")
+                and data.get("subject") == person_id
+            ):
                 relations.append({"id": data.get("id"), "type": "AssertionRelation", "data": data})
         except Exception:
             continue

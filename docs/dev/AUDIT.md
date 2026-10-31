@@ -138,3 +138,59 @@ Close the two requested gaps: editing pending proposals and a JSON API for exter
 1. Commit this work before export.
 2. Hand off only Docker runtime verification and optional legacy cleanup.
 3. Do not expose the unauthenticated API beyond a controlled local network.
+
+## 2026-10-30 - socket-mounted Docker handoff
+
+### Final objective
+
+A deterministic local-first Storygram with a verified container deliverable, human approval gate and optional offline-capable LLM generation.
+
+### Current objective
+
+Prepare a compact, accurate handoff for a next session running in a container with the host Docker socket mounted.
+
+### Point of situation
+
+- Proposal workflow, web UI, JSON API, LLM adapter and bilingual docs are complete and tested: `51 passed`, E2E edit/approve/reject.
+- Docker artifacts exist but have never been built or run.
+- The next environment uses client-to-host-daemon access, not Docker-in-Docker.
+- `AGENTS.md`, `STATE.md`, new `HANDOFF.md`, `PLAN.md`, `RESUME.md`, `DECISIONS.md` and `LESSONS.md` now describe the socket workflow and its path/port pitfalls.
+- No application code changed in this documentation pass.
+
+### Calibration
+
+1. Verify Docker before changing product scope.
+2. Use a unique project name/port and clean only created resources.
+3. Never treat a development-container bind path as a host bind path.
+4. Record actual Docker results before calling the container verified.
+
+## 2026-10-31 - container runtime verified
+
+### Final objective
+
+A deterministic local-first Storygram with a verified container deliverable, human approval gate and optional offline-capable LLM generation.
+
+### Current objective
+
+Execute the pending container verification through the host Docker socket and record real results.
+
+### Point of situation
+
+- The development container lacked Git, Python, Docker CLI, Node and Chromium at session start. Installed Docker client/Compose, Git, Python, dev dependencies, Node and Chromium as needed.
+- `/var/run/docker.sock` exposed Podman Engine 5.8.2 through its Docker-compatible API. Docker CLI 29.9.2 and Compose v5.6.1 reached it.
+- `docker build -t storygram:local /data` succeeded.
+- Compose named-volume run on port 18080: UID 100, auto-init, 15 schemas, initial Git commit, `healthy`, `http-ok`.
+- In-container proposal lifecycle passed, including dry-run and a scoped `feat(proposal): apply ...` commit.
+- Persistence passed across `restart` and across `compose down`/`up` without deleting the volume.
+- Host bind mount passed (`bind-init-ok`, `bind-http-ok`, `bind-persisted`).
+- Python suite `51 passed`; ruff, format, mypy and Playwright E2E all passed after installing dependencies.
+- Test container, volume, network and image were removed. The unrelated `OC-storygram` development container was left running.
+- Optional Ollama profile was not run.
+- User docs and agent working-memory files were updated with actual commands/results; their changes are uncommitted.
+
+### Calibration
+
+1. Mark M9 complete; move to the legacy-surface audit.
+2. Keep the approval gate UI/CLI-only.
+3. Document the actual engine (Podman-compatible) rather than implying native Docker Engine.
+4. Run the optional Ollama profile only when network/time permit.

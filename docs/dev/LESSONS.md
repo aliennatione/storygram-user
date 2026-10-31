@@ -31,8 +31,24 @@
 - Installed wheels must not depend on `Path(__file__).parents[2]` alone for schemas; `$STORYGRAM_SCHEMA_DIR` makes packaged/container initialization reliable.
 - The container entrypoint initializes `/data` and Git only when needed, preserving existing archives and avoiding Docker-in-Docker requirements.
 - The entrypoint can be smoke-tested outside Docker with a temporary `$STORYGRAM_DATA_DIR` and an installed wheel; this verifies init, Git and idempotence without Docker.
-- Docker artifacts are intentionally not executed in this Alpine development container; validate runtime/volume behavior on a Docker-capable host.
+- Before 2026-10-31 the Docker artifacts had only been syntax-checked; runtime/volume behavior was unverified. The host-socket run now covers build, auto-init, health, proposal apply, persistence and bind mount.
 - Pending proposal edits must preserve the route/body ID and `created_at`; otherwise agents could retarget or backdate review.
 - `PUT` is used for full pending replacement, not PATCH; this keeps the schema validation simple.
 - API routes branch before form parsing in `do_POST`; HTML form parsing would corrupt JSON bodies.
 - The API intentionally lacks approve/reject: keeping the human gate at UI/CLI prevents external agents from self-applying changes.
+- Docker availability is environment-specific: a fresh development image may lack the CLI even when the socket is mounted. Check `docker version` and install only the client if needed.
+- Never start `dockerd` when `/var/run/docker.sock` is mounted: the CLI must talk to the host daemon.
+- Docker build context is streamed by the CLI, so `docker build /data` can work even when the host daemon has no `/data` path.
+- Bind-mount sources are host paths. A development-container `/data` path is not automatically valid for a host bind mount; create a host temp dir through a helper container.
+- Images run as a non-root Storygram user. A host bind directory must be chowned to that image UID/GID before the container can initialize it.
+- Host-published ports may be inaccessible at `127.0.0.1` from the development container. Test HTTP inside the app container and health status; test host UI separately.
+- The Docker socket is root-equivalent on the host. Use unique test project names and avoid global prune/cleanup.
+- The host socket may expose Podman, not Docker Engine. `docker version` must be read, not assumed: this session used Podman Engine 5.8.2 through the Docker-compatible API with Docker CLI 29.9.2.
+- `docker compose` v5.6.1 worked with `-p storygram-test` and `STORYGRAM_PORT`; `name:` in `compose.yaml` did not prevent the project-name override.
+- The built image runs as UID 100 / GID 101. Documentation claiming UID/GID 1000 was wrong; discover the real values with `docker run --rm --entrypoint id storygram:local`.
+- The first healthcheck can fail because the web server is still starting; `start-period=5s` plus a 30s interval means a short wait is normal. Do not call it a defect until `healthy` is reached.
+- The helper-container recipe in the previous handoff returned `/hosttmp/storygram-bind.XXXXXX`, but the host path was `/tmp/storygram-bind.XXXXXX`. Passing the helper path to `-v` would be wrong; use a fixed host `/tmp/...` path or strip the mount prefix.
+- A synthetic proposal applied inside the container produced a real scoped Git commit, proving the approval path works without host Python or Git.
+- `docker compose down` without `-v` preserved the named volume and Git history across container recreation.
+- The development container itself may match a `name=storygram` filter (for example `OC-storygram`). Inspect before cleanup; never remove it.
+- Minus Docker, this Alpine image initially lacked Git, Python, Node and Chromium. The AGENTS environment summary is an expectation, not a guarantee; install only what the task needs and record it.

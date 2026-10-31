@@ -1,38 +1,27 @@
 # Resume Instructions for Storygram
 
-This file contains all information needed to resume work if the container is destroyed. /data is bind-mounted to host storage and persists.
+This file is a short pointer for resuming work. The maintained working memory is:
 
-## Current State
-- Project bootstrapped with CLI, schemas (Episode, Assertion), validation, models
-- Tests passing (8 tests)
-- Git repo initialized on branch main
-- Documentation bilingual (README EN/IT, CONTRIBUTING EN/IT)
-- Plan saved in PLAN.md
+- `AGENTS.md` - workflow, environment and safety rules.
+- `docs/dev/STATE.md` - current branch, completed work, checks and exact next steps.
+- `docs/dev/HANDOFF.md` - compact brief for the next session.
+- `docs/dev/DECISIONS.md`, `LESSONS.md`, `AUDIT.md` - rationale, quirks and history.
 
 ## Quick Resume
+
 ```bash
 cd /data
-pip install --break-system-packages -e ".[dev]"  # if needed
-PYTHONPATH=/data/src python -m pytest -v
+git status --short
+PYTHONPATH=/data/src python -m pytest -q
 PYTHONPATH=/data/src python -m storygram --help
 ```
 
-## Git State
-- Initialize if .git missing: `git init && git branch -M main`
-- Current branch: check `git -C /data branch -v`
+The repository persists on host storage. Do not rely on chat history; read the files above before changing code.
 
-## Next Steps (see PLAN.md)
-Follow milestones M0-M8 as documented. Start from next unfinished milestone.
+## Current Handoff
 
-## Key Files
-- PLAN.md - complete implementation plan
-- AGENTS.md - general rules
-- PRD.md - product requirements
-- AI_IMPLEMENTATION_PROMPT.md - original prompt
-- schema/*.json - JSON schemas
-- src/storygram/ - source code
-- tests/ - tests and fixtures
+Container runtime verification is complete through the host Docker socket (Podman Engine 5.8.2 via its Docker-compatible API): image build, non-root start, auto-init, healthcheck, in-container proposal flow, named-volume persistence and host bind mount all passed. The next work unit is the legacy-surface audit; see `docs/dev/HANDOFF.md`. Do not start Docker-in-Docker and do not mount the socket into the Storygram application container.
 
-## Environment
-- Python 3.14, Alpine Linux
-- Dependencies installed system-wide with --break-system-packages
+## Historical Files
+
+`PLAN_EXECUTION.md` and `AI_IMPLEMENTATION_PROMPT.md` are original implementation prompts. `PRD.md` remains the product authority. They are historical context, not current status.

@@ -1,11 +1,13 @@
 # Development Support Notes
 
-These files are the durable working memory for the Storygram implementation. Update them at the end of every meaningful work unit so a new session can resume without relying on chat history.
+These files are the durable working memory for Storygram. Update them at the end of every meaningful work unit so a new session can resume without chat history.
 
-- `STATE.md`: current branch, completed work, active task, exact next steps, checks.
+- `STATE.md`: branch, completed work, active task, exact next steps and checks.
+- `HANDOFF.md`: compact next-session brief, verified container regression procedure and remaining product work.
 - `DECISIONS.md`: product and engineering decisions with rationale.
-- `../en/PROPOSAL_CONTRACT.md`: v1 proposal/apply contract shared by CLI, UI and agents.
+- `LESSONS.md`: environment quirks, defects and implementation notes.
+- `AUDIT.md`: session-by-session objective, situation and calibration.
+- `../en/PROPOSAL_CONTRACT.md` and `../it/PROPOSAL_CONTRACT.md`: proposal/apply contract.
 - `../en/API.md` and `../it/API.md`: external agent JSON API.
-- `LESSONS.md`: environment quirks, discovered defects and implementation notes.
 
-Keep these notes factual. Do not mark work complete until the corresponding test or command has actually run.
+Keep these notes factual. Do not mark work complete until the command or test actually ran. Record the actual container engine when it is a Docker-compatible daemon such as Podman.

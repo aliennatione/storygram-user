@@ -64,6 +64,15 @@
 - Prefer subagents for inventory/research and direct edits for tightly coupled implementation.
 - Do not claim a check passed unless it actually ran in this environment.
 
+## Deployment Verification
+
+- Container verification runs from a development container with the host Docker socket bind-mounted at `/var/run/docker.sock`.
+- This is client-to-host-daemon access, not Docker-in-Docker. Never start `dockerd` and never mount the socket into the Storygram application container.
+- Docker images, containers and volumes live on the host; build contexts are sent by the client, so building from `/data` works.
+- Compose bind-mount sources resolve on the host, not in the development container. Default verification uses the named volume; host bind verification uses a host temp directory created through a helper container.
+- Host-published ports are not assumed reachable from the development container. Verify with `docker compose exec` and health status first.
+- Verification uses a unique Compose project name and port, and removes only resources it created.
+
 ## Deployment
 
 - The final deliverable must be containerizable.
@@ -74,3 +83,13 @@
 - The runtime image is non-root, offline-capable and has no Chromium/Node; browser tooling stays in development.
 - The entrypoint may auto-initialize an empty `/data` and Git repository, but never auto-approves records.
 - Ollama is an optional Compose profile; the app still runs and validates without it.
+
+## Container Verification Result
+
+- The container deliverable is verified through the host socket with Docker CLI 29.9.2 and Compose v5.6.1 against Podman Engine 5.8.2's Docker-compatible API.
+- "Docker verified" in project docs means the CLI/Compose workflow passed against a Docker-compatible daemon; future runs must name the actual engine when it is Podman.
+- The image runs as UID/GID 100:101 (`storygram`), not 1000. User docs must state the real UID/GID and show how to discover it.
+- Host bind paths must be created on the host. A helper container that mounts host `/tmp` at `/hosttmp` returns a container path; map it back to `/tmp/...` before passing it to `-v`.
+- The named volume remains the primary persistence check. Restart and `down`/`up` (without `-v`) both preserve canonical records and Git history.
+- The Ollama profile stays optional and unverified until a model pull is explicitly run.
+- Test resources use a unique Compose project name and host port, then are removed individually; the development container is never removed.

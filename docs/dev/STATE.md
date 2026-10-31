@@ -1,22 +1,24 @@
 # Current State
 
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Latest commit: `38cdb70 feat: add pending proposal editing and agent API`
+- Latest commit: `d705939 docs: record pending edit and API handoff state`
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
-- Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present. Python and browser checks pass locally; Docker itself was not run in this session.
+- Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
+- Python, lint and browser checks pass. The container image has now been built and exercised end-to-end through the host Docker socket.
+- Documentation updates for the verified container run are uncommitted; check `git status` before starting.
 
 ## Environment
 
-- Alpine Linux 3.24.2, running as root in the container.
+- Alpine development container, running as root.
 - Repository at `/data`, bind-mounted from the host.
-- Web UI will be served on `0.0.0.0:8080`; port 8080 is mapped to the host.
-- Python 3.14.10, Git 2.54.0, pip 26.1.2.
-- Dependencies installed with `pip install --break-system-packages -e '.[dev]'`.
+- Python 3.14.10, Git 2.54.0, pip 26.1.2, Node 24.22.1/npm 11.12.1 and system Chromium.
+- Dependencies installed with `pip install --break-system-packages -e '.[dev]'`; Docker client and Compose installed with `apk add --no-cache docker-cli docker-cli-compose`.
 - Tests use paths relative to `/data` and must be run from the repository root.
+- `/var/run/docker.sock` is the host socket. In this session it exposed Podman Engine 5.8.2 through its Docker-compatible API; Docker CLI was 29.9.2 and Compose v5.6.1. This is not Docker-in-Docker; never start `dockerd`.
 
 ## Completed
 
@@ -58,17 +60,20 @@ Last updated: 2026-10-30
 - `.dockerignore`: excludes repository-local data, generated output, caches, tests and development artifacts.
 - Bilingual README/docs rewritten around proposals, UI, adapter, tests and container usage; proposal contract lives in `docs/en/` and `docs/it/`.
 - Packaged wheel was built, installed in a temporary venv and exercised via `storygram init` with `$STORYGRAM_SCHEMA_DIR`.
+- Container verification through the host socket: image built; Compose started on port 18080; container ran as UID 100/GID 101; auto-init created `/data`, 15 schemas and Git with an initial schema commit; healthcheck reached `healthy`; HTTP worked inside the container; a synthetic proposal passed `new`/`list`/`dry-run`/`approve` with a scoped commit; data survived `restart` and `compose down`/`up`; a host bind mount initialized, served HTTP and persisted. Test resources were cleaned up.
+- User docs corrected: the image user is UID/GID 100:101, not 1000; the container section now records commands actually run.
 
 ## Active
 
-- Session ready for export/handoff. No uncommitted application work.
-- Docker image/Compose runtime verification remains for a Docker-capable host.
+- Container runtime verification is complete. The next work unit is the legacy-surface audit and documentation cleanup.
+- No application code changes are pending; only documentation updates are uncommitted.
 
 ## Next Steps
 
-1. Build and smoke-test the Dockerfile/Compose on a Docker-capable host; verify named-volume ownership, auto-init, healthcheck and optional Ollama profile.
-2. Clean up leftover `export`/`ingest` stubs and refresh `PRD.md`/`PLAN.md` if they should describe the shipped workflow.
-3. Decide whether agents need withdraw/reject or generation endpoints beyond create/read/update.
+1. Audit `ingest`, `export`, `search`, `rebuild`, `timeline`, `genogram` and `conflicts` against `PRD.md` and actual behavior; fix, implement, or mark experimental with matching tests and docs.
+2. Decide whether agents need withdraw/reject or generation API endpoints, keeping approval UI/CLI-only.
+3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
+4. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
 ## Checks
 
@@ -80,12 +85,20 @@ Last updated: 2026-10-30
 - `python -m pip wheel --no-deps .`: passed; installed wheel initializes an archive with 15 schemas.
 - `sh -n docker-entrypoint.sh`: passed.
 - Entrypoint smoke test outside Docker: fresh archive, Git init, initial schema commit, idempotent second run.
-- `compose.yaml` parsed with PyYAML; Docker runtime not tested.
+- `docker build -t storygram:local /data`: passed against the host daemon.
+- `docker compose -p storygram-test up -d` on port 18080: container healthy; non-root `id -u` returned `100`.
+- In-container `init-ok`, clean `git status`, initial schema commit and `http-ok`: passed.
+- In-container proposal `new` / `list` / `approve --dry-run` / `approve`: passed; commit `feat(proposal): apply proposal:docker-check` created.
+- Restart and `compose down`/`up` persistence: canonical record, archived proposal and Git history survived.
+- Host bind-mount check: `bind-init-ok`, `bind-http-ok`, `bind-persisted`; cleanup completed.
+- Optional Ollama profile: not run.
 
 ## Known Limitations
 
-- The adapter CLI requires a running Ollama server; the test suite uses a callable mock and never needs network.
-- Docker artifacts were syntax-checked and parsed but not built or run in this session.
+- The adapter CLI requires a running Ollama server; the test suite uses a callable mock and never needs network. The container `llm` profile was not exercised.
+- The verified daemon is Podman Engine 5.8.2 exposed through its Docker-compatible API, not a native Docker Engine. Record this distinction in future runs.
+- Host-published ports may not be reachable from the development container; validate through container exec/health and treat host UI access separately.
+- Bind mounts resolve on the host daemon, not inside the development container. The helper's `/hosttmp/...` path is not the host path; derive or use a fixed host `/tmp` path as documented in `HANDOFF.md`.
 - `apply_proposal` commit message is `feat(proposal): apply <id>`.
 - The archived proposal records `applied_at`, but not the resulting commit hash, to keep the archive and data commit atomic.
 - Conflict detection is deliberately conservative and year-based; it is not a complete temporal reasoner.

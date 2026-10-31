@@ -61,16 +61,17 @@ Configuration: `--ollama-url`, `--model`, `$STORYGRAM_OLLAMA_URL`, `$STORYGRAM_O
 
 ## Container
 
-The repository includes `Dockerfile`, `compose.yaml` and an auto-init entrypoint. Build and test these on a Docker-capable host; they were not executed in the Alpine development container used for this session.
+The repository includes `Dockerfile`, `compose.yaml` and an auto-init entrypoint. The image was built and exercised end-to-end through a Docker-compatible host daemon (Podman Engine 5.8.2 via the Docker CLI): non-root start, auto-init, healthcheck, in-container proposal apply, restart/recreation persistence and a host bind mount all passed.
 
 ```bash
-docker compose up --build -d
+STORYGRAM_PORT=18080 docker compose -p storygram-test up --build -d
+docker compose -p storygram-test ps
 # Optional Ollama profile:
-docker compose --profile llm up -d
-docker compose exec ollama ollama pull llama3.2
+docker compose -p storygram-test --profile llm up -d
+docker compose -p storygram-test exec ollama ollama pull llama3.2
 ```
 
-The default image works without Ollama. Data persists in the `storygram-data` volume, the UI listens on port 8080 and the container runs as a non-root user. For a bind mount, ensure the host directory is writable by UID/GID 1000. Set `STORYGRAM_AUTO_INIT=0` to disable automatic archive/Git initialization.
+The default image works without Ollama. Data persists in the `storygram-data` volume, the UI listens on port 8080 and the container runs as the non-root `storygram` user (UID/GID 100:101). For a bind mount, create the host directory and chown it to that UID/GID; discover it with `docker run --rm --entrypoint id storygram:local`. Set `STORYGRAM_AUTO_INIT=0` to disable automatic archive/Git initialization. Use a unique project name and port for tests, and clean up only the resources you created.
 
 ## Layout
 

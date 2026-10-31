@@ -91,12 +91,13 @@ npm run test:e2e
 
 ## Container
 
-Sono inclusi `Dockerfile` e `compose.yaml`. Non sono stati eseguiti in questa sessione di sviluppo. Su un host con Docker:
+Sono inclusi `Dockerfile` e `compose.yaml`. L'immagine è stata verificata end-to-end tramite un daemon host compatibile Docker (Podman Engine 5.8.2 via Docker CLI): avvio non-root, auto-init, healthcheck, applicazione di una proposta nel container, persistenza dopo restart/ricreazione e bind mount host sono tutti passati.
 
 ```bash
-docker compose up --build -d
-docker compose --profile llm up -d
-docker compose exec ollama ollama pull llama3.2
+STORYGRAM_PORT=18080 docker compose -p storygram-test up --build -d
+docker compose -p storygram-test ps
+docker compose -p storygram-test --profile llm up -d
+docker compose -p storygram-test exec ollama ollama pull llama3.2
 ```
 
-Il container predefinito inizializza automaticamente `/data` e Git quando serve, gira come UID/GID 1000 e persiste i dati in un volume nominato. Imposta `STORYGRAM_AUTO_INIT=0` per disattivare. Il profilo Ollama è opzionale; il nucleo deterministico e la UI funzionano senza.
+Il container predefinito inizializza automaticamente `/data` e Git quando serve, gira come utente non-root `storygram` (UID/GID 100:101) e persiste i dati in un volume nominato. Per un bind mount, assegna alla directory host quell'UID/GID; scoprili con `docker run --rm --entrypoint id storygram:local`. Imposta `STORYGRAM_AUTO_INIT=0` per disattivare. Il profilo Ollama è opzionale; il nucleo deterministico e la UI funzionano senza. Usa un nome progetto e una porta unici per i test e rimuovi solo le risorse create.

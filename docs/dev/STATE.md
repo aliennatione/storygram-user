@@ -5,7 +5,7 @@ Last updated: 2026-10-31
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Latest commit: `493965b chore: prefer frequent atomic local commits` (container-verification docs committed in the preceding two commits)
+- Recent commits: `d2851e2` user-facing container docs, `3abf1f0` working-memory update, `493965b` commit policy, `387d775` policy alignment.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - Python, lint and browser checks pass. The container image has now been built and exercised end-to-end through the host Docker socket.

@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-31
 Branch: `feature/agent-proposal-flow`
-Latest commit: `d705939 docs: record pending edit and API handoff state`
+Latest commit: `493965b chore: prefer frequent atomic local commits` (container-verification docs committed in the preceding two commits)
 
 ## Compacted Context
 
@@ -167,5 +167,5 @@ Do not remove unrelated host images, volumes, containers or networks. Do not pru
 - Fix container defects with focused changes; re-run Python and E2E checks after code changes.
 - Update `README.md`/`README.it.md` and `docs/en/`/`docs/it/` only with commands actually executed.
 - Update `docs/dev/STATE.md`, `DECISIONS.md`, `LESSONS.md` and `AUDIT.md`.
-- Commit only when the user explicitly asks; otherwise report the uncommitted diff.
+- Commit each coherent unit as a small, atomic local commit; do not push or amend unless explicitly asked.
 - End with the standard completion report from `AGENTS.md`.

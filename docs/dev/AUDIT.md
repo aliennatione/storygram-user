@@ -186,7 +186,7 @@ Execute the pending container verification through the host Docker socket and re
 - Python suite `51 passed`; ruff, format, mypy and Playwright E2E all passed after installing dependencies.
 - Test container, volume, network and image were removed. The unrelated `OC-storygram` development container was left running.
 - Optional Ollama profile was not run.
-- User docs and agent working-memory files were updated with actual commands/results; their changes are uncommitted.
+- User docs and agent working-memory files were updated with actual commands/results and committed in atomic local commits.
 
 ### Calibration
 

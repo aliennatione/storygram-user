@@ -21,7 +21,7 @@
 1. Clean up legacy `export`/`ingest`/search/timeline/genogram behavior and align `PRD.md`/docs with the shipped proposal workflow.
 2. Decide whether agents need withdraw/reject or generation API endpoints beyond create/read/update.
 3. Run the optional Ollama container profile when network/time permit; it remains unverified.
-4. Decide whether to commit the uncommitted container-verification documentation updates.
+4. Continue committing each coherent work unit as a small, atomic local commit.
 
 ## Git Strategy
 

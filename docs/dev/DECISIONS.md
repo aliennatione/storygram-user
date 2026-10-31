@@ -59,7 +59,8 @@
 
 ## Process
 
-- Work in small atomic commits using Conventional Commits.
+- Work in small atomic commits using Conventional Commits. Local commits are expected after each coherent unit so work stays traceable.
+- Do not push, amend, force-push or create tags/releases unless the user explicitly asks.
 - Keep this support documentation current and commit it with the work it describes.
 - Prefer subagents for inventory/research and direct edits for tightly coupled implementation.
 - Do not claim a check passed unless it actually ran in this environment.

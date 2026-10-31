@@ -5,11 +5,11 @@ Last updated: 2026-10-31
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Latest commit: `d705939 docs: record pending edit and API handoff state`
+- Latest commit: `493965b chore: prefer frequent atomic local commits` (container-verification docs committed in the preceding two commits)
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - Python, lint and browser checks pass. The container image has now been built and exercised end-to-end through the host Docker socket.
-- Documentation updates for the verified container run are uncommitted; check `git status` before starting.
+- The verified-container documentation and the frequent-local-commit policy are committed in atomic local commits.
 
 ## Environment
 
@@ -66,7 +66,7 @@ Last updated: 2026-10-31
 ## Active
 
 - Container runtime verification is complete. The next work unit is the legacy-surface audit and documentation cleanup.
-- No application code changes are pending; only documentation updates are uncommitted.
+- No application code or documentation changes are pending; the tracked working tree is clean.
 
 ## Next Steps
 

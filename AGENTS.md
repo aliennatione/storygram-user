@@ -12,6 +12,12 @@ Durable context, in order:
 3. `docs/dev/HANDOFF.md` - compact briefing for the next session.
 4. `docs/dev/DECISIONS.md`, `LESSONS.md`, `AUDIT.md` - rationale, quirks and session history.
 
+## Communication
+
+- Address the user in Italian unless they explicitly switch language.
+- Keep code, commit messages and English documentation in English; Italian user/contract docs stay in the bilingual files.
+
+
 ## Environment
 
 - Development repository: `/data`, usually bind-mounted from the host.

@@ -188,3 +188,20 @@ def test_init_uses_configured_schema_dir(tmp_path: Path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     assert (archive / "schema" / "proposal.schema.json").exists()
     assert len(list((archive / "schema").glob("*.schema.json"))) == 15
+
+
+def test_withdraw_marks_pending_proposal(tmp_path: Path, monkeypatch) -> None:
+    init_archive(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    incoming = write_proposal(tmp_path, proposal())
+    runner = CliRunner()
+    assert runner.invoke(main, ["proposal", "new", "--file", str(incoming)]).exit_code == 0
+
+    withdrawn = runner.invoke(
+        main, ["proposal", "withdraw", "proposal:cli-1", "--reason", "wrong source"]
+    )
+
+    assert withdrawn.exit_code == 0, withdrawn.output
+    data = json.loads((tmp_path / "proposals" / "proposal_cli-1.json").read_text())
+    assert data["status"] == "withdrawn"
+    assert data["notes"] == "wrong source"

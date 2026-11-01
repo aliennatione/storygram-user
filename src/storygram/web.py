@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import html
 import json
-import os
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -13,7 +12,15 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from . import proposals as proposals_mod
 from . import validate as validate_mod
-from .llm import LLMAdapter, LLMAdapterError, OllamaProvider, Provider, save_pending
+from .llm import (
+    LLMAdapter,
+    LLMAdapterError,
+    Provider,
+    ProviderConfig,
+    provider_config,
+    provider_from_config,
+    save_pending,
+)
 from .registry import RECORD_TYPES
 
 MAX_BODY = 4 * 1024 * 1024
@@ -197,23 +204,32 @@ def render_generate_form(
     source: str = "",
     errors: list[str] | None = None,
     model: str | None = None,
-    ollama_url: str | None = None,
+    base_url: str | None = None,
+    provider: str | None = None,
 ) -> str:
-    model_value = model or os.environ.get("STORYGRAM_OLLAMA_MODEL", "llama3.2")
-    url_value = ollama_url or os.environ.get("STORYGRAM_OLLAMA_URL", "http://127.0.0.1:11434")
+    try:
+        config = provider_config(provider, model, base_url)
+    except LLMAdapterError:
+        config = ProviderConfig(provider=provider or "ollama")
     body = f"""
 <h1>Generate proposal</h1>
 <p class="muted">
-A local Ollama model turns source text into a pending proposal. It cannot approve or
-write canonical data; review the dry-run first.
+A local model turns source text into a pending proposal. It cannot approve or
+write canonical data; review the dry-run first. Set <code>STORYGRAM_LLM_API_KEY</code>
+in the server environment for providers that require a key.
 </p>
 {_errors_block(errors or [])}
 <form method="post" action="/proposals/generate">
 <textarea name="source" spellcheck="false"
  placeholder="Paste an interview, note or memory...">{_esc(source)}</textarea>
-<p><label>Model <input name="model" value="{_esc(model_value)}" style="padding:6px"></label>
-<label>Ollama URL
-<input name="ollama_url" value="{_esc(url_value)}" style="padding:6px; width:20rem"></label></p>
+<p>
+<label>Provider
+<input name="provider" value="{_esc(config.provider)}" style="padding:6px"></label>
+<label>Model
+<input name="model" value="{_esc(config.model)}" style="padding:6px"></label>
+<label>LLM URL
+<input name="url" value="{_esc(config.base_url)}" style="padding:6px; width:20rem"></label>
+</p>
 <p>
   <button class="primary" type="submit">Generate pending proposal</button>
   <a class="button" href="/proposals">Cancel</a>
@@ -264,6 +280,13 @@ def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None)
 </p>
 <button type="submit">Reject</button>
 </form>
+<form method="post" action="/proposals/{quote(proposal_id, safe="")}/withdraw">
+<p>
+<input name="reason" placeholder="Withdrawal reason (optional)"
+       style="width:70%; padding:6px">
+</p>
+<button type="submit">Withdraw</button>
+</form>
 """
         except proposals_mod.ProposalError as exc:
             plan_html = f"<h2>Dry-run preview</h2>{_errors_block(exc.errors)}"
@@ -293,7 +316,7 @@ def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None)
 class StorygramServer(ThreadingHTTPServer):
     daemon_threads = True
     archive_root: Path
-    provider_factory: Callable[[str, str], Provider] | None = None
+    provider_factory: Callable[[ProviderConfig], Provider] | None = None
 
 
 class StorygramHandler(BaseHTTPRequestHandler):
@@ -333,11 +356,13 @@ class StorygramHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
-    def _read_json(self) -> dict[str, Any]:
+    def _read_json(self, required: bool = True) -> dict[str, Any]:
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        length = int(self.headers.get("Content-Length", "0"))
+        if length == 0 and not required:
+            return {}
         if content_type != "application/json":
             raise APIRequestError(415, "Content-Type must be application/json")
-        length = int(self.headers.get("Content-Length", "0"))
         if length > MAX_BODY:
             raise APIRequestError(413, "request body too large")
         raw = self.rfile.read(length).decode("utf-8")
@@ -446,6 +471,75 @@ class StorygramHandler(BaseHTTPRequestHandler):
         saved = proposals_mod._load_json(path) or data
         self._send_json(200, {"ok": True, "proposal": saved})
 
+    def _api_generate(self) -> None:
+        try:
+            data = self._read_json()
+            source = data.get("source", data.get("text"))
+            if not isinstance(source, str) or not source.strip():
+                raise APIRequestError(400, "source text is empty")
+            provider_name = data.get("provider")
+            model = data.get("model")
+            base_url = data.get("url", data.get("ollama_url"))
+            api_key = data.get("api_key")
+            for value, name in (
+                (provider_name, "provider"),
+                (model, "model"),
+                (base_url, "url"),
+                (api_key, "api_key"),
+            ):
+                if value is not None and not isinstance(value, str):
+                    raise APIRequestError(400, f"{name} must be a string")
+            try:
+                config = provider_config(provider_name, model, base_url, api_key)
+            except LLMAdapterError as exc:
+                raise APIRequestError(400, str(exc)) from exc
+            factory = cast(StorygramServer, self.server).provider_factory
+            provider = factory(config) if factory is not None else provider_from_config(config)
+            proposal = LLMAdapter(provider).generate(self.root, source)
+            save = data.get("save", True)
+            if not isinstance(save, bool):
+                raise APIRequestError(400, "save must be a boolean")
+            path = save_pending(self.root, proposal) if save else None
+        except APIRequestError as exc:
+            self._api_error(exc.status, exc.message)
+            return
+        except LLMAdapterError as exc:
+            self._api_error(502, str(exc))
+            return
+        proposal_id = str(proposal["id"])
+        location = f"/api/proposals/{quote(proposal_id, safe='')}"
+        payload: dict[str, Any] = {
+            "ok": True,
+            "saved": path is not None,
+            "proposal": proposal,
+            "location": location,
+        }
+        self._send_json(201 if path is not None else 200, payload)
+
+    def _api_close(self, proposal_id: str, status: str) -> None:
+        try:
+            data = self._read_json(required=False)
+            reason = data.get("reason")
+            if reason is not None and not isinstance(reason, str):
+                raise APIRequestError(400, "reason must be a string")
+            if status == "rejected":
+                result = proposals_mod.reject_proposal(self.root, proposal_id, reason)
+            else:
+                result = proposals_mod.withdraw_proposal(self.root, proposal_id, reason)
+        except APIRequestError as exc:
+            self._api_error(exc.status, exc.message)
+            return
+        except proposals_mod.ProposalNotFoundError as exc:
+            self._api_error(404, "; ".join(exc.errors))
+            return
+        except proposals_mod.ProposalConflictError as exc:
+            self._api_error(409, "; ".join(exc.errors))
+            return
+        except proposals_mod.ProposalError as exc:
+            self._api_error(400, "; ".join(exc.errors))
+            return
+        self._send_json(200, result)
+
     def _handle_api(self, method: str, path: str, query: str) -> None:
         segments = [unquote(part) for part in path.strip("/").split("/") if part]
         if len(segments) < 2 or segments[0] != "api" or segments[1] != "proposals":
@@ -460,6 +554,12 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 self._api_error(405, "method not allowed", {"Allow": "GET, POST"})
             return
         if len(segments) == 3:
+            if segments[2] == "generate":
+                if method == "POST":
+                    self._api_generate()
+                else:
+                    self._api_error(405, "method not allowed", {"Allow": "POST"})
+                return
             proposal_id = segments[2]
             if not proposal_id.startswith("proposal:"):
                 self._api_error(400, "proposal id must start with proposal:")
@@ -470,6 +570,20 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 self._api_update(proposal_id)
             else:
                 self._api_error(405, "method not allowed", {"Allow": "GET, PUT"})
+            return
+        if len(segments) == 4:
+            proposal_id = segments[2]
+            action = segments[3]
+            if not proposal_id.startswith("proposal:"):
+                self._api_error(400, "proposal id must start with proposal:")
+                return
+            if action not in {"reject", "withdraw"}:
+                self._api_error(404, "API route not found")
+                return
+            if method != "POST":
+                self._api_error(405, "method not allowed", {"Allow": "POST"})
+                return
+            self._api_close(proposal_id, "rejected" if action == "reject" else "withdrawn")
             return
         self._api_error(404, "API route not found")
 
@@ -549,30 +663,37 @@ class StorygramHandler(BaseHTTPRequestHandler):
 
         if path == "/proposals/generate":
             source = (form.get("source") or [""])[0]
-            model = (form.get("model") or [""])[0].strip() or os.environ.get(
-                "STORYGRAM_OLLAMA_MODEL", "llama3.2"
-            )
-            ollama_url = (form.get("ollama_url") or [""])[0].strip() or os.environ.get(
-                "STORYGRAM_OLLAMA_URL", "http://127.0.0.1:11434"
-            )
+            provider_name = (form.get("provider") or [""])[0].strip() or None
+            model = (form.get("model") or [""])[0].strip() or None
+            base_url = (form.get("url") or [""])[0].strip() or None
+            base_url = base_url or (form.get("ollama_url") or [""])[0].strip() or None
             if not source.strip():
                 self._send(
-                    400, render_generate_form(source, ["Source text is empty"], model, ollama_url)
+                    400,
+                    render_generate_form(
+                        source, ["Source text is empty"], model, base_url, provider_name
+                    ),
+                )
+                return
+            try:
+                config = provider_config(provider_name, model, base_url)
+            except LLMAdapterError as exc:
+                self._send(
+                    400,
+                    render_generate_form(source, [str(exc)], model, base_url, provider_name),
                 )
                 return
             factory = cast(StorygramServer, self.server).provider_factory
-            provider = (
-                factory(model, ollama_url)
-                if factory is not None
-                else OllamaProvider(model=model, base_url=ollama_url)
-            )
+            provider = factory(config) if factory is not None else provider_from_config(config)
             try:
                 data = LLMAdapter(provider).generate(self.root, source)
                 save_pending(self.root, data)
             except LLMAdapterError as exc:
                 self._send(
                     502,
-                    render_generate_form(source, [str(exc)], model, ollama_url),
+                    render_generate_form(
+                        source, [str(exc)], config.model, config.base_url, config.provider
+                    ),
                 )
                 return
             generated_id = str(data["id"])
@@ -644,6 +765,18 @@ class StorygramHandler(BaseHTTPRequestHandler):
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
             return
 
+        if path.startswith("/proposals/") and path.endswith("/withdraw"):
+            proposal_id = path.removeprefix("/proposals/").removesuffix("/withdraw").strip("/")
+            reason = (form.get("reason") or [""])[0] or None
+            try:
+                proposals_mod.withdraw_proposal(self.root, proposal_id, reason)
+            except proposals_mod.ProposalError as exc:
+                status, body = render_detail(self.root, proposal_id, exc.errors)
+                self._send(400, body)
+                return
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
         self._send(404, _layout("Not found", "<h1>Not found</h1>"))
 
     def do_PUT(self) -> None:  # noqa: N802
@@ -659,7 +792,7 @@ def create_server(
     root: Path,
     host: str = "0.0.0.0",
     port: int = 8080,
-    provider_factory: Callable[[str, str], Provider] | None = None,
+    provider_factory: Callable[[ProviderConfig], Provider] | None = None,
 ) -> StorygramServer:
     server = StorygramServer((host, port), StorygramHandler)
     server.archive_root = Path(root)

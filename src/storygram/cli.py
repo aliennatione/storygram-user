@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from pathlib import Path
 from typing import Any, NoReturn
@@ -293,14 +292,20 @@ def proposal_new(file_: str, archive_path: str | None, as_json: bool) -> None:
 @click.option("--file", "file_", type=click.Path(exists=True), default=None)
 @click.option("--text", default=None)
 @click.option(
-    "--model",
-    default=lambda: os.environ.get("STORYGRAM_OLLAMA_MODEL", "llama3.2"),
-    show_default="llama3.2 or $STORYGRAM_OLLAMA_MODEL",
+    "--provider",
+    default=None,
+    help="Ollama or OpenAI-compatible provider; default $STORYGRAM_LLM_PROVIDER or ollama",
+)
+@click.option("--model", default=None, help="Model name; default $STORYGRAM_LLM_MODEL")
+@click.option("--url", "base_url", default=None, help="LLM base URL; default $STORYGRAM_LLM_URL")
+@click.option(
+    "--ollama-url", "legacy_url", default=None, help="Deprecated alias for --url (Ollama only)"
 )
 @click.option(
-    "--ollama-url",
-    default=lambda: os.environ.get("STORYGRAM_OLLAMA_URL", "http://127.0.0.1:11434"),
-    show_default="http://127.0.0.1:11434 or $STORYGRAM_OLLAMA_URL",
+    "--api-key",
+    default=None,
+    envvar="STORYGRAM_LLM_API_KEY",
+    help="Bearer token for OpenAI-compatible providers; prefer the env var",
 )
 @click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--no-save", is_flag=True, help="Print the proposal without saving it")
@@ -308,14 +313,23 @@ def proposal_new(file_: str, archive_path: str | None, as_json: bool) -> None:
 def proposal_generate(
     file_: str | None,
     text: str | None,
-    model: str,
-    ollama_url: str,
+    provider: str | None,
+    model: str | None,
+    base_url: str | None,
+    legacy_url: str | None,
+    api_key: str | None,
     archive_path: str | None,
     no_save: bool,
     as_json: bool,
 ) -> None:
-    """Generate a pending proposal with a local Ollama model."""
-    from .llm import LLMAdapter, LLMAdapterError, OllamaProvider, save_pending
+    """Generate a pending proposal with a local or OpenAI-compatible model."""
+    from .llm import (
+        LLMAdapter,
+        LLMAdapterError,
+        provider_config,
+        provider_from_config,
+        save_pending,
+    )
 
     if file_ and text:
         _fail("Use either --file or --text, not both", as_json)
@@ -325,8 +339,13 @@ def proposal_generate(
         source = text
     else:
         _fail("Provide --file or --text", as_json)
+    resolved_provider = provider or ("ollama" if legacy_url and not base_url else None)
+    try:
+        config = provider_config(resolved_provider, model, base_url or legacy_url, api_key)
+    except LLMAdapterError as exc:
+        _fail(str(exc), as_json)
     root = _root(archive_path)
-    adapter = LLMAdapter(OllamaProvider(model=model, base_url=ollama_url))
+    adapter = LLMAdapter(provider_from_config(config))
     try:
         proposal_data = adapter.generate(root, source)
         path = None if no_save else save_pending(root, proposal_data)
@@ -430,6 +449,22 @@ def proposal_reject(
     except proposals_mod.ProposalError as exc:
         _fail("; ".join(exc.errors), as_json)
     _emit(result, as_json, f"Rejected {proposal_id}")
+
+
+@proposal.command("withdraw")
+@click.argument("proposal_id")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--reason", default=None)
+@click.option("--json", "as_json", is_flag=True)
+def proposal_withdraw(
+    proposal_id: str, archive_path: str | None, reason: str | None, as_json: bool
+) -> None:
+    """Withdraw a pending proposal without changing canonical data."""
+    try:
+        result = proposals_mod.withdraw_proposal(_root(archive_path), proposal_id, reason)
+    except proposals_mod.ProposalError as exc:
+        _fail("; ".join(exc.errors), as_json)
+    _emit(result, as_json, f"Withdrew {proposal_id}")
 
 
 if __name__ == "__main__":

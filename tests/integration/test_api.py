@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 from click.testing import CliRunner
 
 from storygram.cli import main
+from storygram.llm import CallableProvider, LLMAdapterError
 from storygram.proposals import apply_proposal
 from storygram.web import create_server
 
@@ -41,10 +42,10 @@ def proposal(proposal_id: str = "proposal:api-1", title: str = "API proposal") -
     }
 
 
-def start(tmp_path: Path):
+def start(tmp_path: Path, provider_factory=None):
     result = CliRunner().invoke(main, ["init", str(tmp_path)])
     assert result.exit_code == 0, result.output
-    server = create_server(tmp_path, host="127.0.0.1", port=0)
+    server = create_server(tmp_path, host="127.0.0.1", port=0, provider_factory=provider_factory)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread, f"http://127.0.0.1:{server.server_port}"
@@ -187,6 +188,180 @@ def test_api_marks_applied_proposals_read_only(tmp_path: Path) -> None:
         status, payload = request(base, api_proposal(), method="PUT", body=proposal())
         assert status == 409
         assert "already applied" in payload["errors"][0]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_api_generate_creates_pending_only(tmp_path: Path) -> None:
+    captured = {}
+
+    def factory(config):
+        captured["provider"] = config.provider
+        captured["model"] = config.model
+        captured["url"] = config.base_url
+        captured["max_tokens"] = None
+
+        def complete(prompt: str) -> str:
+            captured["prompt"] = prompt
+            return json.dumps(proposal("proposal:ignored"))
+
+        return CallableProvider(complete)
+
+    server, thread, base = start(tmp_path, factory)
+    try:
+        status, payload = request(
+            base,
+            "/api/proposals/generate",
+            method="POST",
+            body={
+                "source": "Nonna said she lived near the station.",
+                "provider": "openai",
+                "model": "qwen3-4b",
+                "url": "http://llm:8080",
+            },
+        )
+        assert status == 201, payload
+        assert payload["ok"] is True
+        assert payload["saved"] is True
+        assert payload["location"].startswith("/api/proposals/proposal%3Allm-")
+        assert captured["provider"] == "openai"
+        assert captured["model"] == "qwen3-4b"
+        assert captured["url"] == "http://llm:8080"
+        assert "Nonna said" in captured["prompt"]
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        assert not (tmp_path / "data" / "episodes" / "episode_api-note.json").exists()
+
+        proposal_id = payload["proposal"]["id"]
+        status, fetched = request(base, api_proposal(proposal_id))
+        assert status == 200
+        assert fetched["proposal"]["status"] == "proposed"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_api_generate_can_skip_saving(tmp_path: Path) -> None:
+    def factory(config):
+        def complete(prompt: str) -> str:
+            return json.dumps(proposal("proposal:ignored"))
+
+        return CallableProvider(complete)
+
+    server, thread, base = start(tmp_path, factory)
+    try:
+        status, payload = request(
+            base,
+            "/api/proposals/generate",
+            method="POST",
+            body={"source": "A memory", "save": False},
+        )
+        assert status == 200, payload
+        assert payload["saved"] is False
+        assert payload["proposal"]["status"] == "proposed"
+        assert not list((tmp_path / "proposals").glob("*.json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_api_generate_validation_and_provider_errors(tmp_path: Path) -> None:
+    def failing_factory(config):
+        def complete(prompt: str) -> str:
+            raise LLMAdapterError("model offline")
+
+        return CallableProvider(complete)
+
+    server, thread, base = start(tmp_path, failing_factory)
+    try:
+        status, payload = request(
+            base, "/api/proposals/generate", method="POST", body={"source": "   "}
+        )
+        assert status == 400
+        assert "source text is empty" in payload["errors"][0]
+
+        status, payload = request(
+            base,
+            "/api/proposals/generate",
+            method="POST",
+            body={"source": "text", "provider": "unknown"},
+        )
+        assert status == 400
+        assert "Unknown LLM provider" in payload["errors"][0]
+
+        status, payload = request(
+            base, "/api/proposals/generate", method="POST", body={"source": "text"}
+        )
+        assert status == 502
+        assert "model offline" in payload["errors"][0]
+        assert not list((tmp_path / "proposals").glob("*.json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_api_reject_and_withdraw_pending_proposals(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        request(
+            base,
+            "/api/proposals",
+            method="POST",
+            body=proposal("proposal:api-reject", "Reject me"),
+        )
+        request(
+            base,
+            "/api/proposals",
+            method="POST",
+            body=proposal("proposal:api-withdraw", "Withdraw me"),
+        )
+
+        status, payload = request(
+            base,
+            f"/api/proposals/{quote('proposal:api-reject', safe='')}/reject",
+            method="POST",
+            body={"reason": "duplicate"},
+        )
+        assert status == 200, payload
+        assert payload["status"] == "rejected"
+        rejected = json.loads((tmp_path / "proposals" / "proposal_api-reject.json").read_text())
+        assert rejected["status"] == "rejected"
+        assert rejected["notes"] == "duplicate"
+
+        status, payload = request(
+            base,
+            f"/api/proposals/{quote('proposal:api-withdraw', safe='')}/withdraw",
+            method="POST",
+            body={"reason": "submitted by mistake"},
+        )
+        assert status == 200, payload
+        assert payload["status"] == "withdrawn"
+        withdrawn = json.loads((tmp_path / "proposals" / "proposal_api-withdraw.json").read_text())
+        assert withdrawn["status"] == "withdrawn"
+        assert withdrawn["notes"] == "submitted by mistake"
+
+        status, payload = request(
+            base,
+            f"/api/proposals/{quote('proposal:api-reject', safe='')}/reject",
+            method="POST",
+        )
+        assert status == 409
+        assert "already rejected" in payload["errors"][0]
+
+        status, payload = request(
+            base,
+            f"/api/proposals/{quote('proposal:missing', safe='')}/withdraw",
+            method="POST",
+        )
+        assert status == 404
+        assert "not found" in payload["errors"][0]
+
+        assert not list((tmp_path / "data" / "episodes").glob("*.json"))
     finally:
         server.shutdown()
         server.server_close()

@@ -110,6 +110,18 @@ def test_web_approve_without_commit_and_reject(tmp_path: Path) -> None:
         assert "rejected" in body
         data = json.loads((tmp_path / "proposals" / "proposal_web-2.json").read_text())
         assert data["notes"] == "duplicate"
+
+        third = proposal("proposal:web-3")
+        post(base + "/proposals/new", {"json": json.dumps(third)})
+        status, body = post(
+            base + f"/proposals/{quote('proposal:web-3', safe='')}/withdraw",
+            {"reason": "wrong source"},
+        )
+        assert status == 200
+        assert "withdrawn" in body
+        data = json.loads((tmp_path / "proposals" / "proposal_web-3.json").read_text())
+        assert data["status"] == "withdrawn"
+        assert data["notes"] == "wrong source"
     finally:
         server.shutdown()
         server.server_close()
@@ -132,9 +144,10 @@ def test_web_rejects_invalid_json(tmp_path: Path) -> None:
 def test_web_generate_creates_pending_only(tmp_path: Path) -> None:
     captured = {}
 
-    def factory(model: str, ollama_url: str):
-        captured["model"] = model
-        captured["url"] = ollama_url
+    def factory(config):
+        captured["model"] = config.model
+        captured["url"] = config.base_url
+        captured["provider"] = config.provider
 
         def complete(prompt: str) -> str:
             captured["prompt"] = prompt
@@ -153,7 +166,8 @@ def test_web_generate_creates_pending_only(tmp_path: Path) -> None:
             {
                 "source": "Nonna said she lived near the station.",
                 "model": "test-model",
-                "ollama_url": "http://test-ollama:11434",
+                "url": "http://test-ollama:11434",
+                "provider": "openai",
             },
         )
 
@@ -161,6 +175,7 @@ def test_web_generate_creates_pending_only(tmp_path: Path) -> None:
         assert "Dry-run preview" in body
         assert captured["model"] == "test-model"
         assert captured["url"] == "http://test-ollama:11434"
+        assert captured["provider"] == "openai"
         assert "Nonna said" in captured["prompt"]
         pending = list((tmp_path / "proposals").glob("*.json"))
         assert len(pending) == 1
@@ -185,7 +200,7 @@ def test_web_generate_rejects_empty_source(tmp_path: Path) -> None:
 
 
 def test_web_generate_surfaces_provider_error(tmp_path: Path) -> None:
-    def factory(model: str, ollama_url: str):
+    def factory(config):
         def complete(prompt: str) -> str:
             raise LLMAdapterError("model offline")
 
@@ -195,7 +210,7 @@ def test_web_generate_surfaces_provider_error(tmp_path: Path) -> None:
     try:
         status, body = post(
             base + "/proposals/generate",
-            {"source": "A memory", "model": "missing", "ollama_url": "http://missing"},
+            {"source": "A memory", "model": "missing", "url": "http://missing"},
         )
         assert status == 502
         assert "model offline" in body

@@ -6,13 +6,15 @@ never approve their own output.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
 import urllib.error
 import urllib.request
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -20,6 +22,25 @@ from typing import Any, Protocol
 from . import proposals as proposals_mod
 from . import validate as validate_mod
 from .registry import TYPE_BY_NAME, iter_reference_strings
+
+DEFAULT_PROVIDER = "ollama"
+DEFAULT_OLLAMA_MODEL = "llama3.2"
+DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
+DEFAULT_OPENAI_MODEL = "qwen3-4b"
+DEFAULT_OPENAI_URL = "http://127.0.0.1:8080"
+DEFAULT_LLAMACPP_MODEL = DEFAULT_OPENAI_MODEL
+DEFAULT_LLAMACPP_URL = DEFAULT_OPENAI_URL
+OPENAI_ALIASES = {
+    "openai",
+    "openai-compatible",
+    "openai_compatible",
+    "llamacpp",
+    "llama.cpp",
+    "llama-cpp",
+    "llama-swap",
+    "llamaswap",
+}
+OLLAMA_ALIASES = {"ollama"}
 
 
 class LLMAdapterError(Exception):
@@ -69,6 +90,128 @@ class OllamaProvider:
         return output
 
 
+@dataclass
+class OpenAICompatibleProvider:
+    """OpenAI-compatible chat completions client using only the stdlib."""
+
+    model: str = DEFAULT_OPENAI_MODEL
+    base_url: str = DEFAULT_OPENAI_URL
+    timeout: int = 300
+    max_tokens: int = 2048
+    temperature: float = 0.1
+    api_key: str | None = field(default=None, repr=False)
+    completion_path: str = "/v1/chat/completions"
+
+    def complete(self, prompt: str) -> str:
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "stream": False,
+            }
+        ).encode()
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        request = urllib.request.Request(
+            f"{self.base_url.rstrip('/')}{self.completion_path}",
+            data=payload,
+            headers=headers,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode())
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            with contextlib.suppress(Exception):
+                detail = exc.read().decode()[:300]
+            suffix = f": {detail}" if detail else ""
+            raise LLMAdapterError(f"LLM request failed: HTTP {exc.code}{suffix}") from exc
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            raise LLMAdapterError(f"LLM request failed: {exc}") from exc
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise LLMAdapterError("LLM response did not contain choices")
+        first = choices[0]
+        message = first.get("message") if isinstance(first, dict) else None
+        output = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(output, str):
+            raise LLMAdapterError("LLM response did not contain text")
+        return output
+
+
+LlamaCppProvider = OpenAICompatibleProvider
+
+
+@dataclass
+class ProviderConfig:
+    """Resolved provider settings for a generation request."""
+
+    provider: str = DEFAULT_PROVIDER
+    model: str = ""
+    base_url: str = ""
+    api_key: str | None = field(default=None, repr=False)
+
+
+def provider_defaults(provider: str) -> tuple[str, str]:
+    """Return the default model and URL for a provider name."""
+    name = provider.strip().lower()
+    if name in OPENAI_ALIASES:
+        return DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_URL
+    if name in OLLAMA_ALIASES:
+        return DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL
+    raise LLMAdapterError(f"Unknown LLM provider: {provider}")
+
+
+def provider_config(
+    provider: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> ProviderConfig:
+    """Resolve provider settings from arguments and environment variables."""
+    raw_name = provider or os.environ.get("STORYGRAM_LLM_PROVIDER") or DEFAULT_PROVIDER
+    name = raw_name.strip().lower()
+    if name in OPENAI_ALIASES:
+        name = "openai"
+    elif name in OLLAMA_ALIASES:
+        name = "ollama"
+    default_model, default_url = provider_defaults(name)
+    if name == "ollama":
+        default_model = os.environ.get("STORYGRAM_OLLAMA_MODEL", default_model)
+        default_url = os.environ.get("STORYGRAM_OLLAMA_URL", default_url)
+    resolved_key = api_key if api_key is not None else os.environ.get("STORYGRAM_LLM_API_KEY")
+    return ProviderConfig(
+        provider=name,
+        model=model or os.environ.get("STORYGRAM_LLM_MODEL") or default_model,
+        base_url=base_url or os.environ.get("STORYGRAM_LLM_URL") or default_url,
+        api_key=resolved_key or None,
+    )
+
+
+def provider_from_config(config: ProviderConfig) -> Provider:
+    """Build a provider instance from resolved settings."""
+    if config.provider == "ollama":
+        return OllamaProvider(model=config.model, base_url=config.base_url)
+    return OpenAICompatibleProvider(
+        model=config.model,
+        base_url=config.base_url,
+        api_key=config.api_key,
+    )
+
+
+def build_provider(
+    provider: str,
+    model: str | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> Provider:
+    """Build a provider from a name and optional overrides."""
+    return provider_from_config(provider_config(provider, model, base_url, api_key))
+
+
 PROPOSAL_FIELDS = {
     "id",
     "type",
@@ -110,6 +253,9 @@ def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
         "  Narrative, Collection, Conflict.",
         "- Every record must include id, type, status, created_at, updated_at,",
         "  plus its type-specific required fields.",
+        '- Record IDs use lowercase prefixes: "episode:...", "assertion:...", "person:...".',
+        '- Every operation must include "record_type" and either "record" (create)',
+        '  or "target_id" (create, update_metadata, supersede, archive).',
         '- Use explicit, minimal operations. Never invent an "apply" or "approve" operation.',
         "- Semantic operations must cite evidence IDs.",
         "  Evidence must be episode:, source: or annotation:.",
@@ -118,6 +264,15 @@ def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
         "  If a conflict is real, create an explicit Conflict operation with both assertion IDs.",
         "- Prefer existing IDs when supplied; otherwise create stable new IDs.",
         "- Output valid JSON matching the Storygram proposal contract.",
+        '- Do not wrap the result in an outer "proposal" key.',
+        "",
+        "Minimal valid shape:",
+        '{"id":"proposal:example","type":"Proposal","status":"proposed",'
+        '"created_at":"2026-01-01T00:00:00+00:00","updated_at":"2026-01-01T00:00:00+00:00",'
+        '"title":"Source capture","operations":[{"op":"create","record_type":"Episode",'
+        '"record":{"id":"episode:source-note","type":"Episode","episode_type":"other",'
+        '"status":"reported","created_at":"2026-01-01T00:00:00+00:00",'
+        '"updated_at":"2026-01-01T00:00:00+00:00"}}]}',
         "",
         "Known canonical IDs:",
         known,
@@ -131,6 +286,9 @@ def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
 
 def extract_json(text: str) -> dict[str, Any]:
     stripped = text.strip()
+    stripped = re.sub(
+        r"<think(?:ing)?>.*?</think(?:ing)?>", "", stripped, flags=re.DOTALL | re.IGNORECASE
+    ).strip()
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", stripped, re.DOTALL)
     if fenced:
         stripped = fenced.group(1)

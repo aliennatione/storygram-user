@@ -11,7 +11,10 @@ from storygram.llm import (
     LLMAdapter,
     LLMAdapterError,
     OllamaProvider,
+    OpenAICompatibleProvider,
+    build_provider,
     extract_json,
+    provider_config,
     save_pending,
 )
 from storygram.proposals import apply_proposal
@@ -150,3 +153,79 @@ def test_ollama_provider_builds_expected_request(monkeypatch) -> None:
     assert captured["body"]["model"] == "test-model"
     assert captured["body"]["stream"] is False
     assert captured["body"]["format"] == "json"
+
+
+def test_extract_json_strips_thinking_blocks() -> None:
+    response = 'Thinking...\n<thinking>{"draft": true}</thinking>\n{"id": "proposal:x"}'
+    assert extract_json(response) == {"id": "proposal:x"}
+
+
+def test_openai_provider_builds_request_and_reads_content(monkeypatch) -> None:
+    captured = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def read(self):
+            return b'{"choices":[{"message":{"content":"{\\"ok\\": true}"}}]}'
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["body"] = json.loads(request.data)
+        captured["authorization"] = request.headers.get("Authorization")
+        return Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    provider = OpenAICompatibleProvider(
+        model="qwen3-4b",
+        base_url="http://llm:8080",
+        timeout=9,
+        api_key="test-key",
+    )
+
+    assert provider.complete("hello") == '{"ok": true}'
+    assert captured["url"] == "http://llm:8080/v1/chat/completions"
+    assert captured["timeout"] == 9
+    assert captured["body"]["model"] == "qwen3-4b"
+    assert captured["body"]["messages"] == [{"role": "user", "content": "hello"}]
+    assert captured["body"]["stream"] is False
+    assert captured["authorization"] == "Bearer test-key"
+
+
+def test_openai_provider_surfaces_http_error_without_leaking_key(monkeypatch) -> None:
+    import urllib.error
+
+    def fake_urlopen(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    provider = OpenAICompatibleProvider(api_key="super-secret")
+
+    with pytest.raises(LLMAdapterError) as excinfo:
+        provider.complete("hello")
+    assert "HTTP 401" in str(excinfo.value)
+    assert "super-secret" not in str(excinfo.value)
+
+
+def test_provider_config_resolves_env_defaults(monkeypatch) -> None:
+    monkeypatch.setenv("STORYGRAM_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("STORYGRAM_LLM_MODEL", "qwen3-4b")
+    monkeypatch.setenv("STORYGRAM_LLM_URL", "http://llm:8080")
+    monkeypatch.setenv("STORYGRAM_LLM_API_KEY", "env-key")
+
+    config = provider_config()
+    assert config.provider == "openai"
+    assert config.model == "qwen3-4b"
+    assert config.base_url == "http://llm:8080"
+    assert config.api_key == "env-key"
+    assert isinstance(build_provider("openai"), OpenAICompatibleProvider)
+
+
+def test_provider_config_rejects_unknown_provider() -> None:
+    with pytest.raises(LLMAdapterError, match="Unknown LLM provider"):
+        provider_config("nope")

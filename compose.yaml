@@ -11,6 +11,10 @@ services:
     environment:
       STORYGRAM_OLLAMA_URL: "http://ollama:11434"
       STORYGRAM_OLLAMA_MODEL: "${STORYGRAM_OLLAMA_MODEL:-llama3.2}"
+      STORYGRAM_LLM_PROVIDER: "${STORYGRAM_LLM_PROVIDER:-ollama}"
+      STORYGRAM_LLM_MODEL: "${STORYGRAM_LLM_MODEL:-}"
+      STORYGRAM_LLM_URL: "${STORYGRAM_LLM_URL:-}"
+      STORYGRAM_LLM_API_KEY: "${STORYGRAM_LLM_API_KEY:-}"
     restart: unless-stopped
 
   ollama:

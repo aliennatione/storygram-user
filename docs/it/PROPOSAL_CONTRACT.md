@@ -16,9 +16,9 @@ Campi obbligatori: `id`, `type` (`Proposal`), `status`, `created_at`, `updated_a
 
 Campi opzionali utili: `title`, `target_ids`, `evidence`, `rationale`, `confidence`, `approval_state`, `notes`.
 
-Stati ammessi: `draft`, `proposed`, `under_review`, `approved`, `rejected`, `merged`, `archived`.
+Stati ammessi: `draft`, `proposed`, `under_review`, `approved`, `rejected`, `withdrawn`, `merged`, `archived`.
 
-L'approvazione è consentita solo da `draft`, `proposed`, `under_review` o `approved`. Una proposta rifiutata, merged o archiviata non può essere approvata.
+L'approvazione è consentita solo da `draft`, `proposed`, `under_review` o `approved`. Una proposta rifiutata, ritirata, merged o archiviata non può essere approvata.
 
 ```json
 {
@@ -122,7 +122,7 @@ Tutti gli errori di validazione vengono raccolti prima di scrivere. Se la pianif
 
 - Si possono modificare solo proposte pendenti con stato `draft`, `proposed`, `under_review` o `approved`.
 - La modifica sostituisce il JSON pendente, conserva `created_at`, aggiorna `updated_at` e non può cambiare l'ID.
-- Le proposte applicate, merged, rejected e archived sono in sola lettura.
+- Le proposte applicate, merged, rejected, withdrawn e archived sono in sola lettura.
 - La pagina di modifica web, `PUT /api/proposals/<id>` e l'helper di update usano la stessa validazione e la stessa scrittura atomica.
 
 ## Confine dell'API JSON
@@ -131,6 +131,8 @@ Tutti gli errori di validazione vengono raccolti prima di scrivere. Se la pianif
 - `GET /api/proposals` elenca le proposte pendenti; `?include_applied=1` include anche l'archivio merged.
 - `GET /api/proposals/<id>` restituisce la proposta e, per quelle pendenti, una preview di validazione dry-run.
 - `PUT /api/proposals/<id>` modifica una proposta pendente.
+- `POST /api/proposals/generate` trasforma testo sorgente in una proposta pendente; non la applica mai.
+- `POST /api/proposals/<id>/reject` e `POST /api/proposals/<id>/withdraw` chiudono una proposta pendente senza toccare i dati canonici.
 - Non esiste un endpoint di approvazione. Solo UI/CLI umane possono applicare una proposta.
 - L'API è locale e senza autenticazione; esponila solo su una rete controllata.
 
@@ -142,4 +144,4 @@ Tutti gli errori di validazione vengono raccolti prima di scrivere. Se la pianif
 - `save_pending` valida lo schema della proposta e scrive solo in `proposals/`.
 - La pagina Generate della UI e la CLI usano lo stesso adapter e lo stesso percorso di salvataggio; gli errori del provider non toccano mai i dati canonici.
 - Il motore di apply resta l'unico percorso verso i dati canonici e richiede sempre un'approvazione umana esplicita.
-- I provider sono sostituibili. Il provider Ollama predefinito chiama `/api/generate` con `stream: false` e `format: "json"`.
+- I provider sono sostituibili. Il provider Ollama predefinito chiama `/api/generate` con `stream: false` e `format: "json"`. Un provider compatibile OpenAI chiama `/v1/chat/completions` e supporta un bearer token via `$STORYGRAM_LLM_API_KEY`.

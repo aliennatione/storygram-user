@@ -28,15 +28,16 @@ storygram proposal show proposal:example-1
 storygram proposal approve proposal:example-1 --dry-run
 storygram proposal approve proposal:example-1
 storygram proposal reject proposal:example-1 --reason "manca evidenza"
+storygram proposal withdraw proposal:example-1 --reason "sorgente errata"
 ```
 
 `approve` scrive in modo atomico e crea un commit Git limitato ai file applicati. Usa `--no-commit` per saltare Git. L'archivio deve essere un repository Git con working tree tracciato pulito. Regole complete nel [contratto delle proposte](docs/it/PROPOSAL_CONTRACT.md).
 
-Le proposte pendenti si possono modificare dalla pagina di dettaglio della UI web. Le proposte applicate, merged, rejected o archived sono in sola lettura.
+Le proposte pendenti si possono modificare dalla pagina di dettaglio della UI web. Le proposte applicate, merged, rejected, withdrawn o archived sono in sola lettura.
 
 ## API JSON per agenti
 
-Gli agenti esterni possono creare, elencare, leggere e modificare proposte pendenti tramite l'API JSON locale. Non esiste intenzionalmente un endpoint di approvazione: serve la revisione umana.
+Gli agenti esterni possono creare, elencare, leggere, modificare, generare, rifiutare e ritirare proposte pendenti tramite l'API JSON locale. Non esiste intenzionalmente un endpoint di approvazione: serve la revisione umana.
 
 ```bash
 curl -X POST http://localhost:8080/api/proposals \
@@ -57,7 +58,7 @@ storygram proposal generate --text "Nonna diceva che viveva vicino alla stazione
 storygram proposal generate --file intervista.txt --json
 ```
 
-Configurazione: `--ollama-url`, `--model`, `$STORYGRAM_OLLAMA_URL`, `$STORYGRAM_OLLAMA_MODEL`. Gli errori del provider non toccano i dati canonici e vengono mostrati nella UI.
+Configurazione: `--provider`, `--url`, `--model`, `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_MODEL` e `$STORYGRAM_LLM_API_KEY`. Ollama rispetta anche `$STORYGRAM_OLLAMA_URL` e `$STORYGRAM_OLLAMA_MODEL`. Per un server compatibile OpenAI usa `--provider openai --url http://host:8080 --model qwen3-4b`; tieni la chiave nell'ambiente, non nel repository. Gli errori del provider non toccano i dati canonici e vengono mostrati nella UI.
 
 ## Container
 

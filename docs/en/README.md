@@ -37,7 +37,7 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-The web UI exposes the same engine, including a **Generate** page for local Ollama and an edit link for pending proposals:
+The web UI exposes the same engine, including a **Generate** page for local/Ollama or OpenAI-compatible models and an edit link for pending proposals:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
@@ -59,7 +59,7 @@ See `PROPOSAL_CONTRACT.md` in this directory for the full contract.
 
 ## JSON API
 
-External agents can create, list, read and update pending proposals over HTTP. They cannot approve them. See [API.md](API.md).
+External agents can create, list, read, update, generate, reject and withdraw pending proposals over HTTP. They cannot approve them. See [API.md](API.md).
 
 ```bash
 curl -X POST http://localhost:8080/api/proposals \
@@ -73,6 +73,16 @@ curl -X POST http://localhost:8080/api/proposals \
 ollama serve
 ollama pull llama3.2
 storygram proposal generate --text "A memory..." --model llama3.2 --archive ./archive
+```
+
+For an OpenAI-compatible server:
+
+```bash
+export STORYGRAM_LLM_PROVIDER=openai
+export STORYGRAM_LLM_URL=http://127.0.0.1:8080
+export STORYGRAM_LLM_MODEL=qwen3-4b
+export STORYGRAM_LLM_API_KEY=...
+storygram proposal generate --text "A memory..." --archive ./archive
 ```
 
 The adapter forces `status=proposed`, drops unknown fields and saves only under `proposals/`. It cannot approve, apply or modify canonical records. Use `--no-save` to inspect without writing. The web **Generate** page uses the same adapter; provider errors are shown without writing anything.

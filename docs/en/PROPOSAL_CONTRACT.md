@@ -16,9 +16,9 @@ Required fields: `id`, `type` (`Proposal`), `status`, `created_at`, `updated_at`
 
 Useful optional fields: `title`, `target_ids`, `evidence`, `rationale`, `confidence`, `approval_state`, `notes`.
 
-Allowed statuses: `draft`, `proposed`, `under_review`, `approved`, `rejected`, `merged`, `archived`.
+Allowed statuses: `draft`, `proposed`, `under_review`, `approved`, `rejected`, `withdrawn`, `merged`, `archived`.
 
-Approval is only allowed from `draft`, `proposed`, `under_review` or `approved`. A rejected, merged or archived proposal cannot be approved.
+Approval is only allowed from `draft`, `proposed`, `under_review` or `approved`. A rejected, withdrawn, merged or archived proposal cannot be approved.
 
 ```json
 {
@@ -122,7 +122,7 @@ All validation errors are collected before writing. Nothing is written when plan
 
 - Only pending proposals with status `draft`, `proposed`, `under_review` or `approved` can be edited.
 - Editing replaces the pending JSON, preserves `created_at`, refreshes `updated_at` and cannot change the proposal ID.
-- Applied, merged, rejected and archived proposals are read-only.
+- Applied, merged, rejected, withdrawn and archived proposals are read-only.
 - The web edit page, `PUT /api/proposals/<id>` and the pending-update helper all use the same validation and atomic write.
 
 ## JSON API Boundary
@@ -131,6 +131,8 @@ All validation errors are collected before writing. Nothing is written when plan
 - `GET /api/proposals` lists pending proposals; `?include_applied=1` also lists the merged archive.
 - `GET /api/proposals/<id>` returns the proposal and, for pending proposals, a dry-run validation preview.
 - `PUT /api/proposals/<id>` edits a pending proposal.
+- `POST /api/proposals/generate` turns source text into a pending proposal; it never applies it.
+- `POST /api/proposals/<id>/reject` and `POST /api/proposals/<id>/withdraw` close a pending proposal without touching canonical data.
 - There is no approve endpoint. Only the human UI/CLI can apply a proposal.
 - The API is local and unauthenticated; expose it only on a controlled network.
 
@@ -142,4 +144,4 @@ All validation errors are collected before writing. Nothing is written when plan
 - `save_pending` validates against the proposal schema and writes only to `proposals/`.
 - The web Generate page and CLI call the same adapter and save path; provider failures never touch canonical data.
 - The core apply engine remains the only path to canonical data, and it still requires explicit human approval.
-- Providers are pluggable. The default Ollama provider calls `/api/generate` with `stream: false` and `format: "json"`.
+- Providers are pluggable. The default Ollama provider calls `/api/generate` with `stream: false` and `format: "json"`. An OpenAI-compatible provider calls `/v1/chat/completions` and supports a bearer token via `$STORYGRAM_LLM_API_KEY`.

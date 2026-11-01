@@ -28,15 +28,16 @@ storygram proposal show proposal:example-1
 storygram proposal approve proposal:example-1 --dry-run
 storygram proposal approve proposal:example-1
 storygram proposal reject proposal:example-1 --reason "needs evidence"
+storygram proposal withdraw proposal:example-1 --reason "wrong source"
 ```
 
 `approve` writes atomically and creates one scoped Git commit by default. Use `--no-commit` to skip Git. The archive must be a Git repository with a clean tracked tree. See [the proposal contract](docs/en/PROPOSAL_CONTRACT.md) for operations, evidence and conflict rules.
 
-Pending proposals can be edited from their detail page in the web UI. Applied, merged, rejected and archived proposals are read-only.
+Pending proposals can be edited from their detail page in the web UI. Applied, merged, rejected, withdrawn and archived proposals are read-only.
 
 ## JSON API for Agents
 
-External agents can create, list, read and edit pending proposals through the local JSON API. There is intentionally no approve endpoint: a human must review and approve.
+External agents can create, list, read, edit, generate, reject and withdraw pending proposals through the local JSON API. There is intentionally no approve endpoint: a human must review and approve.
 
 ```bash
 curl -X POST http://localhost:8080/api/proposals \
@@ -57,7 +58,7 @@ storygram proposal generate --text "Nonna said she lived near the station." --mo
 storygram proposal generate --file interview.txt --json
 ```
 
-Configuration: `--ollama-url`, `--model`, `$STORYGRAM_OLLAMA_URL`, `$STORYGRAM_OLLAMA_MODEL`. Provider failures leave canonical data untouched and show the error in the UI.
+Configuration: `--provider`, `--url`, `--model`, `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_MODEL` and `$STORYGRAM_LLM_API_KEY`. Ollama also honors `$STORYGRAM_OLLAMA_URL` and `$STORYGRAM_OLLAMA_MODEL`. For an OpenAI-compatible server pass `--provider openai --url http://host:8080 --model qwen3-4b`; keep the key in the environment, not in the repository. Provider failures leave canonical data untouched and show the error in the UI.
 
 ## Container
 

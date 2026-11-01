@@ -272,7 +272,14 @@ class Proposal(BaseModel):
     id: str = Field(pattern=r"^proposal:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Proposal"]
     status: Literal[
-        "draft", "proposed", "under_review", "approved", "rejected", "merged", "archived"
+        "draft",
+        "proposed",
+        "under_review",
+        "approved",
+        "rejected",
+        "withdrawn",
+        "merged",
+        "archived",
     ]
     created_at: datetime
     updated_at: datetime

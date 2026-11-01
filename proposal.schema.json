@@ -9,7 +9,7 @@
   "properties": {
     "id": {"type": "string", "pattern": "^proposal:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
     "type": {"const": "Proposal"},
-    "status": {"type": "string", "enum": ["draft", "proposed", "under_review", "approved", "rejected", "merged", "archived"]},
+    "status": {"type": "string", "enum": ["draft", "proposed", "under_review", "approved", "rejected", "withdrawn", "merged", "archived"]},
     "title": {"type": "string", "minLength": 1},
     "created_at": {"type": "string", "format": "date-time"},
     "updated_at": {"type": "string", "format": "date-time"},

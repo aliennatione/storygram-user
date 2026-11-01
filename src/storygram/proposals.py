@@ -21,7 +21,8 @@ from .registry import (
 )
 
 SEMANTIC_OPS = {"create", "supersede", "archive"}
-CLOSED_STATUSES = {"archived", "rejected", "superseded"}
+CLOSED_STATUSES = {"archived", "rejected", "withdrawn", "superseded"}
+CLOSED_PROPOSAL_STATUSES = {"merged", "rejected", "withdrawn", "archived"}
 
 
 class ProposalError(Exception):
@@ -132,7 +133,7 @@ def _validate_pending(root: Path, proposal: dict[str, Any]) -> None:
     errors = validate.validate_instance(root, proposal, TYPE_BY_NAME["Proposal"])
     if errors:
         raise ProposalError(errors)
-    if proposal.get("status") in {"merged", "rejected", "archived"}:
+    if proposal.get("status") in CLOSED_PROPOSAL_STATUSES:
         raise ProposalConflictError(
             [f"proposal status {proposal.get('status')} cannot be used for a pending proposal"]
         )
@@ -164,7 +165,7 @@ def update_pending(
     original = _load_json(path)
     if original is None:
         raise ProposalError([f"cannot read proposal: {_record_label(root, path)}"])
-    if original.get("status") in {"merged", "rejected", "archived"}:
+    if original.get("status") in CLOSED_PROPOSAL_STATUSES:
         raise ProposalConflictError(
             [f"proposal is already {original.get('status')}: {proposal_id}"]
         )
@@ -372,7 +373,7 @@ def plan_apply(root: Path, proposal: dict[str, Any], now: str | None = None) -> 
         f"proposal: {message}"
         for message in validate.validate_instance(root, proposal, proposal_type)
     )
-    if proposal.get("status") in {"rejected", "merged", "archived"}:
+    if proposal.get("status") in CLOSED_PROPOSAL_STATUSES:
         errors.append(f"proposal: status {proposal.get('status')} cannot be applied")
     operations = proposal.get("operations")
     if not isinstance(operations, list) or not operations:
@@ -660,21 +661,39 @@ def apply_proposal(
     return _result(plan, root, revision, False)
 
 
-def reject_proposal(
-    root: Path, proposal_id: str, reason: str | None = None, now: str | None = None
+def _close_proposal(
+    root: Path,
+    proposal_id: str,
+    status: str,
+    reason: str | None = None,
+    now: str | None = None,
 ) -> dict[str, Any]:
     root = Path(root)
     path = find_proposal(root, proposal_id)
     if path is None:
-        raise ProposalError([f"pending proposal not found: {proposal_id}"])
+        raise ProposalNotFoundError([f"pending proposal not found: {proposal_id}"])
     proposal = _load_json(path)
     if proposal is None:
         raise ProposalError([f"cannot read proposal: {_record_label(root, path)}"])
-    if proposal.get("status") in {"merged", "archived"}:
-        raise ProposalError([f"proposal {proposal_id} is already {proposal.get('status')}"])
-    proposal["status"] = "rejected"
+    if proposal.get("status") in CLOSED_PROPOSAL_STATUSES:
+        raise ProposalConflictError([f"proposal {proposal_id} is already {proposal.get('status')}"])
+    proposal["status"] = status
     proposal["updated_at"] = _now(now)
     if reason:
         proposal["notes"] = reason
-    path.write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
-    return {"ok": True, "proposal_id": proposal_id, "status": "rejected"}
+    _write_json_atomic(path, proposal)
+    return {"ok": True, "proposal_id": proposal_id, "status": status}
+
+
+def reject_proposal(
+    root: Path, proposal_id: str, reason: str | None = None, now: str | None = None
+) -> dict[str, Any]:
+    """Reject a pending proposal without touching canonical data."""
+    return _close_proposal(root, proposal_id, "rejected", reason, now)
+
+
+def withdraw_proposal(
+    root: Path, proposal_id: str, reason: str | None = None, now: str | None = None
+) -> dict[str, Any]:
+    """Withdraw a pending proposal submitted in error, without touching canonical data."""
+    return _close_proposal(root, proposal_id, "withdrawn", reason, now)

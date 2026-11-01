@@ -58,6 +58,10 @@ proposals/*
 media-manifest/*
 !media-manifest/.gitkeep
 
+# Local models
+models/
+*.gguf
+
 # Secrets
 .env
 *.key

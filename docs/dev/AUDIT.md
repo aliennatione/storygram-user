@@ -194,3 +194,32 @@ Execute the pending container verification through the host Docker socket and re
 2. Keep the approval gate UI/CLI-only.
 3. Document the actual engine (Podman-compatible) rather than implying native Docker Engine.
 4. Run the optional Ollama profile only when network/time permit.
+
+## 2026-11-01 - API generation and close endpoints
+
+### Current objective
+
+Expose generation, rejection and withdrawal to agent clients while preserving the human approval gate, and support the user's OpenAI-compatible endpoint.
+
+### Point of situation
+
+- The development container was regenerated as root and required reinstalling Python, pip, Git, Node/npm, Chromium, Docker CLI/Compose and jq.
+- The mounted host socket still exposed Podman Engine 5.8.2; Docker CLI 29.9.2 and Compose v5.6.1 reached it.
+- The live LLM endpoint was `http://100.64.0.8:8080`, model `qwen3-4b`; bearer authentication was required.
+- Added `withdrawn` status, reject/withdraw/generate API routes, CLI withdraw, web withdraw, and an OpenAI-compatible provider with environment configuration.
+- Updated tests and bilingual API/contract/README docs.
+- Python suite `61 passed`; ruff, format, mypy and Playwright all passed.
+- Live CLI and HTTP generation worked; withdraw returned 200 and a repeated withdraw 409.
+- Rebuilt the container, ran it with the live LLM env, reached `healthy`, verified non-root UID 100, init, `/v1/models`, generation, API withdraw and persistence across restart and recreation.
+- Generated qwen3-4b operation records failed the dry-run, confirming that generation is not a substitute for review.
+- Auto-approval was not implemented. The proposal/API path remains unable to apply canonical data.
+- Removed the test container, network, volume, image, temporary archives and ephemeral env file.
+- The 2026-11-01 changes remain uncommitted because the user did not request a commit.
+
+### Calibration
+
+1. Keep approval UI/CLI-only; reject any request for an agent/API approve path or LLM auto-approval.
+2. Treat `withdrawn` and `rejected` as distinct terminal statuses and keep the schema copies identical.
+3. Keep provider credentials in the environment; never log, commit or print them.
+4. Always dry-run generated proposals; model output can be envelope-valid and record-invalid.
+5. Next: legacy-surface audit (`ingest`, `export`, `search`, `rebuild`, `timeline`, `genogram`, `conflicts`).

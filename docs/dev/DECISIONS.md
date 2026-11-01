@@ -94,3 +94,26 @@
 - The named volume remains the primary persistence check. Restart and `down`/`up` (without `-v`) both preserve canonical records and Git history.
 - The Ollama profile stays optional and unverified until a model pull is explicitly run.
 - Test resources use a unique Compose project name and host port, then are removed individually; the development container is never removed.
+
+## Proposal Close and API Endpoints (2026-11-01)
+
+- Added `withdrawn` as a terminal proposal status distinct from `rejected` and `applied`.
+- `rejected` means the human declined the proposal; `withdrawn` means the submitter or reviewer retracted it. Both preserve the proposal and evidence.
+- Closing is centralized: missing proposals map to 404, already closed proposals to 409, success to the new status.
+- The JSON API now supports generation, reject and withdraw. It still has **no approve endpoint**.
+- Auto-approval was explicitly rejected, including the suggestion to let an LLM classify and apply its own proposals. Generation, classification and advisory review may be automated; applying canonical data may not.
+- API close endpoints accept an optional JSON body so a client can supply a reason without a required schema.
+- `POST /api/proposals/generate` returns 201 when a proposal is saved and 200 when `save: false`; provider failures return 502.
+- API and UI share the same proposal engine. No route bypasses dry-run, validation, archival or Git commit behavior.
+
+## OpenAI-Compatible Provider (2026-11-01)
+
+- The adapter supports both Ollama and any OpenAI-compatible `/v1/chat/completions` endpoint.
+- Provider selection is environment-first: `STORYGRAM_LLM_PROVIDER`, `STORYGRAM_LLM_MODEL`, `STORYGRAM_LLM_URL`, `STORYGRAM_LLM_API_KEY`; legacy `STORYGRAM_OLLAMA_*` variables still work.
+- The API key comes only from the environment or `--api-key`; it is never written to proposals, logs or the repository.
+- The default provider remains `ollama`, preserving the offline-first default.
+- OpenAI-compatible aliases cover the common llama.cpp/llama-swap spellings so users do not need to remember one exact name.
+- The adapter strips thinking blocks before JSON extraction because reasoning models may emit them before the payload.
+- Prompt changes add lowercase ID requirements, `record_type` and a minimal valid proposal shape. The goal is fewer schema-invalid proposals, not automated approval.
+- Compose passes the LLM variables into the container. `.env` stays gitignored and excluded from the build context; secrets are supplied at runtime.
+- Generation validates the proposal envelope, not every operation record. A dry-run remains the authoritative pre-approval check.

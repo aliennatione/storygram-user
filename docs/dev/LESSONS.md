@@ -35,7 +35,7 @@
 - Pending proposal edits must preserve the route/body ID and `created_at`; otherwise agents could retarget or backdate review.
 - `PUT` is used for full pending replacement, not PATCH; this keeps the schema validation simple.
 - API routes branch before form parsing in `do_POST`; HTML form parsing would corrupt JSON bodies.
-- The API intentionally lacks approve/reject: keeping the human gate at UI/CLI prevents external agents from self-applying changes.
+- The API intentionally lacks approve: reject and withdraw close pending proposals without applying them, so external agents still cannot self-apply changes.
 - Docker availability is environment-specific: a fresh development image may lack the CLI even when the socket is mounted. Check `docker version` and install only the client if needed.
 - Never start `dockerd` when `/var/run/docker.sock` is mounted: the CLI must talk to the host daemon.
 - Docker build context is streamed by the CLI, so `docker build /data` can work even when the host daemon has no `/data` path.
@@ -52,3 +52,17 @@
 - `docker compose down` without `-v` preserved the named volume and Git history across container recreation.
 - The development container itself may match a `name=storygram` filter (for example `OC-storygram`). Inspect before cleanup; never remove it.
 - Minus Docker, this Alpine image initially lacked Git, Python, Node and Chromium. The AGENTS environment summary is an expectation, not a guarantee; install only what the task needs and record it.
+- The regenerated development container again lacked Python, Git, Node, Chromium and the Docker client. Reinstall only after checking `command -v`; the AGENTS environment summary is an expectation, not a guarantee.
+- BusyBox `time VAR=value command` fails; export the variable first or use `env VAR=value command`.
+- Proposal schemas are duplicated at the repository root and under `schema/`. Adding a status means editing both copies byte-identically and updating the `Proposal.status` literal.
+- A shared close helper keeps reject/withdraw behavior consistent and gives the API reliable 404/409 mapping.
+- HTTP close routes need optional-body handling. Requiring JSON would make a no-reason withdraw awkward.
+- The OpenAI adapter must mask the key in `repr` and sanitize provider error bodies before raising; tests assert the key does not appear in the message.
+- Reasoning models such as qwen3 may emit `<thinking>` blocks. Strip them before extracting the JSON object.
+- Requesting JSON through the prompt is not enough; list required fields and show a minimal valid shape. The qwen3-4b model still chose an invalid `Source` record, so prompt guidance reduces but does not eliminate schema errors.
+- The LLM adapter validates the proposal envelope only. `proposal approve --dry-run` caught an operation-record schema failure that generation had accepted; document this distinction and never equate generation with applicability.
+- Live verification of a remote LLM is easier through a temporary env file loaded with `docker compose --env-file`; keep it outside the repository and delete it afterward.
+- The app container could reach the host-routed LLM endpoint at `100.64.0.8:8080`; verify with `/v1/models` from inside the container rather than assuming outbound networking.
+- `docker compose config` prints environment values. Redact secrets before showing or logging its output.
+- Container verification after a compose change should include the new env pass-through, not just `healthy`: call `/v1/models` and generate a proposal inside the container.
+- Restart and `down`/`up` persistence still passed after adding the API/provider changes. Proposal generation itself must remain pending; persistence tests should not be used to justify auto-approval.

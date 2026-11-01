@@ -1,16 +1,18 @@
 # Session Handoff
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 Branch: `feature/agent-proposal-flow`
-Recent commits: `d2851e2` user-facing container docs, `3abf1f0` working-memory update, `493965b` commit policy, `387d775` policy alignment.
+Recent commits: `7296044` working-memory update, `d2851e2` user-facing container docs, `3abf1f0` working-memory update, `493965b` commit policy.
 
 ## Compacted Context
 
 - Storygram is a local-first archive with a tested proposal workflow: agent/CLI/UI creates pending JSON, a human reviews a dry-run, approval applies atomically and commits Git, rejection leaves canonical data untouched.
-- Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, optional Ollama adapter.
-- Agent API can create/list/read/update pending proposals only. Approval is intentionally UI/CLI-only.
-- Python baseline: `51 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
-- The container deliverable is now verified end-to-end through a Docker-compatible host daemon. Details and exact results are in `docs/dev/STATE.md` and `docs/dev/AUDIT.md`.
+- Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, and Ollama plus OpenAI-compatible providers.
+- Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
+- `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
+- Python baseline: `61 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- The container deliverable was rebuilt and re-verified with the live OpenAI-compatible endpoint, then removed. Details and exact results are in `docs/dev/STATE.md` and `docs/dev/AUDIT.md`.
+- The 2026-11-01 API/provider/withdraw work is uncommitted; commit it as atomic units when the user asks.
 - Known product debt: `ingest` only copies to `inbox/`; `export` and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
 
 ## Verified Container Run (2026-10-31)
@@ -33,13 +35,23 @@ Results:
 8. Test containers, volumes, network and image were removed; only the unrelated `OC-storygram` development container remained.
 9. The optional Ollama profile was not run; it stays optional and unverified.
 
+## Verified LLM Run (2026-11-01)
+
+- Endpoint: `http://100.64.0.8:8080/v1/chat/completions`, llama-swap, model `qwen3-4b`; bearer authentication required.
+- Provider config is environment-only: `STORYGRAM_LLM_PROVIDER`, `STORYGRAM_LLM_MODEL`, `STORYGRAM_LLM_URL`, `STORYGRAM_LLM_API_KEY`.
+- Provider aliases `openai`, `openai-compatible`, `llamacpp`, `llama-swap` and similar all select the OpenAI-compatible adapter; `ollama` remains the default.
+- Inside the rebuilt container, `/v1/models` returned 4 models and `proposal generate` returned a saved pending proposal.
+- The HTTP API returned `201` for generation, `200` for withdraw and `409` for a second withdraw.
+- The qwen3-4b proposal envelope was valid, but its operation records failed `proposal approve --dry-run`; generation does not guarantee an applicable proposal.
+- The key was passed through an ephemeral env file and was never committed or logged. Remove the file after use.
+
 ## Next Objective
 
 Move to the deferred product work now that runtime verification passes. Do not redesign the approval gate.
 
 1. Audit `ingest`, `export`, `search`, `rebuild`, `timeline`, `genogram` and `conflicts` against `PRD.md` and actual behavior.
 2. For each command: fix, implement the missing contract, or explicitly mark it experimental in CLI help and bilingual docs. Verify before documenting.
-3. Decide whether agents need withdraw/reject or generation API endpoints. Keep approval UI/CLI-only.
+3. Keep approval UI/CLI-only. Generation, reject and withdraw are now available; an advisory (non-applying) review endpoint is still open for discussion.
 4. Keep `README.md` / `README.it.md` and `docs/en/` / `docs/it/` in sync.
 5. Re-run Python, lint, format, mypy and Playwright checks after changes.
 
@@ -51,6 +63,13 @@ test -S /var/run/docker.sock && echo socket-ok
 docker version
 docker compose version
 docker info --format '{{.ServerVersion}}'
+```
+
+If the development container was regenerated, reinstall the toolchain:
+
+```bash
+apk add --no-cache python3 py3-pip git nodejs npm chromium docker-cli docker-cli-compose jq
+pip install --break-system-packages -e ".[dev]"
 ```
 
 If the socket is present but the client is missing and package installation is allowed:
@@ -98,6 +117,17 @@ $C exec -T storygram rm /data/proposals/docker-check.txt
 ```
 
 For recreation, apply a synthetic proposal, run `docker compose -p storygram-test down` (without `-v`), start it again, and confirm the canonical record and Git commit still exist.
+
+To exercise the LLM pass-through, start Compose with an env file outside the repository:
+
+```bash
+STORYGRAM_PORT=18080 docker compose -f /data/compose.yaml \
+  --env-file /tmp/opencode/llm.env -p storygram-test up -d
+C="docker compose -f /data/compose.yaml -p storygram-test"
+$C exec -T storygram storygram proposal generate --archive /data --json
+```
+
+The env file must define `STORYGRAM_LLM_PROVIDER=openai`, `STORYGRAM_LLM_MODEL`, `STORYGRAM_LLM_URL` and `STORYGRAM_LLM_API_KEY`. Delete it after the test. Never print the key in logs or commit it.
 
 ## Bind-Mount Regression Procedure
 
@@ -150,6 +180,8 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 - Compose service DNS: `STORYGRAM_OLLAMA_URL=http://ollama:11434` is only valid with the `llm` profile.
 - Port conflicts on 8080; always set `STORYGRAM_PORT`.
 - Host bind path mismatch with the development container; the helper's `/hosttmp/...` path is not the host path.
+- LLM output can be envelope-valid but record-invalid; always dry-run. Never treat generation as approval.
+- The API key must stay in the environment; `.env` is gitignored and excluded from the build context.
 
 ## Cleanup
 
@@ -157,6 +189,8 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 docker compose -f /data/compose.yaml -p storygram-test down -v
 docker rm -f storygram-bind-test 2>/dev/null || true
 docker image rm storygram:local 2>/dev/null || true
+rm -f /tmp/opencode/llm.env
+rm -rf /tmp/opencode/storygram-live /tmp/opencode/storygram-api-live
 ```
 
 Do not remove unrelated host images, volumes, containers or networks. Do not prune the host daemon. The development container may itself be named with `storygram`; leave it alone.

@@ -1,24 +1,26 @@
 # Current State
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: `d2851e2` user-facing container docs, `3abf1f0` working-memory update, `493965b` commit policy, `387d775` policy alignment.
+- Recent commits: `7296044` working-memory update, `d2851e2` user-facing container docs, `3abf1f0` working-memory update, `493965b` commit policy.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
-- Python, lint and browser checks pass. The container image has now been built and exercised end-to-end through the host Docker socket.
-- The verified-container documentation and the frequent-local-commit policy are committed in atomic local commits.
+- The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
+- An OpenAI-compatible provider with bearer-token support was added alongside the Ollama provider.
+- The 2026-11-01 API/provider/withdraw changes are present in the working tree but **not committed** (the user did not request a commit).
+- Python, lint, format, mypy and browser checks pass. The container image was rebuilt and exercised end-to-end with the live LLM endpoint through the host Docker socket, then removed.
 
 ## Environment
 
-- Alpine development container, running as root.
-- Repository at `/data`, bind-mounted from the host.
+- Development container was regenerated on 2026-11-01. Alpine 3.24.2, running as root, repository at `/data` bind-mounted from the host.
+- Reinstalled after regeneration: `apk add --no-cache python3 py3-pip git nodejs npm chromium docker-cli docker-cli-compose jq`, then `pip install --break-system-packages -e '.[dev]'`.
 - Python 3.14.10, Git 2.54.0, pip 26.1.2, Node 24.22.1/npm 11.12.1 and system Chromium.
-- Dependencies installed with `pip install --break-system-packages -e '.[dev]'`; Docker client and Compose installed with `apk add --no-cache docker-cli docker-cli-compose`.
 - Tests use paths relative to `/data` and must be run from the repository root.
 - `/var/run/docker.sock` is the host socket. In this session it exposed Podman Engine 5.8.2 through its Docker-compatible API; Docker CLI was 29.9.2 and Compose v5.6.1. This is not Docker-in-Docker; never start `dockerd`.
+- Live LLM endpoint for verification: `http://100.64.0.8:8080/v1/chat/completions`, model `qwen3-4b` (llama-swap). The bearer key was supplied by the user, used only through an ephemeral env file, and is not stored in the repository.
 
 ## Completed
 
@@ -35,23 +37,23 @@ Last updated: 2026-10-31
   - `init` creates every registry directory and copies all 15 schemas.
   - `get` and `list` are real registry-backed commands.
   - `git-check` is registered once.
-  - `proposal new|list|show|approve|reject` implemented.
+  - `proposal new|list|show|approve|reject|withdraw|generate` implemented.
   - `approve` supports `--dry-run`, `--no-commit` and scoped Git commits.
 - `tests/integration/test_cli_proposals.py`: CLI coverage for init, proposal lifecycle, dry-run, no-commit, commit, reject and invalid input.
 - `src/storygram/web.py`: stdlib HTTP UI with home, proposal list, JSON create form, Ollama Generate page, pending edit page, dry-run preview, approve (commit/no-commit) and reject.
-- JSON API: `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`; no approve endpoint.
+- JSON API: `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`, `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject`, `POST /api/proposals/<id>/withdraw`; no approve endpoint.
 - `src/storygram/cli.py`: `web` command serving the UI on `0.0.0.0:8080` by default.
-- `tests/integration/test_web.py`: HTTP tests for home, create, edit, preview, approve, reject, invalid JSON, Ollama generation, empty source and provider errors.
-- `tests/integration/test_api.py`: agent API create/read/update/list, duplicate/closed/applied guards, error codes and absence of approve endpoint.
-- Web generation uses an injectable provider factory for tests; production uses `OllamaProvider` with form/env model and URL.
+- `tests/integration/test_web.py`: HTTP tests for home, create, edit, preview, approve, reject, withdraw, invalid JSON, generation, empty source and provider errors.
+- `tests/integration/test_api.py`: agent API create/read/update/list/generate/reject/withdraw, duplicate/closed/applied guards, error codes and absence of approve endpoint.
+- Web generation uses an injectable provider factory for tests; production resolves Ollama or an OpenAI-compatible provider from form/env values.
 - Documentation audit added in `docs/dev/AUDIT.md`.
 - `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, generate form, create, edit pending, approve without commit, reject.
 - `package.json` / `package-lock.json`: Playwright Node dependency and `npm run test:e2e`.
 - `.gitignore`: `node_modules/` ignored.
 - `src/storygram/llm.py`: provider-agnostic adapter, callable mock provider, stdlib Ollama provider, prompt builder, JSON extraction, normalization, pending-only save.
 - Adapter always forces `type=Proposal`, `status=proposed` and fresh timestamps; unknown model fields are dropped.
-- `proposal generate`: CLI command using local Ollama; supports `--file`, `--text`, `--model`, `--ollama-url`, `--no-save`, `--json`, `$STORYGRAM_OLLAMA_MODEL`, `$STORYGRAM_OLLAMA_URL`.
-- `tests/integration/test_llm_adapter.py`: generation, fenced JSON, unknown-field removal, pending-only writes, duplicate rejection, invalid/empty input, Ollama request shape.
+- `proposal generate`: CLI command; supports `--file`, `--text`, `--provider`, `--model`, `--url`, deprecated `--ollama-url`, `--api-key`, `--no-save`, `--json` and the `$STORYGRAM_LLM_*` variables.
+- `tests/integration/test_llm_adapter.py`: generation, fenced/thinking JSON, unknown-field removal, pending-only writes, duplicate rejection, invalid/empty input, Ollama and OpenAI request/auth shapes, env config and error redaction.
 - `tests/integration/test_cli_proposals.py`: CLI generation saves pending only, `--no-save` writes nothing, and `init` honors `$STORYGRAM_SCHEMA_DIR`.
 - Schema lookup now supports archive-local schemas, `$STORYGRAM_SCHEMA_DIR`, repository/package paths and the current directory. This fixes packaged/container `init`.
 - `Dockerfile`: multi-stage Python 3.12 Alpine image, non-root user, Git plus tini, schemas copied to `/app/schema`, healthcheck on port 8080.
@@ -62,40 +64,55 @@ Last updated: 2026-10-31
 - Packaged wheel was built, installed in a temporary venv and exercised via `storygram init` with `$STORYGRAM_SCHEMA_DIR`.
 - Container verification through the host socket: image built; Compose started on port 18080; container ran as UID 100/GID 101; auto-init created `/data`, 15 schemas and Git with an initial schema commit; healthcheck reached `healthy`; HTTP worked inside the container; a synthetic proposal passed `new`/`list`/`dry-run`/`approve` with a scoped commit; data survived `restart` and `compose down`/`up`; a host bind mount initialized, served HTTP and persisted. Test resources were cleaned up.
 - User docs corrected: the image user is UID/GID 100:101, not 1000; the container section now records commands actually run.
+- 2026-11-01 API work: `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject` and `POST /api/proposals/<id>/withdraw`; no approve endpoint.
+- `withdrawn` is now a proposal status (schema root duplicate kept identical, `models.py` and engine guards updated).
+- `withdraw_proposal` and a shared close helper distinguish missing (404), already closed (409) and success.
+- CLI `proposal withdraw`; web detail page exposes Withdraw; web Generate form accepts provider, model and URL.
+- `OpenAICompatibleProvider` calls `/v1/chat/completions`, supports `Authorization: Bearer`, hides the key from its repr and error text, and is aliased as `LlamaCppProvider`.
+- Provider resolution: `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_MODEL`, `$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_API_KEY`; Ollama still honors `$STORYGRAM_OLLAMA_*`. Default provider remains `ollama`.
+- Prompt now includes lowercase ID rules, `record_type` requirements, a minimal valid proposal shape, and strips `<thinking>` blocks before JSON extraction.
+- Compose passes the `STORYGRAM_LLM_*` variables into the app container; `.env` stays gitignored and excluded from the build context.
+- Tests: API generate/save/no-save/error, reject/withdraw, provider request/auth/error, thinking-block extraction, CLI withdraw, web withdraw.
+- Live verification: real qwen3-4b generation returned 201 and a pending proposal; withdraw returned 200 and a second withdraw 409.
+- Container re-verification: image rebuilt, app started on port 18080 with the live LLM env, reached healthy, reached the LLM endpoint, generated a pending proposal, withdrew it through the API, survived restart and `down`/`up`, then all test resources and the image were removed.
 
 ## Active
 
-- Container runtime verification is complete. The next work unit is the legacy-surface audit and documentation cleanup.
-- No application code or documentation changes are pending; the tracked working tree is clean.
+- API generate/reject/withdraw and the OpenAI-compatible provider are implemented, tested and live-verified.
+- The next work unit is the legacy-surface audit and documentation cleanup.
+- The 2026-11-01 changes are uncommitted; commit them as atomic units when the user asks.
 
 ## Next Steps
 
 1. Audit `ingest`, `export`, `search`, `rebuild`, `timeline`, `genogram` and `conflicts` against `PRD.md` and actual behavior; fix, implement, or mark experimental with matching tests and docs.
-2. Decide whether agents need withdraw/reject or generation API endpoints, keeping approval UI/CLI-only.
+2. Keep approval UI/CLI-only; generation, reject and withdraw are now available through the API. Consider advisory (non-applying) model review later.
 3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
 4. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `51 passed`.
+- `PYTHONPATH=/data/src python -m pytest -q`: `61 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
 - `mypy src`: passed.
-- `python -m pip wheel --no-deps .`: passed; installed wheel initializes an archive with 15 schemas.
-- `sh -n docker-entrypoint.sh`: passed.
-- Entrypoint smoke test outside Docker: fresh archive, Git init, initial schema commit, idempotent second run.
-- `docker build -t storygram:local /data`: passed against the host daemon.
-- `docker compose -p storygram-test up -d` on port 18080: container healthy; non-root `id -u` returned `100`.
-- In-container `init-ok`, clean `git status`, initial schema commit and `http-ok`: passed.
-- In-container proposal `new` / `list` / `approve --dry-run` / `approve`: passed; commit `feat(proposal): apply proposal:docker-check` created.
-- Restart and `compose down`/`up` persistence: canonical record, archived proposal and Git history survived.
-- Host bind-mount check: `bind-init-ok`, `bind-http-ok`, `bind-persisted`; cleanup completed.
+- Live CLI generation against `qwen3-4b`: returned `ok: true` and a pending proposal.
+- Live API generation: `201`, saved pending; `withdraw`: `200`; repeated `withdraw`: `409`.
+- `docker build -t storygram:local /data`: passed after the compose/provider changes.
+- Compose run on port 18080 with the live LLM env: `healthy`, UID `100`, `init-ok`, `http-ok`.
+- In-container LLM reachability: `/v1/models` returned 4 models.
+- In-container generation: `ok: true`; generated pending proposal saved.
+- In-container API withdraw: `200`; repeated withdraw: `409`.
+- Restart and `down`/`up` persistence: pending proposal survived.
+- Test container, network, volume, image, temp archives and ephemeral env file were removed.
 - Optional Ollama profile: not run.
 
 ## Known Limitations
 
-- The adapter CLI requires a running Ollama server; the test suite uses a callable mock and never needs network. The container `llm` profile was not exercised.
+- The default provider is Ollama, but the live verification used the OpenAI-compatible `qwen3-4b` endpoint. The container `llm` Ollama profile was not exercised.
+- LLM generation validates the proposal envelope only; operation records can still fail the dry-run. The live qwen3-4b output did exactly that, so generation is not a guarantee of an applicable proposal.
+- There is intentionally no automate-approval or approve endpoint. A model may suggest or classify, but only a human UI/CLI action can apply canonical data.
+- `STORYGRAM_LLM_API_KEY` is read from the environment; never place it in Git. `.env` is gitignored and excluded from the Docker build context.
 - The verified daemon is Podman Engine 5.8.2 exposed through its Docker-compatible API, not a native Docker Engine. Record this distinction in future runs.
 - Host-published ports may not be reachable from the development container; validate through container exec/health and treat host UI access separately.
 - Bind mounts resolve on the host daemon, not inside the development container. The helper's `/hosttmp/...` path is not the host path; derive or use a fixed host `/tmp` path as documented in `HANDOFF.md`.

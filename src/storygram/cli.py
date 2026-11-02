@@ -118,16 +118,28 @@ def git_check(base: str | None, as_json: bool) -> None:
         raise SystemExit(1)
 
 
-@main.command()
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--inbox/--data", default=True, help="Ingest to inbox (default) or directly to data")
-def ingest(file: str, inbox: bool) -> None:
-    """Ingest an episode - registers the capture without confirming facts."""
-    root = Path.cwd()
-    destination = root / ("inbox" if inbox else "data/episodes")
-    destination.mkdir(parents=True, exist_ok=True)
+@main.group()
+def ingest() -> None:
+    """Capture source material without confirming facts."""
+
+
+@ingest.command("episode")
+@click.argument("file", type=click.Path(exists=True, dir_okay=False))
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--overwrite", is_flag=True, help="Replace an existing capture with the same name")
+def ingest_episode(file: str, archive_path: str | None, overwrite: bool) -> None:
+    """Copy an episode capture into inbox/ for later review.
+
+    Ingestion never writes canonical data and never confirms assertions.
+    """
+    root = _root(archive_path)
     source = Path(file)
-    shutil.copy(source, destination / source.name)
+    destination = root / "inbox"
+    destination.mkdir(parents=True, exist_ok=True)
+    target = destination / source.name
+    if target.exists() and not overwrite:
+        _fail(f"Capture already exists: {target}; use --overwrite to replace it")
+    shutil.copy2(source, target)
     click.echo(f"Ingested {source.name} to {destination}")
 
 

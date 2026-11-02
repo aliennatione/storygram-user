@@ -315,6 +315,10 @@ def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
         "- Do not create Period records; use Assertion.valid_time for periods.",
         "- Only reference IDs that are created in this proposal or listed under known IDs.",
         "- If you reference a new place, event or person, create that record first.",
+        "- object must be a valid record ID from those prefixes.",
+        "- For a literal fact such as an occupation, omit object and put the literal in value.",
+        "- Never invent prefixes such as occupation: or event: for a predicate.",
+        "- Do not add surnames or details that the source does not state.",
         "- Never invent an apply, approve or merged status.",
         "- Preserve uncertainty and conflicting evidence; never resolve a conflict silently.",
         "- If a real contradiction exists, create an explicit Conflict",
@@ -330,6 +334,17 @@ def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
         '"object":"place:torino","status":"reported",'
         '"transaction_time":{"recorded_at":"2026-01-01T00:00:00+00:00"},'
         '"valid_time":{"start":"1990","precision":"year"},'
+        '"created_at":"2026-01-01T00:00:00+00:00",'
+        '"updated_at":"2026-01-01T00:00:00+00:00"},'
+        '"evidence":["episode:source-capture"]}',
+        "",
+        "Literal-value assertion example (format illustration only):",
+        '{"op":"create","record_type":"Assertion","record":{'
+        '"id":"assertion:elena-worked-as-nurse","type":"Assertion",'
+        '"subject":"person:elena","predicate":"relation:worked_as",'
+        '"value":"nurse","status":"reported",'
+        '"transaction_time":{"recorded_at":"2026-01-01T00:00:00+00:00"},'
+        '"valid_time":{"start":"1985","precision":"year"},'
         '"created_at":"2026-01-01T00:00:00+00:00",'
         '"updated_at":"2026-01-01T00:00:00+00:00"},'
         '"evidence":["episode:source-capture"]}',

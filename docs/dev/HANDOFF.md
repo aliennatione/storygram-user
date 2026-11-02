@@ -225,3 +225,20 @@ Do not remove unrelated host images, volumes, containers or networks. Do not pru
 - Update `docs/dev/STATE.md`, `DECISIONS.md`, `LESSONS.md` and `AUDIT.md`.
 - Commit each coherent unit as a small, atomic local commit; do not push or amend unless explicitly asked.
 - End with the standard completion report from `AGENTS.md`.
+
+## New Session Start
+
+The model-quality unit is closed. Start a fresh session from `/data` on branch `feature/agent-proposal-flow`; the only untracked files are known workspace leftovers (`archive/`, `chatgpt.md`, `session-ses_*.md`). Do not reopen model selection unless a regression appears: `qwen3-4b` is the single reference, the 1.5B GGUF is a smoke test, and the 3B GGUF is not promoted.
+
+```bash
+cd /data
+git status --short --branch
+opencode
+```
+
+Suggested opening prompt (Italian):
+
+> Riprendi Storygram da `/data`. Leggi `AGENTS.md`, `docs/dev/STATE.md`, `docs/dev/HANDOFF.md`, `docs/dev/DECISIONS.md`, `docs/dev/LESSONS.md` e `docs/dev/AUDIT.md`.
+> Conferma branch `feature/agent-proposal-flow` e che non ci siano modifiche tracciate pendenti.
+> Il lavoro su `qwen3-4b` e sul prompt è chiuso: non cambiare modello e non cambiare il gate umano.
+> Prossimo obiettivo: chiudere il gap di export round-trip JSON-LD/YAML/Markdown richiesto da `PRD.md`, senza rompere l'export JSON. Prima ispeziona PRD e test esistenti, poi proponi un piano atomico e inizia dal caso più piccolo con test di andata/ritorno. Esegui test, ruff, mypy ed E2E, e aggiorna `docs/dev/`.

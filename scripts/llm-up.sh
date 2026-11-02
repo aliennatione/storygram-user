@@ -2,7 +2,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MODEL_FILE="qwen2.5-1.5b-instruct-q4_k_m.gguf"
+MODEL_FILE="${STORYGRAM_MODEL_FILE:-qwen2.5-1.5b-instruct-q4_k_m.gguf}"
 LOCAL_MODELS_DIR="${ROOT}/models"
 
 if [ -z "${STORYGRAM_MODELS_DIR:-}" ]; then

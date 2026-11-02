@@ -2,9 +2,9 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MODEL_NAME="qwen2.5-1.5b-instruct-q4_k_m.gguf"
-MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/${MODEL_NAME}"
-MODEL_SHA256="6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e"
+MODEL_NAME="${STORYGRAM_MODEL_FILE:-qwen2.5-1.5b-instruct-q4_k_m.gguf}"
+MODEL_URL="${STORYGRAM_MODEL_URL:-https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/${MODEL_NAME}}"
+MODEL_SHA256="${STORYGRAM_MODEL_SHA256:-6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e}"
 MODELS_DIR="${STORYGRAM_MODELS_DIR:-${STORYGRAM_MODEL_DIR:-${ROOT}/models}}"
 DESTINATION="${MODELS_DIR}/${MODEL_NAME}"
 

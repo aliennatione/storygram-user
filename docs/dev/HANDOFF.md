@@ -1,8 +1,8 @@
 # Session Handoff
 
-Last updated: 2026-11-01
+Last updated: 2026-11-02
 Branch: `feature/agent-proposal-flow`
-Recent commits: API/provider/withdraw series, then the legacy command hardening series. Use `git log --oneline -20`.
+Recent commits: API/provider/withdraw series, legacy command hardening, then the local GGUF helper/profile commits. Use `git log --oneline -20`.
 
 ## Compacted Context
 
@@ -11,6 +11,7 @@ Recent commits: API/provider/withdraw series, then the legacy command hardening 
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
 - Python baseline: `86 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Local GGUF helpers are tracked: `scripts/download-model.sh` downloads a checksummed Qwen 1.5B Q4_K_M file, and `scripts/llm-up.sh` starts the `llm` llama.cpp Compose profile with a read-only model mount. The model itself is untracked.
 - The container deliverable was rebuilt and re-verified with the live OpenAI-compatible endpoint, then removed. Details and exact results are in `docs/dev/STATE.md` and `docs/dev/AUDIT.md`.
 - The 2026-11-01 API/provider/withdraw work and the legacy command hardening are committed in small atomic units.
 - Known product debt: `ingest` only copies to `inbox/`; `export` and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
@@ -45,6 +46,17 @@ Results:
 - The qwen3-4b proposal envelope was valid, but its operation records failed `proposal approve --dry-run`; generation does not guarantee an applicable proposal.
 - The key was passed through an ephemeral env file and was never committed or logged. Remove the file after use.
 
+## Verified Local GGUF Run (2026-11-02)
+
+- Downloaded model: `models/qwen2.5-1.5b-instruct-q4_k_m.gguf` (about 1.0 GB), SHA256 `6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e`.
+- `scripts/download-model.sh` and `scripts/llm-up.sh` are tracked and executable; both pass `sh -n`.
+- `llm-up.sh` with a stubbed `docker` derived the host path `/mnt/c/Users/erobi/Desktop/storygram_test/models`, exported `STORYGRAM_LLM_PROVIDER=openai`, `STORYGRAM_LLM_URL=http://llm:8080`, `STORYGRAM_LLM_MODEL=qwen2.5-1.5b-instruct-q4_k_m`, and invoked `compose --profile llm up -d`.
+- Real `llm` profile: model loaded in about 2m36s; `/health` returned `{"status":"ok"}`; `/v1/models` listed the GGUF path; the model mount was read-only.
+- App container on host port 18080 reached `healthy`; in-container `proposal generate` returned `ok: true` with a valid proposal envelope.
+- The 1.5B model ignored most of the prompt and produced a minimal Episode with no evidence/source, so the operation record would fail dry-run. Treat this as a quality limitation, not a wiring defect.
+- Containers, project network, project volume and temporary Alpine image from this run were removed. The downloaded model and `storygram:local` remain.
+- The Ollama profile is now `--profile ollama`; `--profile llm` is the llama.cpp service.
+
 ## Next Objective
 
 The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
@@ -53,7 +65,8 @@ The legacy command audit is complete. Continue with the remaining product gaps w
 2. Add capture metadata/checksums to `ingest` while keeping `inbox/` as the only destination.
 3. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram`.
 4. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
-5. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
+5. Keep the local GGUF helpers honest: they wire inference only; the small model is not a quality baseline.
+6. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
 
 ## Environment Check
 
@@ -162,7 +175,7 @@ If the helper cannot create a host path, report the limitation and use the named
 Only if network/time permit:
 
 ```bash
-docker compose -f /data/compose.yaml -p storygram-test --profile llm up -d ollama
+docker compose -f /data/compose.yaml -p storygram-test --profile ollama up -d ollama
 docker compose -f /data/compose.yaml -p storygram-test exec -T ollama ollama pull llama3.2
 docker compose -f /data/compose.yaml -p storygram-test exec -T storygram \
   storygram proposal generate --text "A synthetic Docker check." --no-save --json
@@ -177,8 +190,11 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 - Schema discovery via `$STORYGRAM_SCHEMA_DIR=/app/schema`.
 - Healthcheck starting too early: the first probe can fail while the UI starts; wait for `healthy`.
 - Git author/committer configuration inside the container.
-- Compose service DNS: `STORYGRAM_OLLAMA_URL=http://ollama:11434` is only valid with the `llm` profile.
-- Port conflicts on 8080; always set `STORYGRAM_PORT`.
+- Compose service DNS: `STORYGRAM_OLLAMA_URL=http://ollama:11434` is only valid with the `ollama` profile; `STORYGRAM_LLM_URL=http://llm:8080` requires the `llm` profile.
+- Port conflicts on 8080; always set `STORYGRAM_PORT`. The local `llm` container listens on 8080 inside the Compose network only, but the app publishes 8080 by default.
+- The local GGUF takes roughly 2.5 minutes to load on CPU; `/health` and `/v1/models` return 503 until loading finishes. Do not declare the container dead before checking logs.
+- `LLAMA_ARG_HOST` is overwritten by the image entrypoint's `--host 0.0.0.0`; the warning is harmless.
+- Bind sources must exist on the host daemon. Setting `STORYGRAM_MODELS_DIR=/data/models` inside the development container can fail with a `/data` permission error because that is not the host path; let `llm-up.sh` derive it or pass the real host path.
 - Host bind path mismatch with the development container; the helper's `/hosttmp/...` path is not the host path.
 - LLM output can be envelope-valid but record-invalid; always dry-run. Never treat generation as approval.
 - The API key must stay in the environment; `.env` is gitignored and excluded from the build context.

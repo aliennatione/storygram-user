@@ -106,7 +106,7 @@ These are non-negotiable (details in `PRD.md`):
 
 - Add regression tests for defects and malformed/empty/boundary cases. Do not weaken tests to pass.
 - CLI changes need focused CLI tests; HTTP/API changes need integration tests; UI flows need E2E when practical.
-- Container runtime is verified (build, non-root, auto-init, healthcheck, proposal flow, named-volume persistence, host bind mount). Re-run the `docs/dev/HANDOFF.md` regression procedure after changing `Dockerfile`, `compose.yaml`, the entrypoint or packaging; a passing Python suite alone does not prove the container works.
+- Container runtime is verified (build, non-root, auto-init, healthcheck, proposal flow, named-volume persistence, host bind mount). The optional local `llm` llama.cpp profile and GGUF helpers are runtime-verified; the Ollama profile is not. Re-run the `docs/dev/HANDOFF.md` regression procedure after changing `Dockerfile`, `compose.yaml`, the entrypoint or packaging; a passing Python suite alone does not prove the container works.
 - Keep `README.md` / `README.it.md` and `docs/en/` / `docs/it/` in sync.
 - Update `docs/dev/STATE.md`, `HANDOFF.md`, `DECISIONS.md`, `LESSONS.md` and `AUDIT.md` at the end of every meaningful work unit.
 

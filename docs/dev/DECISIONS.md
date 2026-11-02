@@ -134,3 +134,14 @@
 - Timeline distinguishes an unknown record from a known record with no entries; both are actionable errors or explicit empty results.
 - Genogram remains experimental. Relationship records are ignored because the schema has no endpoints; relations come from `relation:*` assertions and unsupported predicates are warnings.
 - `get` and `list` accept `--archive`, matching the documented examples and the rest of the read surface.
+
+## Local GGUF Helpers and Profiles (2026-11-02)
+
+- The optional Ollama service now uses the `ollama` profile; the `llm` profile is reserved for the local llama.cpp service.
+- `scripts/download-model.sh` downloads a specific Qwen 2.5 1.5B Instruct Q4_K_M GGUF and verifies its SHA256. The model stays in the gitignored `models/` directory and is never committed.
+- `scripts/llm-up.sh` starts the `llm` profile through Compose. It sets the app to the OpenAI-compatible adapter at `http://llm:8080` and keeps the model file name as the model identifier.
+- `STORYGRAM_MODELS_DIR` is the canonical model-directory variable; `download-model.sh` still accepts the older `STORYGRAM_MODEL_DIR` as a fallback.
+- The model directory is a host bind source. Inside the development container, `llm-up.sh` derives the host path from the `/data` mount instead of passing the container path to the host daemon.
+- The model mount is read-only; inference has no reason to write to the model directory.
+- The helper verifies a model only when it is visible locally or at the configured path. A host path that is not visible from the development container cannot be checked; Compose still handles it on the host side.
+- Local inference is optional. The core stays deterministic and LLM-free, and generation cannot approve or apply data.

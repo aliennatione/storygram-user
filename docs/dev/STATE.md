@@ -1,11 +1,11 @@
 # Current State
 
-Last updated: 2026-11-01
+Last updated: 2026-11-02
 
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: API/provider/withdraw series followed by the legacy command hardening series; see `git log --oneline -20`.
+- Recent commits: API/provider/withdraw series, legacy command hardening, then the local GGUF helper/profile commits (`076d7ff`, `5840302`, `367b177`); see `git log --oneline -20`.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
@@ -98,9 +98,17 @@ Last updated: 2026-11-01
 5. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
 6. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
+## Local GGUF Helpers (2026-11-02)
+
+- Added `scripts/download-model.sh` and `scripts/llm-up.sh`, both tracked and executable.
+- `download-model.sh` downloads `qwen2.5-1.5b-instruct-q4_k_m.gguf` into `${STORYGRAM_MODELS_DIR:-${STORYGRAM_MODEL_DIR:-<repo>/models}}` and verifies SHA256 `6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e`.
+- `llm-up.sh` derives the host-side model path from the development container's `/data` mount when `STORYGRAM_MODELS_DIR` is omitted, then starts the `llm` Compose profile with `STORYGRAM_LLM_PROVIDER=openai`, `STORYGRAM_LLM_URL=http://llm:8080` and the GGUF filename without extension as the model name.
+- `compose.yaml` now has an `llm` llama.cpp service using `samueltallet/alpine-llama-cpp-server:latest`, a read-only bind mount, and `LLAMA_ARG_MODEL`/`LLAMA_ARG_HOST`/`LLAMA_ARG_PORT`/`LLAMA_ARG_JINJA`; the Ollama service moved to the `ollama` profile so the names do not collide.
+- The helper scripts were syntax-checked, and `docker compose config` passed for the default and `llm` profiles. A stubbed `docker` verified the derived host path and exported provider variables without starting containers.
+
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `86 passed`.
+- `PYTHONPATH=/data/src python -m pytest -q`: `86 passed` (exit 0; pytest summary is suppressed by project config).
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -115,15 +123,25 @@ Last updated: 2026-11-01
 - Restart and `down`/`up` persistence: pending proposal survived.
 - Legacy CLI tests: ingest, export, search/rebuild, conflicts, timeline, genogram and read commands all pass.
 - Test container, network, volume, image, temp archives and ephemeral env file were removed.
+- `sh -n scripts/download-model.sh scripts/llm-up.sh`: passed.
+- `docker compose config` and `docker compose --profile llm config`: passed.
+- `scripts/llm-up.sh` with a stubbed `docker`: derived `/mnt/c/Users/erobi/Desktop/storygram_test/models`, set `openai` / `http://llm:8080` / `qwen2.5-1.5b-instruct-q4_k_m`, and passed `--profile llm up -d`.
+- Local `llm` profile with `models/qwen2.5-1.5b-instruct-q4_k_m.gguf`: model loaded in about 2m36s, `/health` returned `{"status":"ok"}`, `/v1/models` listed the GGUF, and the read-only mount worked.
+- App container on port 18080 with the local profile: reached `healthy`; in-container `proposal generate` returned a valid proposal envelope.
+- The small Qwen model ignored most of the prompt and produced a minimal Episode with no evidence/source, so the record would fail dry-run. This is a model-quality result, not a wiring failure.
 - Optional Ollama profile: not run.
+- Test containers, project network, the project volume created by this run, and the temporary Alpine image were removed; `storygram:local` and the downloaded GGUF remain.
 
 ## Known Limitations
 
-- The default provider is Ollama, but the live verification used the OpenAI-compatible `qwen3-4b` endpoint. The container `llm` Ollama profile was not exercised.
-- LLM generation validates the proposal envelope only; operation records can still fail the dry-run. The live qwen3-4b output did exactly that, so generation is not a guarantee of an applicable proposal.
+- The default provider is Ollama, but live verification used the OpenAI-compatible `qwen3-4b` endpoint and later the local `llm` llama.cpp profile. The Ollama profile (`--profile ollama`) was not exercised.
+- LLM generation validates the proposal envelope only; operation records can still fail the dry-run. The live qwen3-4b output and the local Qwen 1.5B output did exactly that, so generation is not a guarantee of an applicable proposal.
 - There is intentionally no automate-approval or approve endpoint. A model may suggest or classify, but only a human UI/CLI action can apply canonical data.
 - `STORYGRAM_LLM_API_KEY` is read from the environment; never place it in Git. `.env` is gitignored and excluded from the Docker build context.
 - The verified daemon is Podman Engine 5.8.2 exposed through its Docker-compatible API, not a native Docker Engine. Record this distinction in future runs.
+- `scripts/llm-up.sh` assumes the development repository is mounted at `/data` when deriving the host model path; otherwise set `STORYGRAM_MODELS_DIR` explicitly.
+- The local GGUF must exist on the host daemon's side of the bind mount. A development-container path is not a host path.
+- The local Qwen 1.5B model loaded slowly on CPU (about 2m36s) and may trigger transient app healthcheck failures under CPU contention; wait for both services before testing generation.
 - Host-published ports may not be reachable from the development container; validate through container exec/health and treat host UI access separately.
 - Bind mounts resolve on the host daemon, not inside the development container. The helper's `/hosttmp/...` path is not the host path; derive or use a fixed host `/tmp` path as documented in `HANDOFF.md`.
 - `apply_proposal` commit message is `feat(proposal): apply <id>`.

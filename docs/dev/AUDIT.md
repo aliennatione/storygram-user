@@ -250,3 +250,29 @@ Close the deterministic legacy-surface gaps without weakening the approval gate,
 3. Keep the search index deterministic and rebuildable; report malformed input instead of skipping silently.
 4. Keep genogram experimental until Relationship models endpoints and relation type.
 5. Next: higher-level timelines, real JSON-LD/YAML/Markdown round-trips and capture metadata.
+
+## 2026-11-02 - local GGUF helpers and llama.cpp profile
+
+### Current objective
+
+Track the previously untracked model helpers and make them consistent with the Compose runtime, without changing the approval gate.
+
+### Point of situation
+
+- `scripts/download-model.sh` and `scripts/llm-up.sh` were untracked; `llm-up.sh` had no corresponding Compose service and used a different model-directory variable than the downloader.
+- Added an `llm` llama.cpp service, read-only model bind, `LLAMA_ARG_*` configuration, and moved Ollama to the `ollama` profile.
+- Normalized `STORYGRAM_MODELS_DIR` (plural) with a fallback to the older singular name.
+- `llm-up.sh` now derives the host model path from the development container's `/data` mount and exports the provider, URL and model name before starting Compose.
+- Both scripts are tracked with mode `755`, syntax-checked and covered by a stubbed-`docker` wiring check.
+- Real run with `models/qwen2.5-1.5b-instruct-q4_k_m.gguf`: model loaded in about 2m36s, health and model listing passed, read-only mount worked, app reached `healthy`, and in-container generation returned a valid proposal envelope.
+- The small model produced a minimal invalid Episode (no evidence/source), confirming again that generation is not applicability.
+- Removed the test containers, network, project volume and temporary Alpine image. Kept the downloaded model and `storygram:local`.
+- Python suite `86 passed`; ruff, format and mypy passed.
+
+### Calibration
+
+1. Keep the model file untracked and mounted read-only.
+2. Keep `llm` for llama.cpp and `ollama` for Ollama; do not reuse profile names.
+3. Keep the tiny model as a transport smoke test, not a quality baseline.
+4. Always dry-run generated records; transport success is not schema success.
+5. Next: choose a larger local GGUF for quality, or leave local inference as an optional smoke path.

@@ -241,17 +241,21 @@ def genogram(record_id: str, as_json: bool) -> None:
 
 @main.command()
 @click.option("--status", default=None)
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--json", "as_json", is_flag=True)
-def conflicts(status: str | None, as_json: bool) -> None:
-    """List conflicts."""
+def conflicts(status: str | None, archive_path: str | None, as_json: bool) -> None:
+    """List explicit and assertion-derived conflicts."""
     from .conflicts import list_conflicts
 
-    results = list_conflicts(Path.cwd(), status)
+    results = list_conflicts(_root(archive_path), status)
     if as_json:
         click.echo(json.dumps(results, indent=2))
         return
     for conflict in results:
-        click.echo(f"{conflict.get('id')} [{conflict.get('status')}]")
+        marker = " [derived]" if conflict.get("derived") else ""
+        click.echo(f"{conflict.get('id')} [{conflict.get('status')}]{marker}")
+        if conflict.get("derived"):
+            click.echo(f"  assertions: {', '.join(conflict.get('assertions') or [])}")
     if not results:
         click.echo("[]")
 

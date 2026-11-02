@@ -26,9 +26,7 @@ def test_ingest_copies_to_inbox_only(tmp_path):
     source = tmp_path / "interview.txt"
     source.write_text("synthetic capture", encoding="utf-8")
 
-    result = CliRunner().invoke(
-        main, ["ingest", "episode", str(source), "--archive", str(root)]
-    )
+    result = CliRunner().invoke(main, ["ingest", "episode", str(source), "--archive", str(root)])
 
     assert result.exit_code == 0, result.output
     assert (root / "inbox" / "interview.txt").read_text(encoding="utf-8") == "synthetic capture"
@@ -40,9 +38,7 @@ def test_ingest_invalid_episode_never_reaches_data(tmp_path):
     source = tmp_path / "bad.json"
     source.write_text('{"id": "episode:bad", "type": "Episode"}', encoding="utf-8")
 
-    result = CliRunner().invoke(
-        main, ["ingest", "episode", str(source), "--archive", str(root)]
-    )
+    result = CliRunner().invoke(main, ["ingest", "episode", str(source), "--archive", str(root)])
 
     assert result.exit_code == 0, result.output
     assert (root / "inbox" / "bad.json").exists()
@@ -59,7 +55,10 @@ def test_ingest_refuses_silent_overwrite(tmp_path):
     second.write_text("second", encoding="utf-8")
     runner = CliRunner()
 
-    assert runner.invoke(main, ["ingest", "episode", str(first), "--archive", str(root)]).exit_code == 0
+    assert (
+        runner.invoke(main, ["ingest", "episode", str(first), "--archive", str(root)]).exit_code
+        == 0
+    )
     result = runner.invoke(main, ["ingest", "episode", str(second), "--archive", str(root)])
 
     assert result.exit_code == 1

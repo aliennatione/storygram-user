@@ -87,9 +87,7 @@ def _is_current(root: Path, db_path: Path) -> bool:
     try:
         conn = _connect(db_path)
         try:
-            row = conn.execute(
-                "SELECT value FROM records_meta WHERE key='signature'"
-            ).fetchone()
+            row = conn.execute("SELECT value FROM records_meta WHERE key='signature'").fetchone()
         finally:
             conn.close()
     except sqlite3.Error:
@@ -119,7 +117,8 @@ def search(root: Path, query: str, rebuild: bool = False) -> list[dict[str, Any]
         if not rows:
             try:
                 rows = conn.execute(
-                    "SELECT id,type FROM records_fts WHERE records_fts MATCH ? ORDER BY id LIMIT 100",
+                    "SELECT id,type FROM records_fts "
+                    "WHERE records_fts MATCH ? ORDER BY id LIMIT 100",
                     (_fts_query(query),),
                 ).fetchall()
             except sqlite3.Error:

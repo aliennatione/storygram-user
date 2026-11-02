@@ -21,8 +21,16 @@ def write(root: Path, relative: str, data: dict) -> None:
 
 def test_export_visibility_filter_is_default_deny(tmp_path):
     root = make_archive(tmp_path)
-    write(root, "people/public.json", {"id": "person:public", "type": "Person", "visibility": "public"})
-    write(root, "people/private.json", {"id": "person:private", "type": "Person", "visibility": "private"})
+    write(
+        root,
+        "people/public.json",
+        {"id": "person:public", "type": "Person", "visibility": "public"},
+    )
+    write(
+        root,
+        "people/private.json",
+        {"id": "person:private", "type": "Person", "visibility": "private"},
+    )
     write(root, "conflicts/unclassified.json", {"id": "conflict:01", "type": "Conflict"})
 
     assert [r["id"] for r in export_json(root, {"public"})] == ["person:public"]
@@ -35,14 +43,16 @@ def test_export_visibility_filter_is_default_deny(tmp_path):
 
 def test_export_jsonld_marks_each_node(tmp_path):
     root = make_archive(tmp_path)
-    write(root, "people/public.json", {"id": "person:public", "type": "Person", "visibility": "public"})
+    write(
+        root,
+        "people/public.json",
+        {"id": "person:public", "type": "Person", "visibility": "public"},
+    )
 
     result = export_jsonld(root, {"public"})
 
     assert result["@context"]["@vocab"].startswith("https://storygram.local/")
-    assert result["@graph"] == [
-        {"@id": "person:public", "@type": "Person", "visibility": "public"}
-    ]
+    assert result["@graph"] == [{"@id": "person:public", "@type": "Person", "visibility": "public"}]
 
 
 def test_export_reports_malformed_json(tmp_path):
@@ -59,8 +69,16 @@ def test_export_reports_malformed_json(tmp_path):
 
 def test_export_cli_filters_and_uses_archive(tmp_path):
     root = make_archive(tmp_path)
-    write(root, "people/public.json", {"id": "person:public", "type": "Person", "visibility": "public"})
-    write(root, "people/private.json", {"id": "person:private", "type": "Person", "visibility": "private"})
+    write(
+        root,
+        "people/public.json",
+        {"id": "person:public", "type": "Person", "visibility": "public"},
+    )
+    write(
+        root,
+        "people/private.json",
+        {"id": "person:private", "type": "Person", "visibility": "private"},
+    )
 
     result = CliRunner().invoke(
         main,

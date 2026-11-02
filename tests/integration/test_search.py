@@ -63,15 +63,15 @@ def test_search_matches_id_type_and_content(tmp_path):
 
     assert search(root, "person:anna") == [{"id": "person:anna", "type": "Person"}]
     assert search(root, "Person") == [{"id": "person:anna", "type": "Person"}]
-    assert search(root, "relation:lived_in") == [
-        {"id": "assertion:lived", "type": "Assertion"}
-    ]
+    assert search(root, "relation:lived_in") == [{"id": "assertion:lived", "type": "Assertion"}]
 
 
 def test_search_is_deterministic(tmp_path):
     root = make_archive(tmp_path)
     for name in ("zoe", "anna", "mario"):
-        write(root, f"people/{name}.json", {"id": f"person:{name}", "type": "Person", "name": "Smith"})
+        write(
+            root, f"people/{name}.json", {"id": f"person:{name}", "type": "Person", "name": "Smith"}
+        )
 
     assert [r["id"] for r in search(root, "Smith")] == [
         "person:anna",

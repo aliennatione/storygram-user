@@ -32,9 +32,21 @@ def assertion(assertion_id: str, subject: str, predicate: str, obj: str) -> dict
 
 def test_genogram_scopes_assertions_to_person(tmp_path):
     root = make_archive(tmp_path)
-    write(root, "assertions/out.json", assertion("assertion:out", "person:anna", "relation:parent", "person:bruno"))
-    write(root, "assertions/in.json", assertion("assertion:in", "person:carla", "relation:parent", "person:anna"))
-    write(root, "assertions/other.json", assertion("assertion:other", "person:bruno", "relation:parent", "person:carla"))
+    write(
+        root,
+        "assertions/out.json",
+        assertion("assertion:out", "person:anna", "relation:parent", "person:bruno"),
+    )
+    write(
+        root,
+        "assertions/in.json",
+        assertion("assertion:in", "person:carla", "relation:parent", "person:anna"),
+    )
+    write(
+        root,
+        "assertions/other.json",
+        assertion("assertion:other", "person:bruno", "relation:parent", "person:carla"),
+    )
 
     result = build_genogram(root, "person:anna")
 
@@ -49,7 +61,11 @@ def test_genogram_scopes_assertions_to_person(tmp_path):
 def test_genogram_ignores_unscoped_relationship_records(tmp_path):
     root = make_archive(tmp_path)
     write(root, "relationships/family.json", {"id": "relationship:family", "type": "Relationship"})
-    write(root, "assertions/out.json", assertion("assertion:out", "person:anna", "relation:parent", "person:bruno"))
+    write(
+        root,
+        "assertions/out.json",
+        assertion("assertion:out", "person:anna", "relation:parent", "person:bruno"),
+    )
 
     result = build_genogram(root, "person:anna")
 
@@ -59,7 +75,11 @@ def test_genogram_ignores_unscoped_relationship_records(tmp_path):
 
 def test_genogram_keeps_unsupported_relations_as_warnings(tmp_path):
     root = make_archive(tmp_path)
-    write(root, "assertions/lived.json", assertion("assertion:lived", "person:anna", "relation:lived_in", "place:turin"))
+    write(
+        root,
+        "assertions/lived.json",
+        assertion("assertion:lived", "person:anna", "relation:lived_in", "place:turin"),
+    )
 
     result = build_genogram(root, "person:anna")
 
@@ -69,7 +89,11 @@ def test_genogram_keeps_unsupported_relations_as_warnings(tmp_path):
 
 def test_genogram_cli_marks_experimental_and_shows_warnings(tmp_path):
     root = make_archive(tmp_path)
-    write(root, "assertions/lived.json", assertion("assertion:lived", "person:anna", "relation:lived_in", "place:turin"))
+    write(
+        root,
+        "assertions/lived.json",
+        assertion("assertion:lived", "person:anna", "relation:lived_in", "place:turin"),
+    )
     runner = CliRunner()
 
     result = runner.invoke(main, ["genogram", "person:anna", "--archive", str(root)])

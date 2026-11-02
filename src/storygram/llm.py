@@ -191,14 +191,33 @@ def provider_config(
     )
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise LLMAdapterError(f"{name} must be an integer") from None
+    if value <= 0:
+        raise LLMAdapterError(f"{name} must be positive")
+    return value
+
+
 def provider_from_config(config: ProviderConfig) -> Provider:
     """Build a provider instance from resolved settings."""
     if config.provider == "ollama":
-        return OllamaProvider(model=config.model, base_url=config.base_url)
+        return OllamaProvider(
+            model=config.model,
+            base_url=config.base_url,
+            timeout=_env_int("STORYGRAM_LLM_TIMEOUT", 120),
+        )
     return OpenAICompatibleProvider(
         model=config.model,
         base_url=config.base_url,
         api_key=config.api_key,
+        timeout=_env_int("STORYGRAM_LLM_TIMEOUT", 300),
+        max_tokens=_env_int("STORYGRAM_LLM_MAX_TOKENS", 2048),
     )
 
 

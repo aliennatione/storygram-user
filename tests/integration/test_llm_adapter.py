@@ -226,6 +226,21 @@ def test_provider_config_resolves_env_defaults(monkeypatch) -> None:
     assert isinstance(build_provider("openai"), OpenAICompatibleProvider)
 
 
+def test_provider_config_resolves_timeout_and_token_limits(monkeypatch) -> None:
+    monkeypatch.setenv("STORYGRAM_LLM_TIMEOUT", "900")
+    monkeypatch.setenv("STORYGRAM_LLM_MAX_TOKENS", "768")
+    provider = build_provider("openai")
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.timeout == 900
+    assert provider.max_tokens == 768
+
+
+def test_provider_config_rejects_invalid_timeout(monkeypatch) -> None:
+    monkeypatch.setenv("STORYGRAM_LLM_TIMEOUT", "slow")
+    with pytest.raises(LLMAdapterError, match="must be an integer"):
+        build_provider("openai")
+
+
 def test_provider_config_rejects_unknown_provider() -> None:
     with pytest.raises(LLMAdapterError, match="Unknown LLM provider"):
         provider_config("nope")

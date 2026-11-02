@@ -257,41 +257,59 @@ def canonical_ids(root: Path, limit: int = 300) -> list[str]:
 def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
     ids = known_ids or []
     known = "\n".join(f"- {value}" for value in ids) if ids else "(none supplied)"
+    example = (
+        '{"id":"proposal:example","type":"Proposal","status":"proposed",'
+        '"created_at":"2026-01-01T00:00:00+00:00","updated_at":"2026-01-01T00:00:00+00:00",'
+        '"title":"Source capture","operations":['
+        '{"op":"create","record_type":"Episode","record":{"id":"episode:source-capture",'
+        '"type":"Episode","episode_type":"memory","status":"reported",'
+        '"content":{"text":"<faithful source text>"},'
+        '"created_at":"2026-01-01T00:00:00+00:00","updated_at":"2026-01-01T00:00:00+00:00"}},'
+        '{"op":"create","record_type":"Person","record":{"id":"person:maria-bianchi",'
+        '"type":"Person","name":"Maria Bianchi","status":"reported",'
+        '"created_at":"2026-01-01T00:00:00+00:00","updated_at":"2026-01-01T00:00:00+00:00"},'
+        '"evidence":["episode:source-capture"]}]}'
+    )
     lines = [
-        "You convert source material into a Storygram proposal.",
-        "Return one JSON object only. Do not use markdown fences.",
+        "You convert source material into a Storygram proposal for human review.",
+        "Return one JSON object only. Do not use markdown fences, comments or explanations.",
         "",
-        "Rules:",
+        "Required structure:",
         '- The proposal id must start with "proposal:".',
-        '- type must be "Proposal".',
-        '- status must be "proposed".',
+        '- type must be "Proposal"; status must be "proposed".',
         "- operations must be a non-empty array.",
+        "- The first operation MUST create exactly one Episode that captures the source.",
+        '- Put the source text faithfully in that Episode record under "content": {"text": "..."}.',
+        '- Use episode_type "memory", "interview", "letter", "document", "observation" or "other";',
+        '  use status "reported" unless the source explicitly says otherwise.',
+        "- Then add semantic operations only for facts explicitly stated",
+        "  or directly implied by the source.",
+        "- If the source is too short or has no clear facts, return only the Episode.",
+        "- Do not invent people, places, dates, relationships, events or certainty.",
+        "",
+        "Semantic operations:",
         "- Allowed ops: create, update_metadata, supersede, archive.",
         "- Allowed record_type values: Episode, Assertion, Person, Organization,",
         "  Place, Period, Event, Relationship, Source, MediaAsset, Annotation,",
         "  Narrative, Collection, Conflict.",
+        "- Every Person, Place, Organization, Period, Event, Relationship, Assertion,",
+        "  Source, Annotation, Narrative, Collection or Conflict create MUST include",
+        '  "evidence" inside the operation, citing the new Episode id, for example',
+        '  "evidence": ["episode:source-capture"].',
         "- Every record must include id, type, status, created_at, updated_at,",
         "  plus its type-specific required fields.",
         '- Record IDs use lowercase prefixes: "episode:...", "assertion:...", "person:...".',
-        '- Every operation must include "record_type" and either "record" (create)',
-        '  or "target_id" (create, update_metadata, supersede, archive).',
-        '- Use explicit, minimal operations. Never invent an "apply" or "approve" operation.',
+        "- Use stable, descriptive IDs with hyphens; do not use spaces.",
+        "- Use an existing ID when the known list contains the same entity.",
         "- Semantic operations must cite evidence IDs.",
         "  Evidence must be episode:, source: or annotation:.",
-        "- Do not mark anything approved, merged or applied.",
-        "- Preserve uncertainty and conflicting evidence.",
-        "  If a conflict is real, create an explicit Conflict operation with both assertion IDs.",
-        "- Prefer existing IDs when supplied; otherwise create stable new IDs.",
-        "- Output valid JSON matching the Storygram proposal contract.",
-        '- Do not wrap the result in an outer "proposal" key.',
+        "- Never invent an apply, approve or merged status.",
+        "- Preserve uncertainty and conflicting evidence; never resolve a conflict silently.",
+        "- If a real contradiction exists, create an explicit Conflict",
+        "  operation with both assertion IDs.",
         "",
-        "Minimal valid shape:",
-        '{"id":"proposal:example","type":"Proposal","status":"proposed",'
-        '"created_at":"2026-01-01T00:00:00+00:00","updated_at":"2026-01-01T00:00:00+00:00",'
-        '"title":"Source capture","operations":[{"op":"create","record_type":"Episode",'
-        '"record":{"id":"episode:source-note","type":"Episode","episode_type":"other",'
-        '"status":"reported","created_at":"2026-01-01T00:00:00+00:00",'
-        '"updated_at":"2026-01-01T00:00:00+00:00"}}]}',
+        "Complete example (format illustration only; do not copy its facts):",
+        example,
         "",
         "Known canonical IDs:",
         known,

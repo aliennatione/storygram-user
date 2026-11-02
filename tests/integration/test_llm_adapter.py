@@ -12,6 +12,7 @@ from storygram.llm import (
     LLMAdapterError,
     OllamaProvider,
     OpenAICompatibleProvider,
+    build_prompt,
     build_provider,
     extract_json,
     provider_config,
@@ -119,6 +120,16 @@ def test_adapter_rejects_empty_source(tmp_path: Path) -> None:
     root = make_archive(tmp_path)
     with pytest.raises(LLMAdapterError, match="empty"):
         adapter(json.dumps(generated())).generate(root, "   ")
+
+
+def test_build_prompt_requires_source_episode_and_evidence() -> None:
+    prompt = build_prompt("Maria moved to Turin.", ["person:maria"])
+    assert "first operation MUST create exactly one Episode" in prompt
+    assert "content" in prompt and "faithful source text" in prompt
+    assert "evidence" in prompt
+    assert '"evidence":["episode:source-capture"]' in prompt
+    assert "person:maria" in prompt
+    assert "Maria moved to Turin." in prompt
 
 
 def test_extract_json_handles_surrounding_text() -> None:

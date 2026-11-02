@@ -60,6 +60,15 @@ storygram proposal generate --file interview.txt --json
 
 Configuration: `--provider`, `--url`, `--model`, `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_MODEL` and `$STORYGRAM_LLM_API_KEY`. Ollama also honors `$STORYGRAM_OLLAMA_URL` and `$STORYGRAM_OLLAMA_MODEL`. For an OpenAI-compatible server pass `--provider openai --url http://host:8080 --model qwen3-4b`; keep the key in the environment, not in the repository. Provider failures leave canonical data untouched and show the error in the UI.
 
+The bundled GGUF helpers download a small model into `models/` and start the optional `llm` Compose profile:
+
+```bash
+scripts/download-model.sh
+STORYGRAM_MODELS_DIR=<host-path>/models scripts/llm-up.sh
+```
+
+The model is never committed and is mounted read-only into the inference container. `llm-up.sh` derives the host path from the development container when `STORYGRAM_MODELS_DIR` is omitted.
+
 ## Legacy and derived commands
 
 These commands are deterministic and offline, but some remain narrower than `PRD.md`:
@@ -82,7 +91,7 @@ The repository includes `Dockerfile`, `compose.yaml` and an auto-init entrypoint
 STORYGRAM_PORT=18080 docker compose -p storygram-test up --build -d
 docker compose -p storygram-test ps
 # Optional Ollama profile:
-docker compose -p storygram-test --profile llm up -d
+docker compose -p storygram-test --profile ollama up -d
 docker compose -p storygram-test exec ollama ollama pull llama3.2
 ```
 

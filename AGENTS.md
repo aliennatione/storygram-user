@@ -75,17 +75,18 @@ Read `docs/dev/HANDOFF.md` before the first Docker command. Key rules:
 - `data/`: canonical reviewed records only; currently empty.
 - `proposals/`: local pending proposals, gitignored. `data/proposals/` is the committed merged archive.
 - `tests/`: unit and integration tests plus synthetic fixtures. `tests/e2e/web.mjs` drives the real local UI.
-- `generated/`, `inbox/`, `media-manifest/`: gitignored derived/unreviewed data; do not commit.
+- `generated/`, `inbox/`, `media-manifest/`, `models/`: gitignored derived, unreviewed or large local data; do not commit.
+- `scripts/`: local GGUF download and llama.cpp Compose helpers. The model file itself stays untracked.
 - `archive/`, `chatgpt.md`, `session-ses_*.md`, `{src/`: leftovers, not application source.
 - `docs/en/`, `docs/it/`: bilingual user/contract/API documentation.
 - `docs/dev/`: durable agent working memory.
 
 ## CLI and Web Surface
 
-- Implemented and tested: `init`, `get`, `list`, `validate`, `git-check`, `web`, `proposal new|list|show|approve|reject|generate`.
+- Implemented and tested: `init`, `get`, `list`, `validate`, `git-check`, `web`, `proposal new|list|show|approve|reject|withdraw|generate`.
 - Proposal approval is atomic, creates one scoped Git commit by default, supports `--dry-run` and `--no-commit`.
 - The web UI supports create, edit pending proposals, Generate, dry-run, approve and reject.
-- JSON API supports `GET/POST /api/proposals` and `GET/PUT /api/proposals/<id>`; there is intentionally no approve endpoint.
+- JSON API supports `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`, `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject` and `POST /api/proposals/<id>/withdraw`; there is intentionally no approve endpoint.
 - `ingest episode` only copies into `inbox/`; `export`, `search`, `rebuild`, `timeline` and `conflicts` have focused CLI tests; `genogram` is experimental and requires endpoint-aware Relationship records.
 - `init` copies all 15 schemas through the registry and supports `$STORYGRAM_SCHEMA_DIR`.
 

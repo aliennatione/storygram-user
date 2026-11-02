@@ -87,6 +87,15 @@ storygram proposal generate --text "A memory..." --archive ./archive
 
 The adapter forces `status=proposed`, drops unknown fields and saves only under `proposals/`. It cannot approve, apply or modify canonical records. Use `--no-save` to inspect without writing. The web **Generate** page uses the same adapter; provider errors are shown without writing anything.
 
+For the bundled local GGUF path:
+
+```bash
+scripts/download-model.sh
+STORYGRAM_MODELS_DIR=<host-path>/models scripts/llm-up.sh
+```
+
+The helpers keep the model outside Git and mount it read-only into the optional `llm` Compose profile.
+
 ## Legacy and derived commands
 
 These commands are deterministic and offline, but some remain narrower than `PRD.md`:
@@ -120,7 +129,7 @@ npm run test:e2e
 ```bash
 STORYGRAM_PORT=18080 docker compose -p storygram-test up --build -d
 docker compose -p storygram-test ps
-docker compose -p storygram-test --profile llm up -d
+docker compose -p storygram-test --profile ollama up -d
 docker compose -p storygram-test exec ollama ollama pull llama3.2
 ```
 

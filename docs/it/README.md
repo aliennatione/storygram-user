@@ -87,6 +87,15 @@ storygram proposal generate --text "Un ricordo..." --archive ./archive
 
 L'adapter forza `status=proposed`, scarta i campi sconosciuti e salva solo in `proposals/`. Non può approvare, applicare o modificare record canonici. Usa `--no-save` per controllare senza scrivere. La pagina **Generate** della UI usa lo stesso adapter; gli errori del provider vengono mostrati senza scrivere nulla.
 
+Per il percorso GGUF locale incluso:
+
+```bash
+scripts/download-model.sh
+STORYGRAM_MODELS_DIR=<host-path>/models scripts/llm-up.sh
+```
+
+Gli helper tengono il modello fuori da Git e lo montano in sola lettura nel profilo Compose opzionale `llm`.
+
 ## Comandi legacy e derivati
 
 Questi comandi sono deterministici e offline, ma alcuni restano più limitati di `PRD.md`:
@@ -120,7 +129,7 @@ Sono inclusi `Dockerfile` e `compose.yaml`. L'immagine è stata verificata end-t
 ```bash
 STORYGRAM_PORT=18080 docker compose -p storygram-test up --build -d
 docker compose -p storygram-test ps
-docker compose -p storygram-test --profile llm up -d
+docker compose -p storygram-test --profile ollama up -d
 docker compose -p storygram-test exec ollama ollama pull llama3.2
 ```
 

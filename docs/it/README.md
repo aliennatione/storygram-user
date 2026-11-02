@@ -85,7 +85,7 @@ export STORYGRAM_LLM_API_KEY=...
 storygram proposal generate --text "Un ricordo..." --archive ./archive
 ```
 
-L'adapter forza `status=proposed`, scarta i campi sconosciuti e salva solo in `proposals/`. Non può approvare, applicare o modificare record canonici. Usa `--no-save` per controllare senza scrivere. La pagina **Generate** della UI usa lo stesso adapter; gli errori del provider vengono mostrati senza scrivere nulla.
+L'adapter forza `status=proposed`, scarta i campi sconosciuti e salva solo in `proposals/`. Non può approvare, applicare o modificare record canonici. Usa `--no-save` per controllare senza scrivere. La pagina **Generate** della UI usa lo stesso adapter; gli errori del provider vengono mostrati senza scrivere nulla. Regola la generazione con `$STORYGRAM_LLM_TIMEOUT` e `$STORYGRAM_LLM_MAX_TOKENS`.
 
 Per il percorso GGUF locale incluso:
 
@@ -94,7 +94,7 @@ scripts/download-model.sh
 STORYGRAM_MODELS_DIR=<host-path>/models scripts/llm-up.sh
 ```
 
-Gli helper tengono il modello fuori da Git e lo montano in sola lettura nel profilo Compose opzionale `llm`.
+Gli helper tengono il modello fuori da Git e lo montano in sola lettura nel profilo Compose opzionale `llm`. Il file 1.5B predefinito serve a verificare il cablaggio; su un container con 1 CPU il file 3B non è praticabile. Usa un solo endpoint compatibile OpenAI `qwen3-4b` come riferimento di qualità e fai sempre il dry-run delle proposte generate.
 
 ## Comandi legacy e derivati
 

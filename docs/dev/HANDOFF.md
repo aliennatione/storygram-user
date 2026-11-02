@@ -10,8 +10,8 @@ Recent commits: API/provider/withdraw series, legacy command hardening, then the
 - Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `86 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
-- Local GGUF helpers are tracked: `scripts/download-model.sh` downloads a checksummed Qwen 1.5B Q4_K_M file, and `scripts/llm-up.sh` starts the `llm` llama.cpp Compose profile with a read-only model mount. The model itself is untracked.
+- Python baseline: `90 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Local GGUF helpers are tracked: `scripts/download-model.sh` downloads a checksummed Qwen 1.5B Q4_K_M file by default, and `scripts/llm-up.sh` starts the `llm` llama.cpp Compose profile with a read-only model mount. The model itself is untracked. The 1.5B file is a smoke test; the 3B file is not practical on 1 CPU.
 - The container deliverable was rebuilt and re-verified with the live OpenAI-compatible endpoint, then removed. Details and exact results are in `docs/dev/STATE.md` and `docs/dev/AUDIT.md`.
 - The 2026-11-01 API/provider/withdraw work and the legacy command hardening are committed in small atomic units.
 - Known product debt: `ingest` only copies to `inbox/`; `export` and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
@@ -43,7 +43,7 @@ Results:
 - Provider aliases `openai`, `openai-compatible`, `llamacpp`, `llama-swap` and similar all select the OpenAI-compatible adapter; `ollama` remains the default.
 - Inside the rebuilt container, `/v1/models` returned 4 models and `proposal generate` returned a saved pending proposal.
 - The HTTP API returned `201` for generation, `200` for withdraw and `409` for a second withdraw.
-- The qwen3-4b proposal envelope was valid, but its operation records failed `proposal approve --dry-run`; generation does not guarantee an applicable proposal.
+- The earlier qwen3-4b operation records failed `proposal approve --dry-run`. After prompt hardening on 2026-11-02, qwen3-4b passed dry-run on Italian, English and short-capture fixtures; generation still does not guarantee semantic correctness.
 - The key was passed through an ephemeral env file and was never committed or logged. Remove the file after use.
 
 ## Verified Local GGUF Run (2026-11-02)
@@ -53,7 +53,10 @@ Results:
 - `llm-up.sh` with a stubbed `docker` derived the host path `/mnt/c/Users/erobi/Desktop/storygram_test/models`, exported `STORYGRAM_LLM_PROVIDER=openai`, `STORYGRAM_LLM_URL=http://llm:8080`, `STORYGRAM_LLM_MODEL=qwen2.5-1.5b-instruct-q4_k_m`, and invoked `compose --profile llm up -d`.
 - Real `llm` profile: model loaded in about 2m36s; `/health` returned `{"status":"ok"}`; `/v1/models` listed the GGUF path; the model mount was read-only.
 - App container on host port 18080 reached `healthy`; in-container `proposal generate` returned `ok: true` with a valid proposal envelope.
-- The 1.5B model ignored most of the prompt and produced a minimal Episode with no evidence/source. The proposal passes dry-run, so it is a quality limitation (no useful content/evidence) rather than a schema/wiring failure.
+- The hardened prompt made the 1.5B model emit the captured Episode with `content.text`; it passes dry-run but still does not extract people, places or assertions. This is a model-quality limitation, not a schema/wiring failure.
+- The 3B GGUF (`qwen2.5-3b-instruct-q4_k_m.gguf`, SHA256 `626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d`) loaded in about 9 minutes at 1.86 GiB, then produced no token for more than 25 minutes under the 1-CPU quota. It was stopped and is not the default.
+- Remote qwen3-4b with the hardened prompt produced six operations and a passing dry-run for the Italian fixture; English passed after adding a literal-value assertion example. A model typo (`place:neapes`) shows human review is still required.
+- Do not switch models on the llama-swap server during a session; keep qwen3-4b as the single quality reference.
 - Containers, project network, project volume and temporary Alpine image from this run were removed. The downloaded model and `storygram:local` remain.
 - The Ollama profile is now `--profile ollama`; `--profile llm` is the llama.cpp service.
 
@@ -65,7 +68,7 @@ The legacy command audit is complete. Continue with the remaining product gaps w
 2. Add capture metadata/checksums to `ingest` while keeping `inbox/` as the only destination.
 3. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram`.
 4. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
-5. Keep the local GGUF helpers honest: they wire inference only; the small model is not a quality baseline.
+5. Keep the local GGUF helpers honest: they wire inference only. The 1.5B model is a smoke test, the 3B model is impractical on 1 CPU, and qwen3-4b is the single quality reference. Always dry-run generated proposals.
 6. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
 
 ## Environment Check

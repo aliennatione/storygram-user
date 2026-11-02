@@ -52,7 +52,7 @@ npm run test:e2e
 
 - Prefer `PYTHONPATH=/data/src python -m storygram ...` until the package is installed.
 - `npm run test:e2e` uses Node Playwright with `/usr/bin/chromium`; Python Playwright is not musllinux-compatible.
-- Current baseline: `86 passed`, ruff/format/mypy clean, Playwright edit/approve/reject flow passing.
+- Current baseline: `90 passed`, ruff/format/mypy clean, Playwright edit/approve/reject flow passing.
 - Never claim a check passed unless it actually ran in this environment.
 
 ## Docker from the Host Socket

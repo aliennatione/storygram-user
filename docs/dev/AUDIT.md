@@ -276,3 +276,28 @@ Track the previously untracked model helpers and make them consistent with the C
 3. Keep the tiny model as a transport smoke test, not a quality baseline.
 4. Always dry-run generated records; transport success is not schema success.
 5. Next: choose a larger local GGUF for quality, or leave local inference as an optional smoke path.
+
+## 2026-11-02 - model quality and prompt hardening
+
+### Current objective
+
+Determine whether a larger local GGUF should replace the 1.5B smoke-test model, and harden the proposal prompt so `qwen3-4b` produces dry-run-valid operations. Keep the human approval gate unchanged.
+
+### Point of situation
+
+- The local 1.5B model produced only a minimal Episode. The local 3B model was downloaded and loaded, but produced no token for more than 25 minutes under the 1-CPU quota; it was stopped and removed.
+- The prompt previously allowed invalid operations: missing `transaction_time` on Assertion, Period records with unsupported `start_year`/`end_year`, Relationship records without endpoints, and invented entity prefixes such as `occupation:nurse`.
+- A `_new_record_path` crash on an invalid generated `record_type` was fixed with a regression test.
+- Prompt hardening added required fields, `relation:*` predicates, literal `value` examples, evidence rules, ID-reference rules and explicit avoidance of Relationship/Period records.
+- `qwen3-4b` produced six dry-run-valid operations for the Italian fixture and a valid short-capture Episode. The English fixture passed after adding the literal-value example.
+- `qwen3-8b` failed envelope validation on the English fixture (`record_type: Occupation`) and was not selected. `qwen3-14b` was only used during prompt tuning; it is not the reference.
+- `place:neapes` remained a model typo, confirming that dry-run validity is not semantic correctness.
+- The local 1.5B model, with the hardened prompt, returned only an Episode with `content.text` in about 76 seconds; it passed dry-run but did not extract people, places or assertions.
+
+### Calibration
+
+1. Keep `qwen3-4b` as the single quality reference; do not switch models on the shared server during normal review.
+2. Keep the 1.5B model as a smoke test and do not promote the 3B model on 1 CPU.
+3. Keep the prompt's field-level examples; prohibitions alone are not reliable for small models.
+4. Keep generation separate from approval. Always dry-run and review; dry-run validity is not truth.
+5. Next: run the same prompt against a second real capture if needed, then return to the remaining product gaps.

@@ -145,3 +145,13 @@
 - The model mount is read-only; inference has no reason to write to the model directory.
 - The helper verifies a model only when it is visible locally or at the configured path. A host path that is not visible from the development container cannot be checked; Compose still handles it on the host side.
 - Local inference is optional. The core stays deterministic and LLM-free, and generation cannot approve or apply data.
+
+## Local Model Quality and Prompt Contract (2026-11-02)
+
+- `qwen3-4b` is the single quality reference. The server should keep it loaded; do not switch to 8B or 14B during normal review, because model loading adds latency and makes evaluations incomparable.
+- The local Qwen 1.5B GGUF remains a transport/wiring smoke test. The local 3B GGUF is not the default and is not recommended on the current 1-CPU quota: it loaded but produced no token in more than 25 minutes.
+- The prompt is part of the generation contract, not a cosmetic hint. It must require: an Episode with `content.text`, evidence on operations, no `Relationship` records, `relation:*` predicates, `transaction_time.recorded_at` as record time, source dates in `valid_time`, no `Period` records, only IDs created in the proposal or known, literal facts in `value` without an invented object prefix, and no invented surnames.
+- Field-level examples are more effective than prohibitions alone. The literal-value Assertion example made `qwen3-4b` stop emitting `occupation:nurse` as an object.
+- Generation validates the proposal envelope, not operation schemas or semantics. A passing generation is not a passing dry-run, and a passing dry-run is not truth. Humans must run `proposal approve --dry-run` and review the result.
+- Keep the approval gate unchanged: no approve API endpoint and no auto-apply path.
+- `STORYGRAM_LLM_TIMEOUT`, `STORYGRAM_LLM_MAX_TOKENS` and the Compose `STORYGRAM_LLM_CTX_SIZE` are the supported generation controls.

@@ -58,7 +58,7 @@ storygram proposal generate --text "Nonna diceva che viveva vicino alla stazione
 storygram proposal generate --file intervista.txt --json
 ```
 
-Configurazione: `--provider`, `--url`, `--model`, `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_MODEL` e `$STORYGRAM_LLM_API_KEY`. Ollama rispetta anche `$STORYGRAM_OLLAMA_URL` e `$STORYGRAM_OLLAMA_MODEL`. Per un server compatibile OpenAI usa `--provider openai --url http://host:8080 --model qwen3-4b`; tieni la chiave nell'ambiente, non nel repository. Gli errori del provider non toccano i dati canonici e vengono mostrati nella UI.
+Configurazione: `--provider`, `--url`, `--model`, `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_MODEL` e `$STORYGRAM_LLM_API_KEY`. Regola la generazione con `$STORYGRAM_LLM_TIMEOUT` e `$STORYGRAM_LLM_MAX_TOKENS`; il profilo Compose `llm` accetta anche `$STORYGRAM_LLM_CTX_SIZE` (default `8192`). Ollama rispetta anche `$STORYGRAM_OLLAMA_URL` e `$STORYGRAM_OLLAMA_MODEL`. Per un server compatibile OpenAI usa `--provider openai --url http://host:8080 --model qwen3-4b`; tieni la chiave nell'ambiente, non nel repository. Gli errori del provider non toccano i dati canonici e vengono mostrati nella UI.
 
 Gli helper GGUF inclusi scaricano un modello piccolo in `models/` e avviano il profilo Compose opzionale `llm`:
 
@@ -67,7 +67,7 @@ scripts/download-model.sh
 STORYGRAM_MODELS_DIR=<host-path>/models scripts/llm-up.sh
 ```
 
-Il modello non viene mai committato ed è montato in sola lettura nel container di inferenza. Se `STORYGRAM_MODELS_DIR` non è impostata, `llm-up.sh` ricava il path host dal container di sviluppo.
+Il modello non viene mai committato ed è montato in sola lettura nel container di inferenza. Se `STORYGRAM_MODELS_DIR` non è impostata, `llm-up.sh` ricava il path host dal container di sviluppo. Il file predefinito Qwen2.5-1.5B serve solo a verificare il cablaggio, non è un riferimento di qualità: può restituire solo l'Episode catturato. Su un container con 1 CPU il file 3B non è consigliato (si carica ma non ha prodotto token in 25 minuti). Per la qualità usa un solo modello compatibile OpenAI `qwen3-4b` come riferimento ed evita di cambiare modello sul server. Esegui sempre `proposal approve --dry-run` prima dell'approvazione.
 
 ## Comandi legacy e derivati
 

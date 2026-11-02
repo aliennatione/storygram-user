@@ -85,7 +85,7 @@ export STORYGRAM_LLM_API_KEY=...
 storygram proposal generate --text "A memory..." --archive ./archive
 ```
 
-The adapter forces `status=proposed`, drops unknown fields and saves only under `proposals/`. It cannot approve, apply or modify canonical records. Use `--no-save` to inspect without writing. The web **Generate** page uses the same adapter; provider errors are shown without writing anything.
+The adapter forces `status=proposed`, drops unknown fields and saves only under `proposals/`. It cannot approve, apply or modify canonical records. Use `--no-save` to inspect without writing. The web **Generate** page uses the same adapter; provider errors are shown without writing anything. Tune generation with `$STORYGRAM_LLM_TIMEOUT` and `$STORYGRAM_LLM_MAX_TOKENS`.
 
 For the bundled local GGUF path:
 
@@ -94,7 +94,7 @@ scripts/download-model.sh
 STORYGRAM_MODELS_DIR=<host-path>/models scripts/llm-up.sh
 ```
 
-The helpers keep the model outside Git and mount it read-only into the optional `llm` Compose profile.
+The helpers keep the model outside Git and mount it read-only into the optional `llm` Compose profile. The default 1.5B file is a wiring smoke test; on a 1-CPU container the 3B file is not practical. Use one `qwen3-4b` OpenAI-compatible endpoint as the quality reference and always dry-run generated proposals.
 
 ## Legacy and derived commands
 

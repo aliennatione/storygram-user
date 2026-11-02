@@ -126,7 +126,8 @@ Content-Type: application/json
 `provider` accepts `ollama` or an OpenAI-compatible provider (`openai`, `llamacpp`).
 `save` defaults to `true`; set it to `false` to return a proposal without writing it.
 Provider settings fall back to `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_MODEL`,
-`$STORYGRAM_LLM_URL` and `$STORYGRAM_LLM_API_KEY` on the server. Ollama also honors
+`$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_API_KEY`, `$STORYGRAM_LLM_TIMEOUT` and
+`$STORYGRAM_LLM_MAX_TOKENS` on the server. Ollama also honors
 `$STORYGRAM_OLLAMA_MODEL` and `$STORYGRAM_OLLAMA_URL`.
 
 A successful saved generation returns `201` with the proposal and its `location`.

@@ -126,8 +126,8 @@ Content-Type: application/json
 `provider` accetta `ollama` oppure un provider compatibile OpenAI (`openai`, `llamacpp`).
 `save` vale `true` per impostazione predefinita; impostalo a `false` per ottenere la
 proposta senza scriverla. Le impostazioni del provider ricadono su
-`$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_MODEL`, `$STORYGRAM_LLM_URL` e
-`$STORYGRAM_LLM_API_KEY` del server. Ollama rispetta anche `$STORYGRAM_OLLAMA_MODEL` e
+`$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_MODEL`, `$STORYGRAM_LLM_URL`,
+`$STORYGRAM_LLM_API_KEY`, `$STORYGRAM_LLM_TIMEOUT` e `$STORYGRAM_LLM_MAX_TOKENS` del server. Ollama rispetta anche `$STORYGRAM_OLLAMA_MODEL` e
 `$STORYGRAM_OLLAMA_URL`.
 
 Una generazione salvata restituisce `201` con la proposta e la sua `location`.

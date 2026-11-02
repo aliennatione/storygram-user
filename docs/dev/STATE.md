@@ -5,12 +5,12 @@ Last updated: 2026-11-02
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: API/provider/withdraw series, legacy command hardening, then the local GGUF helper/profile commits (`076d7ff`, `5840302`, `367b177`); see `git log --oneline -20`.
+- Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helper/profile commits, then prompt hardening and the `_new_record_path` crash fix (`157d313`, `186f700`, `a42249d`, `68089a6`); see `git log --oneline -20`.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
 - An OpenAI-compatible provider with bearer-token support was added alongside the Ollama provider.
-- The 2026-11-01 API/provider/withdraw work and the legacy command hardening are committed in small atomic units. No tracked changes are pending in this unit.
+- The 2026-11-01 API/provider/withdraw work, the legacy command hardening and the 2026-11-02 model-quality fixes are committed in small atomic units. Only documentation updates for the model-quality unit are pending at the time of writing.
 - Python, lint, format, mypy and browser checks pass. The container image was rebuilt and exercised end-to-end with the live LLM endpoint through the host Docker socket, then removed.
 
 ## Environment
@@ -20,7 +20,8 @@ Last updated: 2026-11-02
 - Python 3.14.10, Git 2.54.0, pip 26.1.2, Node 24.22.1/npm 11.12.1 and system Chromium.
 - Tests use paths relative to `/data` and must be run from the repository root.
 - `/var/run/docker.sock` is the host socket. In this session it exposed Podman Engine 5.8.2 through its Docker-compatible API; Docker CLI was 29.9.2 and Compose v5.6.1. This is not Docker-in-Docker; never start `dockerd`.
-- Live LLM endpoint for verification: `http://100.64.0.8:8080/v1/chat/completions`, model `qwen3-4b` (llama-swap). The bearer key was supplied by the user, used only through an ephemeral env file, and is not stored in the repository.
+- Live LLM endpoint for verification: `http://100.64.0.8:8080/v1/chat/completions`, model `qwen3-4b` (llama-swap). The bearer key was supplied by the user, used only through an ephemeral env file, and is not stored in the repository. Keep one model loaded: switching models adds load latency and was explicitly avoided after the 4B reference was chosen.
+- Host cgroup: about 3.78 GiB RAM and a 1-core CPU quota (`cpu.max 100000 100000`). This makes the local 3B GGUF impractical even though it fits in memory.
 
 ## Completed
 
@@ -86,8 +87,8 @@ Last updated: 2026-11-02
 
 ## Active
 
-- API generate/reject/withdraw, the OpenAI-compatible provider and the legacy command hardening are implemented, tested and committed.
-- The next work unit is the remaining product gaps: real JSON-LD/YAML/Markdown round-trips, capture metadata, higher-level timelines and endpoint-aware Relationship records.
+- Model-quality unit: `qwen3-4b` is the single reference model. The prompt now produces dry-run-valid proposals for Italian, English and short captures. The local 1.5B model remains a smoke test; the local 3B model was stopped after it produced no tokens in more than 25 minutes on 1 CPU.
+- Current pending work is documentation sync for this unit. The next product work unit is the remaining product gaps: real JSON-LD/YAML/Markdown round-trips, capture metadata, higher-level timelines and endpoint-aware Relationship records.
 
 ## Next Steps
 
@@ -96,7 +97,8 @@ Last updated: 2026-11-02
 3. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram` beyond experimental.
 4. Keep approval UI/CLI-only; consider advisory (non-applying) model review later.
 5. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
-6. Run the optional Ollama container profile only when network/time permit; it remains unverified.
+6. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
+7. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
 ## Local GGUF Helpers (2026-11-02)
 
@@ -106,9 +108,20 @@ Last updated: 2026-11-02
 - `compose.yaml` now has an `llm` llama.cpp service using `samueltallet/alpine-llama-cpp-server:latest`, a read-only bind mount, and `LLAMA_ARG_MODEL`/`LLAMA_ARG_HOST`/`LLAMA_ARG_PORT`/`LLAMA_ARG_JINJA`; the Ollama service moved to the `ollama` profile so the names do not collide.
 - The helper scripts were syntax-checked, and `docker compose config` passed for the default and `llm` profiles. A stubbed `docker` verified the derived host path and exported provider variables without starting containers.
 
+## Local Model Quality (2026-11-02)
+
+- Reference model: `qwen3-4b` on the configured OpenAI-compatible endpoint. Keep it loaded; do not switch to 8B/14B during normal review.
+- Prompt hardening added: Episode `content.text`, evidence on operations, no Relationship records, `relation:*` predicates, `transaction_time.recorded_at` as record time, `valid_time` for source dates, no Period records, only IDs created in the proposal or known, literal facts in `value` without an invented object prefix, and no invented surnames.
+- Fixtures: Italian (Maria/Luca/Torino), English (Elena/Naples/Milan/nurse), short capture (garden photo).
+- `qwen3-4b` dry-run: Italian passed with 6 operations; English passed after the literal-value example; short capture returned only Episode and passed.
+- `qwen3-8b` was not selected: the English fixture failed envelope validation with a `record_type` of `Occupation`.
+- Local 1.5B with the hardened prompt: returned only Episode with `content.text` in about 76 seconds; dry-run passed.
+- Local 3B: load about 9 minutes / 1.86 GiB; no token in 25+ minutes under the 1-CPU quota; stopped and test resources removed.
+- Semantic quality is still limited: `qwen3-4b` produced `place:neapes` (typo) and previously invented a surname. Dry-run validity is not truth; human approval remains mandatory.
+
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `86 passed` (exit 0; pytest summary is suppressed by project config).
+- `PYTHONPATH=/data/src python -m pytest`: `90 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -128,20 +141,27 @@ Last updated: 2026-11-02
 - `scripts/llm-up.sh` with a stubbed `docker`: derived `/mnt/c/Users/erobi/Desktop/storygram_test/models`, set `openai` / `http://llm:8080` / `qwen2.5-1.5b-instruct-q4_k_m`, and passed `--profile llm up -d`.
 - Local `llm` profile with `models/qwen2.5-1.5b-instruct-q4_k_m.gguf`: model loaded in about 2m36s, `/health` returned `{"status":"ok"}`, `/v1/models` listed the GGUF, and the read-only mount worked.
 - App container on port 18080 with the local profile: reached `healthy`; in-container `proposal generate` returned a valid proposal envelope.
-- The small Qwen model ignored most of the prompt and produced a minimal Episode with no evidence/source. The Episode schema is valid and the proposal passes dry-run; the issue is quality (no useful content/evidence/relations), not schema validity.
+- The 1.5B model with the hardened prompt returned only a minimal Episode with `content.text`; it passes dry-run but does not extract people, places or assertions. This is a model-quality limit, not a wiring failure.
+- With the hardened prompt, `qwen3-4b` produced six operations (Episode, two People, Place, two Assertions) for the Italian fixture and passed dry-run. The English fixture also passed after adding a literal-value example; `place:neapes` remained a model typo, so human review is still required.
+- `qwen3-14b` and `qwen3-8b` were tested during prompt tuning but are not the chosen reference; avoid switching models on the shared server.
 - Optional Ollama profile: not run.
+- Remote prompt A/B: `qwen3-4b` passed dry-run on Italian, English and short-capture fixtures; `qwen3-8b` failed envelope validation on the English fixture and was not selected.
+- Local 3B GGUF: model loaded (about 9 minutes, 1.86 GiB), then produced no token for more than 25 minutes under the 1-CPU quota; stopped and removed. It was not promoted to default.
 - Test containers, project network, the project volume created by this run, and the temporary Alpine image were removed; `storygram:local` and the downloaded GGUF remain.
 
 ## Known Limitations
 
 - The default provider is Ollama, but live verification used the OpenAI-compatible `qwen3-4b` endpoint and later the local `llm` llama.cpp profile. The Ollama profile (`--profile ollama`) was not exercised.
-- LLM generation validates the proposal envelope only; operation records can still fail the dry-run. The live qwen3-4b output and the local Qwen 1.5B output did exactly that, so generation is not a guarantee of an applicable proposal.
+- LLM generation validates the proposal envelope only; operation records can still fail the dry-run. The hardened prompt makes `qwen3-4b` outputs dry-run valid on the tested fixtures, but this is not a guarantee for every capture. The local 1.5B model usually returns only an Episode.
+- `qwen3-4b` can still invent a surname or misspell a place name (for example `place:neapes`); dry-run validity is not semantic correctness. Human review remains mandatory.
+- The local 3B model is not usable on the current 1-CPU quota. It loaded but produced no tokens in 25+ minutes; do not set it as the default.
 - There is intentionally no automate-approval or approve endpoint. A model may suggest or classify, but only a human UI/CLI action can apply canonical data.
 - `STORYGRAM_LLM_API_KEY` is read from the environment; never place it in Git. `.env` is gitignored and excluded from the Docker build context.
 - The verified daemon is Podman Engine 5.8.2 exposed through its Docker-compatible API, not a native Docker Engine. Record this distinction in future runs.
 - `scripts/llm-up.sh` assumes the development repository is mounted at `/data` when deriving the host model path; otherwise set `STORYGRAM_MODELS_DIR` explicitly.
 - The local GGUF must exist on the host daemon's side of the bind mount. A development-container path is not a host path.
-- The local Qwen 1.5B model loaded slowly on CPU (about 2m36s) and may trigger transient app healthcheck failures under CPU contention; wait for both services before testing generation.
+- The local Qwen 1.5B model loads in about 2m36s and may trigger transient app healthcheck failures under CPU contention; wait for both services before testing generation. Generation of a minimal Episode took about 76 seconds in the last run.
+- Do not switch models on the llama-swap server during a session; loading a different model adds latency and the user asked to keep the 4B reference stable.
 - Host-published ports may not be reachable from the development container; validate through container exec/health and treat host UI access separately.
 - Bind mounts resolve on the host daemon, not inside the development container. The helper's `/hosttmp/...` path is not the host path; derive or use a fixed host `/tmp` path as documented in `HANDOFF.md`.
 - `apply_proposal` commit message is `feat(proposal): apply <id>`.

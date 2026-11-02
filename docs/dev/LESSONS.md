@@ -78,7 +78,7 @@
 - Timeline must filter `superseded`, `archived` and `rejected` assertions; filtering only by transaction time is not enough.
 - Genogram could not be person-scoped with the current Relationship schema because it stores no endpoints. Return only matching `relation:*` assertions and warn rather than returning every relationship.
 - Documentation showed `storygram list --archive` while the command ignored the option. CLI changes and docs must be checked together against real `--help` output.
-- The full suite grew to `86 passed` after adding end-to-end CLI tests for ingest, export, search, conflicts, timeline, genogram and read commands.
+- The full suite grew to `86 passed` after adding end-to-end CLI tests for ingest, export, search, conflicts, timeline, genogram and read commands; it later reached `90 passed`.
 - Compose profile names are user-facing. Reusing `llm` for both Ollama and llama.cpp made the docs and helper ambiguous; Ollama is now `ollama`, llama.cpp is `llm`.
 - `llama-server` returns 503 from `/health` and `/v1/models` until the GGUF finishes loading. On CPU the 1.5B Q4 model took about 2m36s; check logs and memory before calling it a failure.
 - The model ID returned by `/v1/models` can be the full in-container path, but llama-server accepted the bare GGUF stem in the request. The helper therefore sets the model name to the file stem.
@@ -88,3 +88,10 @@
 - The 1.5B Qwen model produced an envelope-valid proposal with a minimal Episode lacking evidence/source. The Episode passes schema/dry-run; always dry-run because generation is not applicability/quality.
 - When a local `llm` container and the app both start, allow for CPU contention: the app healthcheck can flip to `unhealthy` while the model is loading, then recover.
 - Cleanup must include the Compose project volume if it was created by the test run. Check `docker volume inspect` creation time before removing it; do not remove pre-existing user data.
+- The full suite later grew to `90 passed` after adding prompt and crash-regression tests.
+- A prompt that only says "do not invent prefixes" was ignored by qwen3-4b: it still emitted `occupation:nurse`. Adding a literal-value Assertion example with `value: "nurse"` and no `object` fixed the dry-run.
+- Negative prompt rules are weaker than a concrete valid shape. Show the exact JSON for each operation kind that small models get wrong.
+- Dry-run validity is not semantic correctness. qwen3-4b still produced `place:neapes` and previously invented a surname; human review is mandatory even when the schema passes.
+- The 3B GGUF is not viable on a 1-CPU cgroup: it loaded, used 1.86 GiB, and produced no token for more than 25 minutes. Do not promote a model solely because it fits in RAM.
+- Keep one model loaded on llama-swap. Switching models for A/B tests adds load latency; choose a reference and avoid switching during normal review.
+- Validate generated proposals on more than one fixture: Italian, English and a short capture. The English literal-value case exposed a prompt gap that the Italian case missed.

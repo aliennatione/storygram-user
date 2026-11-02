@@ -163,10 +163,11 @@ def _canonical_records(root: Path) -> list[dict[str, Any]]:
 
 @main.command()
 @click.argument("record_id")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--json", "as_json", is_flag=True)
-def get(record_id: str, as_json: bool) -> None:
+def get(record_id: str, archive_path: str | None, as_json: bool) -> None:
     """Get a canonical record by ID."""
-    for record in _canonical_records(Path.cwd()):
+    for record in _canonical_records(_root(archive_path)):
         if record.get("id") == record_id:
             _emit(record, as_json)
             return
@@ -175,10 +176,11 @@ def get(record_id: str, as_json: bool) -> None:
 
 @main.command(name="list")
 @click.option("--type", "type_", help="Filter by type")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--json", "as_json", is_flag=True)
-def list_cmd(type_: str | None, as_json: bool) -> None:
+def list_cmd(type_: str | None, archive_path: str | None, as_json: bool) -> None:
     """List canonical records."""
-    records = _canonical_records(Path.cwd())
+    records = _canonical_records(_root(archive_path))
     if type_:
         wanted = type_.lower()
         records = [

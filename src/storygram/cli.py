@@ -215,17 +215,35 @@ def search(query: str, archive_path: str | None, rebuild: bool, as_json: bool) -
         click.echo("[]")
 
 
+def _record_exists(root: Path, record_id: str) -> bool:
+    for path in (root / "data").rglob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict) and data.get("id") == record_id:
+            return True
+    return False
+
+
 @main.command()
 @click.argument("record_id")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--json", "as_json", is_flag=True)
-def timeline(record_id: str, as_json: bool) -> None:
-    """Generate a timeline for an entity."""
+def timeline(record_id: str, archive_path: str | None, as_json: bool) -> None:
+    """Generate a timeline for an entity or place."""
     from .timeline import build_timeline
 
-    result = build_timeline(Path.cwd(), record_id)
-    if not result and not as_json:
-        click.echo("Timeline not found")
-        return
+    root = _root(archive_path)
+    result = build_timeline(root, record_id)
+    if not result:
+        if _record_exists(root, record_id):
+            if as_json:
+                click.echo("[]")
+            else:
+                click.echo(f"No timeline entries for {record_id}")
+            return
+        _fail(f"Unknown record: {record_id}", as_json)
     _emit(result, as_json)
 
 

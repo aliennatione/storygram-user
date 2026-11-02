@@ -265,7 +265,7 @@ Track the previously untracked model helpers and make them consistent with the C
 - `llm-up.sh` now derives the host model path from the development container's `/data` mount and exports the provider, URL and model name before starting Compose.
 - Both scripts are tracked with mode `755`, syntax-checked and covered by a stubbed-`docker` wiring check.
 - Real run with `models/qwen2.5-1.5b-instruct-q4_k_m.gguf`: model loaded in about 2m36s, health and model listing passed, read-only mount worked, app reached `healthy`, and in-container generation returned a valid proposal envelope.
-- The small model produced a minimal invalid Episode (no evidence/source), confirming again that generation is not applicability.
+- The small model produced a minimal Episode with no content/evidence; it is schema-valid and passes dry-run, confirming that generation is not applicability or quality.
 - Removed the test containers, network, project volume and temporary Alpine image. Kept the downloaded model and `storygram:local`.
 - Python suite `86 passed`; ruff, format and mypy passed.
 

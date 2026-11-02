@@ -128,7 +128,7 @@ Last updated: 2026-11-02
 - `scripts/llm-up.sh` with a stubbed `docker`: derived `/mnt/c/Users/erobi/Desktop/storygram_test/models`, set `openai` / `http://llm:8080` / `qwen2.5-1.5b-instruct-q4_k_m`, and passed `--profile llm up -d`.
 - Local `llm` profile with `models/qwen2.5-1.5b-instruct-q4_k_m.gguf`: model loaded in about 2m36s, `/health` returned `{"status":"ok"}`, `/v1/models` listed the GGUF, and the read-only mount worked.
 - App container on port 18080 with the local profile: reached `healthy`; in-container `proposal generate` returned a valid proposal envelope.
-- The small Qwen model ignored most of the prompt and produced a minimal Episode with no evidence/source, so the record would fail dry-run. This is a model-quality result, not a wiring failure.
+- The small Qwen model ignored most of the prompt and produced a minimal Episode with no evidence/source. The Episode schema is valid and the proposal passes dry-run; the issue is quality (no useful content/evidence/relations), not schema validity.
 - Optional Ollama profile: not run.
 - Test containers, project network, the project volume created by this run, and the temporary Alpine image were removed; `storygram:local` and the downloaded GGUF remain.
 

@@ -85,6 +85,6 @@
 - The image entrypoint passes `--host 0.0.0.0`, so `LLAMA_ARG_HOST` is overwritten with a harmless warning. Prefer the entrypoint defaults or override the whole command if the warning matters.
 - A Compose bind source must exist on the host daemon. Passing the development-container path `/data/models` produced `mkdir /data: permission denied`; derive the host path from `docker inspect "$(hostname)"` or pass the real host path.
 - Test the helper wiring without starting containers by putting a stub `docker` first in `PATH`; assert the derived model directory and exported `STORYGRAM_LLM_*` variables.
-- The 1.5B Qwen model produced an envelope-valid proposal with a minimal Episode lacking evidence/source. A working transport does not imply useful or schema-valid operation records; always dry-run.
+- The 1.5B Qwen model produced an envelope-valid proposal with a minimal Episode lacking evidence/source. The Episode passes schema/dry-run; always dry-run because generation is not applicability/quality.
 - When a local `llm` container and the app both start, allow for CPU contention: the app healthcheck can flip to `unhealthy` while the model is loading, then recover.
 - Cleanup must include the Compose project volume if it was created by the test run. Check `docker volume inspect` creation time before removing it; do not remove pre-existing user data.

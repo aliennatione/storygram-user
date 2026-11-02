@@ -53,7 +53,7 @@ Results:
 - `llm-up.sh` with a stubbed `docker` derived the host path `/mnt/c/Users/erobi/Desktop/storygram_test/models`, exported `STORYGRAM_LLM_PROVIDER=openai`, `STORYGRAM_LLM_URL=http://llm:8080`, `STORYGRAM_LLM_MODEL=qwen2.5-1.5b-instruct-q4_k_m`, and invoked `compose --profile llm up -d`.
 - Real `llm` profile: model loaded in about 2m36s; `/health` returned `{"status":"ok"}`; `/v1/models` listed the GGUF path; the model mount was read-only.
 - App container on host port 18080 reached `healthy`; in-container `proposal generate` returned `ok: true` with a valid proposal envelope.
-- The 1.5B model ignored most of the prompt and produced a minimal Episode with no evidence/source, so the operation record would fail dry-run. Treat this as a quality limitation, not a wiring defect.
+- The 1.5B model ignored most of the prompt and produced a minimal Episode with no evidence/source. The proposal passes dry-run, so it is a quality limitation (no useful content/evidence) rather than a schema/wiring failure.
 - Containers, project network, project volume and temporary Alpine image from this run were removed. The downloaded model and `storygram:local` remain.
 - The Ollama profile is now `--profile ollama`; `--profile llm` is the llama.cpp service.
 

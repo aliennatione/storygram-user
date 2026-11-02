@@ -241,8 +241,15 @@ def _record_errors(
     ]
 
 
-def _new_record_path(root: Path, record: dict[str, Any]) -> Path:
-    record_type = TYPE_BY_NAME[str(record["type"])]
+def _new_record_path(
+    root: Path, record: dict[str, Any], record_type: RecordType | None = None
+) -> Path:
+    if record_type is None:
+        record_type = type_for_id(str(record.get("id", "")))
+    if record_type is None:
+        record_type = TYPE_BY_NAME.get(str(record.get("type")))
+    if record_type is None:
+        return Path(root) / "data" / safe_filename(str(record.get("id", "unknown")))
     return Path(root) / "data" / record_type.directory / safe_filename(str(record["id"]))
 
 
@@ -533,7 +540,7 @@ def plan_apply(root: Path, proposal: dict[str, Any], now: str | None = None) -> 
     for record_id, record in records.items():
         path = paths.get(record_id)
         if path is None:
-            path = _new_record_path(root, record)
+            path = _new_record_path(root, record, type_for_id(record_id))
         validation_items.append((path, record))
     validation_items.append((archived_path, archived))
     final_validation = validate.validate_items(root, validation_items)
@@ -545,7 +552,8 @@ def plan_apply(root: Path, proposal: dict[str, Any], now: str | None = None) -> 
     writes: dict[Path, dict[str, Any]] = {}
     for record_id, record in records.items():
         if record_id not in original or record != original[record_id]:
-            writes[paths.get(record_id) or _new_record_path(root, record)] = record
+            path = paths.get(record_id) or _new_record_path(root, record, type_for_id(record_id))
+            writes[path] = record
     writes[archived_path] = archived
 
     return ApplyPlan(

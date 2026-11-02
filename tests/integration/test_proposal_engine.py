@@ -114,6 +114,19 @@ def test_dry_run_does_not_write_or_archive(tmp_path: Path) -> None:
     assert (root / "proposals" / "proposal_p1.json").exists()
 
 
+def test_dry_run_reports_record_type_mismatch_without_crashing(tmp_path: Path) -> None:
+    root = make_archive(tmp_path)
+    record = base_record("person:p2", "Person")
+    record["type"] = "sibling"
+    save_proposal(
+        root,
+        proposal({"op": "create", "record_type": "Person", "record": record}),
+    )
+
+    with pytest.raises(ProposalError, match="record type must be Person"):
+        apply_proposal(root, "proposal:p1", dry_run=True)
+
+
 def test_apply_creates_record_archives_proposal_and_removes_pending(tmp_path: Path) -> None:
     root = make_archive(tmp_path)
     save_proposal(

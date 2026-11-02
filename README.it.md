@@ -60,6 +60,20 @@ storygram proposal generate --file intervista.txt --json
 
 Configurazione: `--provider`, `--url`, `--model`, `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_MODEL` e `$STORYGRAM_LLM_API_KEY`. Ollama rispetta anche `$STORYGRAM_OLLAMA_URL` e `$STORYGRAM_OLLAMA_MODEL`. Per un server compatibile OpenAI usa `--provider openai --url http://host:8080 --model qwen3-4b`; tieni la chiave nell'ambiente, non nel repository. Gli errori del provider non toccano i dati canonici e vengono mostrati nella UI.
 
+## Comandi legacy e derivati
+
+Questi comandi sono deterministici e offline, ma alcuni restano più limitati di `PRD.md`:
+
+- `storygram ingest episode FILE [--archive PATH] [--overwrite]` copia una cattura solo in `inbox/`. Non scrive mai in `data/` e rifiuta le sovrascritture silenziose.
+- `storygram export [--format json|jsonld] [--visibility VALUE ...] [--archive PATH]` legge i record canonici dal registry, ordina per ID e fallisce su JSON malformato. Con un filtro di visibilità, i record senza `visibility` sono esclusi. `jsonld` è una proiezione minima `@id`/`@type`, non un round-trip RDF completo.
+- `storygram rebuild [PATH]` ricostruisce solo l'indice di ricerca SQLite/FTS5. È idempotente, rimuove i record obsoleti e segnala gli input malformati.
+- `storygram search QUERY [--archive PATH] [--rebuild]` cerca prima ID e tipi esatti, poi nel contenuto indicizzato. L'indice si aggiorna quando cambiano i file canonici.
+- `storygram conflicts [--status VALUE] [--archive PATH]` unisce i Conflict espliciti con le contraddizioni derivate dalle asserzioni, deduplica le coppie e mostra entrambe le asserzioni con l'evidenza.
+- `storygram timeline ID [--archive PATH]` esclude le asserzioni superseded, archived e rejected, ordina per inizio del valid-time e include i campi di evidenza.
+- `storygram genogram ID [--archive PATH]` è sperimentale: usa le asserzioni `relation:*`, segnala i predicati non supportati e ignora i record Relationship finché lo schema non modella i loro estremi.
+
+`validate`, `get`, `list` e `git-check` restano la superficie stabile di lettura e validazione.
+
 ## Container
 
 Il repository include `Dockerfile`, `compose.yaml` e un entrypoint con auto-inizializzazione. L'immagine è stata costruita e verificata end-to-end tramite un daemon host compatibile Docker (Podman Engine 5.8.2 via Docker CLI): avvio non-root, auto-init, healthcheck, applicazione di una proposta nel container, persistenza dopo restart/ricreazione e bind mount host sono tutti passati.

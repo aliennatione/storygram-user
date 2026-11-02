@@ -87,6 +87,20 @@ storygram proposal generate --text "Un ricordo..." --archive ./archive
 
 L'adapter forza `status=proposed`, scarta i campi sconosciuti e salva solo in `proposals/`. Non può approvare, applicare o modificare record canonici. Usa `--no-save` per controllare senza scrivere. La pagina **Generate** della UI usa lo stesso adapter; gli errori del provider vengono mostrati senza scrivere nulla.
 
+## Comandi legacy e derivati
+
+Questi comandi sono deterministici e offline, ma alcuni restano più limitati di `PRD.md`:
+
+- `storygram ingest episode FILE [--archive PATH] [--overwrite]` copia una cattura solo in `inbox/`. Non scrive mai in `data/` e rifiuta le sovrascritture silenziose.
+- `storygram export [--format json|jsonld] [--visibility VALUE ...] [--archive PATH]` legge i record canonici dal registry, ordina per ID e fallisce su JSON malformato. Con un filtro di visibilità, i record senza `visibility` sono esclusi. `jsonld` è una proiezione minima `@id`/`@type`, non un round-trip RDF completo.
+- `storygram rebuild [PATH]` ricostruisce solo l'indice di ricerca SQLite/FTS5. È idempotente, rimuove i record obsoleti e segnala gli input malformati.
+- `storygram search QUERY [--archive PATH] [--rebuild]` cerca prima ID e tipi esatti, poi nel contenuto indicizzato. L'indice si aggiorna quando cambiano i file canonici.
+- `storygram conflicts [--status VALUE] [--archive PATH]` unisce i Conflict espliciti con le contraddizioni derivate dalle asserzioni, deduplica le coppie e mostra entrambe le asserzioni con l'evidenza.
+- `storygram timeline ID [--archive PATH]` esclude le asserzioni superseded, archived e rejected, ordina per inizio del valid-time e include i campi di evidenza.
+- `storygram genogram ID [--archive PATH]` è sperimentale: usa le asserzioni `relation:*`, segnala i predicati non supportati e ignora i record Relationship finché lo schema non modella i loro estremi.
+
+`validate`, `get`, `list` e `git-check` restano la superficie stabile di lettura e validazione.
+
 ## Test
 
 ```bash

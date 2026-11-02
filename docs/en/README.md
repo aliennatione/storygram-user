@@ -87,6 +87,20 @@ storygram proposal generate --text "A memory..." --archive ./archive
 
 The adapter forces `status=proposed`, drops unknown fields and saves only under `proposals/`. It cannot approve, apply or modify canonical records. Use `--no-save` to inspect without writing. The web **Generate** page uses the same adapter; provider errors are shown without writing anything.
 
+## Legacy and derived commands
+
+These commands are deterministic and offline, but some remain narrower than `PRD.md`:
+
+- `storygram ingest episode FILE [--archive PATH] [--overwrite]` copies a capture into `inbox/` only. It never writes `data/` and refuses silent overwrites.
+- `storygram export [--format json|jsonld] [--visibility VALUE ...] [--archive PATH]` reads canonical records through the registry, sorts by ID and fails on malformed JSON. With a visibility filter, records lacking `visibility` are excluded. `jsonld` is a minimal `@id`/`@type` projection, not a full RDF round-trip.
+- `storygram rebuild [PATH]` rebuilds only the SQLite/FTS5 search index. It is idempotent, drops stale records and reports malformed inputs.
+- `storygram search QUERY [--archive PATH] [--rebuild]` matches exact IDs and types first, then indexed content. The index refreshes when canonical files change.
+- `storygram conflicts [--status VALUE] [--archive PATH]` merges explicit Conflict records with assertion-derived contradictions, deduplicates pairs and includes both assertions plus evidence.
+- `storygram timeline ID [--archive PATH]` excludes superseded, archived and rejected assertions, sorts by valid-time start and includes evidence fields.
+- `storygram genogram ID [--archive PATH]` is experimental: it uses `relation:*` assertions, marks unsupported predicates and ignores Relationship records until the schema models their endpoints.
+
+`validate`, `get`, `list` and `git-check` remain the stable read and validation surface.
+
 ## Tests
 
 ```bash

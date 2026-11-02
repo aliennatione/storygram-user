@@ -3,13 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MODEL_FILE="qwen2.5-1.5b-instruct-q4_k_m.gguf"
-LOCAL_MODEL="${ROOT}/models/${MODEL_FILE}"
-
-if [ ! -f "${LOCAL_MODEL}" ]; then
-    echo "Model not found: ${LOCAL_MODEL}" >&2
-    echo "Run ${ROOT}/scripts/download-model.sh first." >&2
-    exit 1
-fi
+LOCAL_MODELS_DIR="${ROOT}/models"
 
 if [ -z "${STORYGRAM_MODELS_DIR:-}" ]; then
     DATA_SOURCE=$(docker inspect "$(hostname)" \
@@ -18,8 +12,14 @@ if [ -z "${STORYGRAM_MODELS_DIR:-}" ]; then
     if [ -n "${DATA_SOURCE}" ]; then
         STORYGRAM_MODELS_DIR="${DATA_SOURCE%/}/models"
     else
-        STORYGRAM_MODELS_DIR="${ROOT}/models"
+        STORYGRAM_MODELS_DIR="${LOCAL_MODELS_DIR}"
     fi
+fi
+
+if [ ! -f "${STORYGRAM_MODELS_DIR}/${MODEL_FILE}" ] && [ ! -f "${LOCAL_MODELS_DIR}/${MODEL_FILE}" ]; then
+    echo "Model not found: ${STORYGRAM_MODELS_DIR}/${MODEL_FILE}" >&2
+    echo "Run ${ROOT}/scripts/download-model.sh first." >&2
+    exit 1
 fi
 
 export STORYGRAM_MODELS_DIR

@@ -309,6 +309,12 @@ def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
         "  transaction_time.recorded_at and evidence on the operation.",
         "- An Assertion requires subject, predicate, status, transaction_time.recorded_at,",
         "  created_at and updated_at.",
+        '- Every Assertion predicate MUST start with "relation:" (for example relation:sibling).',
+        "- transaction_time.recorded_at is when the record is created; do not use the event date.",
+        '- Put source dates in valid_time, for example {"start":"1990","precision":"year"}.',
+        "- Do not create Period records; use Assertion.valid_time for periods.",
+        "- Only reference IDs that are created in this proposal or listed under known IDs.",
+        "- If you reference a new place, event or person, create that record first.",
         "- Never invent an apply, approve or merged status.",
         "- Preserve uncertainty and conflicting evidence; never resolve a conflict silently.",
         "- If a real contradiction exists, create an explicit Conflict",
@@ -316,6 +322,17 @@ def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
         "",
         "Complete example (format illustration only; do not copy its facts):",
         example,
+        "",
+        "Assertion example (format illustration only):",
+        '{"op":"create","record_type":"Assertion","record":{'
+        '"id":"assertion:maria-moved-to-torino","type":"Assertion",'
+        '"subject":"person:maria-bianchi","predicate":"relation:moved_to",'
+        '"object":"place:torino","status":"reported",'
+        '"transaction_time":{"recorded_at":"2026-01-01T00:00:00+00:00"},'
+        '"valid_time":{"start":"1990","precision":"year"},'
+        '"created_at":"2026-01-01T00:00:00+00:00",'
+        '"updated_at":"2026-01-01T00:00:00+00:00"},'
+        '"evidence":["episode:source-capture"]}',
         "",
         "Known canonical IDs:",
         known,

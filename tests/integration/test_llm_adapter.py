@@ -130,6 +130,8 @@ def test_build_prompt_requires_source_episode_and_evidence() -> None:
     assert '"evidence":["episode:source-capture"]' in prompt
     assert "NEVER create Relationship records" in prompt
     assert "transaction_time.recorded_at" in prompt
+    assert "omit object" in prompt
+    assert "occupation:" in prompt
     assert "person:maria" in prompt
     assert "Maria moved to Turin." in prompt
 

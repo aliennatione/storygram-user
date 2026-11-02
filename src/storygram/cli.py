@@ -87,12 +87,23 @@ def validate(path: str | None, as_json: bool) -> None:
 @click.argument("path", type=click.Path(exists=True), required=False)
 @click.option("--json", "as_json", is_flag=True)
 def rebuild(path: str | None, as_json: bool) -> None:
-    """Rebuild derived views and the search index."""
+    """Rebuild the deterministic search index."""
     from . import index
 
     root = _root(path)
-    db_path = index.build_index(root)
-    _emit({"ok": True, "index": str(db_path)}, as_json, f"Rebuilt index at {db_path}")
+    errors: list[str] = []
+    db_path = index.build_index(root, errors)
+    output = {"ok": not errors, "index": str(db_path), "errors": errors}
+    if as_json:
+        click.echo(json.dumps(output, indent=2))
+    else:
+        for error in errors:
+            click.echo(f"WARNING: {error}", err=True)
+        click.echo(f"Rebuilt index at {db_path}")
+        if errors:
+            click.echo("Indexed valid records; malformed records were skipped", err=True)
+    if errors:
+        raise SystemExit(1)
 
 
 @main.command(name="git-check")
@@ -187,12 +198,14 @@ def list_cmd(type_: str | None, as_json: bool) -> None:
 
 @main.command()
 @click.argument("query")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--rebuild", is_flag=True, help="Force a full index rebuild before searching")
 @click.option("--json", "as_json", is_flag=True)
-def search(query: str, as_json: bool) -> None:
+def search(query: str, archive_path: str | None, rebuild: bool, as_json: bool) -> None:
     """Search canonical records."""
     from . import index
 
-    results = index.search(Path.cwd(), query)
+    results = index.search(_root(archive_path), query, rebuild=rebuild)
     if as_json:
         click.echo(json.dumps(results, indent=2))
         return

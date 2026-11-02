@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-01
 Branch: `feature/agent-proposal-flow`
-Recent commits: `7296044` working-memory update, `d2851e2` user-facing container docs, `3abf1f0` working-memory update, `493965b` commit policy.
+Recent commits: API/provider/withdraw series, then the legacy command hardening series. Use `git log --oneline -20`.
 
 ## Compacted Context
 
@@ -10,9 +10,9 @@ Recent commits: `7296044` working-memory update, `d2851e2` user-facing container
 - Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `61 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Python baseline: `86 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
 - The container deliverable was rebuilt and re-verified with the live OpenAI-compatible endpoint, then removed. Details and exact results are in `docs/dev/STATE.md` and `docs/dev/AUDIT.md`.
-- The 2026-11-01 API/provider/withdraw work is uncommitted; commit it as atomic units when the user asks.
+- The 2026-11-01 API/provider/withdraw work and the legacy command hardening are committed in small atomic units.
 - Known product debt: `ingest` only copies to `inbox/`; `export` and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
 
 ## Verified Container Run (2026-10-31)
@@ -47,13 +47,13 @@ Results:
 
 ## Next Objective
 
-Move to the deferred product work now that runtime verification passes. Do not redesign the approval gate.
+The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
 
-1. Audit `ingest`, `export`, `search`, `rebuild`, `timeline`, `genogram` and `conflicts` against `PRD.md` and actual behavior.
-2. For each command: fix, implement the missing contract, or explicitly mark it experimental in CLI help and bilingual docs. Verify before documenting.
-3. Keep approval UI/CLI-only. Generation, reject and withdraw are now available; an advisory (non-applying) review endpoint is still open for discussion.
-4. Keep `README.md` / `README.it.md` and `docs/en/` / `docs/it/` in sync.
-5. Re-run Python, lint, format, mypy and Playwright checks after changes.
+1. Implement real JSON-LD and YAML/Markdown round-trip export, or explicitly narrow the contract in `PRD.md`/docs.
+2. Add capture metadata/checksums to `ingest` while keeping `inbox/` as the only destination.
+3. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram`.
+4. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
+5. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
 
 ## Environment Check
 
@@ -182,6 +182,9 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 - Host bind path mismatch with the development container; the helper's `/hosttmp/...` path is not the host path.
 - LLM output can be envelope-valid but record-invalid; always dry-run. Never treat generation as approval.
 - The API key must stay in the environment; `.env` is gitignored and excluded from the build context.
+- `genogram` is experimental and ignores Relationship records until their schema models endpoints.
+- JSON-LD export is a minimal `@id`/`@type` projection, not a full RDF round-trip.
+- `ingest` never writes canonical data; review and propose separately.
 
 ## Cleanup
 

@@ -117,3 +117,20 @@
 - Prompt changes add lowercase ID requirements, `record_type` and a minimal valid proposal shape. The goal is fewer schema-invalid proposals, not automated approval.
 - Compose passes the LLM variables into the container. `.env` stays gitignored and excluded from the build context; secrets are supplied at runtime.
 - Generation validates the proposal envelope, not every operation record. A dry-run remains the authoritative pre-approval check.
+
+## Legacy Command Hardening (2026-11-01)
+
+- `ingest` now uses the PRD grammar `ingest episode FILE` and writes only to `inbox/`. The previous `--data` option violated the human approval boundary and was removed.
+- Ingest refuses to overwrite a same-name capture unless `--overwrite` is explicit. Captures remain unreviewed input, not canonical records.
+- Export uses `RECORD_TYPES` instead of a duplicated directory list, sorts by ID and fails on malformed JSON instead of silently omitting data.
+- A visibility filter is default-deny: records without a `visibility` field are excluded when the filter is active. An unfiltered export still includes them.
+- JSON-LD export emits `@id` and `@type` for every node and a local `@vocab` context. It is explicitly a minimal projection, not a full RDF round-trip.
+- The search index is rebuilt from scratch on each rebuild. An FTS5 table has no primary-key uniqueness, so `REPLACE` accumulated duplicates; dropping and recreating removes the ambiguity and stale records.
+- Search matches exact IDs, then exact types, then FTS content, then a `LIKE` fallback. Results are sorted by ID. A signature of path/mtime/size refreshes a stale index before searching.
+- `rebuild` now advertises only the search index. It exits non-zero and reports malformed records instead of claiming success after silently skipping them.
+- Conflicts combine explicit records and assertion-derived contradictions. Derived entries are marked `derived: true`, deduplicated by unordered assertion pair, and carry both assertion records and evidence.
+- Derived conflicts use a `derived:` display ID rather than pretending to be canonical `conflict:` records.
+- Timeline excludes superseded, archived and rejected assertions, sorts by valid-time start then ID, and includes evidence and transaction fields.
+- Timeline distinguishes an unknown record from a known record with no entries; both are actionable errors or explicit empty results.
+- Genogram remains experimental. Relationship records are ignored because the schema has no endpoints; relations come from `relation:*` assertions and unsupported predicates are warnings.
+- `get` and `list` accept `--archive`, matching the documented examples and the rest of the read surface.

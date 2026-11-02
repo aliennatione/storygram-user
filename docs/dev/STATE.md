@@ -5,12 +5,12 @@ Last updated: 2026-11-01
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: `7296044` working-memory update, `d2851e2` user-facing container docs, `3abf1f0` working-memory update, `493965b` commit policy.
+- Recent commits: API/provider/withdraw series followed by the legacy command hardening series; see `git log --oneline -20`.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
 - An OpenAI-compatible provider with bearer-token support was added alongside the Ollama provider.
-- The 2026-11-01 API/provider/withdraw changes are present in the working tree but **not committed** (the user did not request a commit).
+- The 2026-11-01 API/provider/withdraw work and the legacy command hardening are committed in small atomic units. No tracked changes are pending in this unit.
 - Python, lint, format, mypy and browser checks pass. The container image was rebuilt and exercised end-to-end with the live LLM endpoint through the host Docker socket, then removed.
 
 ## Environment
@@ -75,23 +75,32 @@ Last updated: 2026-11-01
 - Tests: API generate/save/no-save/error, reject/withdraw, provider request/auth/error, thinking-block extraction, CLI withdraw, web withdraw.
 - Live verification: real qwen3-4b generation returned 201 and a pending proposal; withdraw returned 200 and a second withdraw 409.
 - Container re-verification: image rebuilt, app started on port 18080 with the live LLM env, reached healthy, reached the LLM endpoint, generated a pending proposal, withdrew it through the API, survived restart and `down`/`up`, then all test resources and the image were removed.
+- `ingest` now uses the PRD grammar `ingest episode FILE`, copies only into `inbox/`, adds `--archive`, refuses silent overwrites and cannot write canonical data.
+- `export` uses the registry, sorts by ID, fails on malformed JSON, adds `--archive`, excludes records without visibility when filtering, and emits a minimal JSON-LD `@id`/`@type` graph.
+- `rebuild` and `search` now use an idempotent SQLite/FTS5 index with a signature check, exact ID/type matching, content fallback, deterministic ordering and reports for malformed records.
+- `conflicts` merges explicit and assertion-derived contradictions, applies status filters to both, deduplicates unordered pairs and includes both assertion records plus evidence.
+- `timeline` excludes superseded/archived/rejected assertions, sorts by valid-time start, includes evidence fields and distinguishes unknown records from known records with no entries.
+- `genogram` is explicitly experimental, scopes relations to `relation:*` assertions for the requested person, marks unsupported predicates and ignores unscoped Relationship records.
+- `get` and `list` now accept `--archive`, matching the documented examples.
+- New tests: `test_ingest.py` CLI coverage, `test_export.py`, `test_search.py`, `test_conflicts.py`, `test_timeline.py`, `test_genogram.py`, `test_read_cli.py`.
 
 ## Active
 
-- API generate/reject/withdraw and the OpenAI-compatible provider are implemented, tested and live-verified.
-- The next work unit is the legacy-surface audit and documentation cleanup.
-- The 2026-11-01 changes are uncommitted; commit them as atomic units when the user asks.
+- API generate/reject/withdraw, the OpenAI-compatible provider and the legacy command hardening are implemented, tested and committed.
+- The next work unit is the remaining product gaps: real JSON-LD/YAML/Markdown round-trips, capture metadata, higher-level timelines and endpoint-aware Relationship records.
 
 ## Next Steps
 
-1. Audit `ingest`, `export`, `search`, `rebuild`, `timeline`, `genogram` and `conflicts` against `PRD.md` and actual behavior; fix, implement, or mark experimental with matching tests and docs.
-2. Keep approval UI/CLI-only; generation, reject and withdraw are now available through the API. Consider advisory (non-applying) model review later.
-3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
-4. Run the optional Ollama container profile only when network/time permit; it remains unverified.
+1. Implement real JSON-LD and YAML/Markdown round-trip export, or explicitly keep JSON-only in `PRD.md`/docs.
+2. Add capture metadata/checksums to `ingest` without allowing canonical writes.
+3. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram` beyond experimental.
+4. Keep approval UI/CLI-only; consider advisory (non-applying) model review later.
+5. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
+6. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest -q`: `61 passed`.
+- `PYTHONPATH=/data/src python -m pytest -q`: `86 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -104,6 +113,7 @@ Last updated: 2026-11-01
 - In-container generation: `ok: true`; generated pending proposal saved.
 - In-container API withdraw: `200`; repeated withdraw: `409`.
 - Restart and `down`/`up` persistence: pending proposal survived.
+- Legacy CLI tests: ingest, export, search/rebuild, conflicts, timeline, genogram and read commands all pass.
 - Test container, network, volume, image, temp archives and ephemeral env file were removed.
 - Optional Ollama profile: not run.
 
@@ -121,7 +131,10 @@ Last updated: 2026-11-01
 - Conflict detection is deliberately conservative and year-based; it is not a complete temporal reasoner.
 - Working-tree cleanliness checks tracked files only, so ignored pending proposals do not block approval.
 - Pending proposals remain local and ignored by Git; only merged proposals are archived and committed.
-- `export` and `ingest` still need the planned cleanup; `ingest` still only copies files.
+- `ingest` is intentionally a safe capture copy into `inbox/`; it does not add checksums or capture metadata yet.
+- `export` supports JSON and a minimal JSON-LD projection only; YAML/Markdown round-trips are not implemented.
+- `genogram` remains experimental until `Relationship` models endpoints and relation type.
+- `timeline` covers entity/place matches only; collection/archive-level timelines remain open.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
 - The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping.
 - The API cannot approve; approval remains UI/CLI only.

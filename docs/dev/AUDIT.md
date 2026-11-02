@@ -223,3 +223,30 @@ Expose generation, rejection and withdrawal to agent clients while preserving th
 3. Keep provider credentials in the environment; never log, commit or print them.
 4. Always dry-run generated proposals; model output can be envelope-valid and record-invalid.
 5. Next: legacy-surface audit (`ingest`, `export`, `search`, `rebuild`, `timeline`, `genogram`, `conflicts`).
+
+## 2026-11-01 - legacy command hardening
+
+### Current objective
+
+Close the deterministic legacy-surface gaps without weakening the approval gate, and document only behavior that actually runs.
+
+### Point of situation
+
+- A read-only audit confirmed functional bugs in all seven legacy commands: `ingest --data` bypass, export visibility leak, duplicate FTS rows and stale results, conflict suppression/filtering bugs, superseded timeline entries, global genogram output and a misleading `rebuild` help string.
+- No legacy command had an end-to-end CLI test.
+- Fixes were committed atomically: ingest, export, index/search/rebuild, conflicts, timeline and genogram, followed by a formatting commit and `get`/`list --archive`.
+- `ingest episode` now captures only into `inbox/` and refuses silent overwrites.
+- Export is registry-driven, sorted, privacy-safe under filters and fails on malformed JSON; JSON-LD is minimal and explicitly documented as such.
+- The search index is rebuilt idempotently, refreshes on file changes and supports exact ID/type plus content search.
+- Conflicts merge explicit and derived entries with deduplication, evidence and status filtering.
+- Timeline excludes closed assertions, sorts deterministically and includes evidence; genogram is scoped and marked experimental.
+- Bilingual README and guide docs now include a "Legacy and derived commands" section with the real options and limitations.
+- Tests: `86 passed`; ruff, format, mypy and Playwright E2E passed.
+
+### Calibration
+
+1. Keep ingest capture-only; never add a canonical-write shortcut.
+2. Keep export filtering default-deny and document JSON-LD/YAML/Markdown limits honestly.
+3. Keep the search index deterministic and rebuildable; report malformed input instead of skipping silently.
+4. Keep genogram experimental until Relationship models endpoints and relation type.
+5. Next: higher-level timelines, real JSON-LD/YAML/Markdown round-trips and capture metadata.

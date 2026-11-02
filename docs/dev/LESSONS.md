@@ -66,3 +66,16 @@
 - `docker compose config` prints environment values. Redact secrets before showing or logging its output.
 - Container verification after a compose change should include the new env pass-through, not just `healthy`: call `/v1/models` and generate a proposal inside the container.
 - Restart and `down`/`up` persistence still passed after adding the API/provider changes. Proposal generation itself must remain pending; persistence tests should not be used to justify auto-approval.
+- The old `ingest --data` path bypassed validation and the approval gate. A safe capture command must write only to `inbox/`; canonical changes belong to proposals.
+- PRD command grammar matters: `ingest episode FILE` needs a Click group, while the old `ingest FILE` form must be rejected rather than silently retained.
+- Export had a privacy bug: `if vis and vis not in filter` treated a missing `visibility` as public. Filtering must be default-deny when a filter is supplied.
+- Hardcoded export directories drift from the registry; always iterate `RECORD_TYPES` and skip `Proposal`.
+- SQLite FTS5 virtual tables have no primary-key uniqueness. `REPLACE INTO records_fts` inserted another copy on every rebuild; dropping/recreating the tables is the reliable idempotent path.
+- A search index needs an explicit freshness check. A signature over relative path, mtime and size detects additions, edits and deletions without scanning all content twice.
+- FTS5 treats `:` as query syntax. Exact ID/type lookup must happen before `MATCH`, and a quoted/escaped query plus `LIKE` fallback keeps predicate searches usable.
+- The conflict list suppressed all assertion-derived contradictions as soon as one explicit Conflict existed. Merge both sources and deduplicate unordered pairs.
+- A synthetic conflict must not use a canonical `conflict:` ID. Mark it `derived` and keep the ID clearly non-canonical.
+- Timeline must filter `superseded`, `archived` and `rejected` assertions; filtering only by transaction time is not enough.
+- Genogram could not be person-scoped with the current Relationship schema because it stores no endpoints. Return only matching `relation:*` assertions and warn rather than returning every relationship.
+- Documentation showed `storygram list --archive` while the command ignored the option. CLI changes and docs must be checked together against real `--help` output.
+- The full suite grew to `86 passed` after adding end-to-end CLI tests for ingest, export, search, conflicts, timeline, genogram and read commands.

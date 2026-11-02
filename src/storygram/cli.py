@@ -249,12 +249,17 @@ def timeline(record_id: str, archive_path: str | None, as_json: bool) -> None:
 
 @main.command()
 @click.argument("record_id")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--json", "as_json", is_flag=True)
-def genogram(record_id: str, as_json: bool) -> None:
-    """Generate a genogram for a person."""
+def genogram(record_id: str, archive_path: str | None, as_json: bool) -> None:
+    """Generate an experimental genogram from relation:* assertions."""
     from .genogram import build_genogram
 
-    _emit(build_genogram(Path.cwd(), record_id), as_json)
+    result = build_genogram(_root(archive_path), record_id)
+    if not as_json:
+        for warning in result["warnings"]:
+            click.echo(f"WARNING: {warning}", err=True)
+    _emit(result, as_json)
 
 
 @main.command()

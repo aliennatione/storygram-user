@@ -62,6 +62,26 @@ def export_jsonld(root: Path, visibility_filter: set[str] | None = None) -> dict
     }
 
 
+def records_from_json(text: str) -> list[dict[str, Any]]:
+    """Rebuild canonical records from the JSON export list."""
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ExportError(f"Cannot parse JSON export: {exc}") from exc
+    if isinstance(payload, dict) and "records" in payload:
+        payload = payload["records"]
+    if isinstance(payload, dict):
+        payload = [payload]
+    if not isinstance(payload, list):
+        raise ExportError("JSON export must contain a record or a list of records")
+    records = []
+    for item in payload:
+        if not isinstance(item, dict):
+            raise ExportError("Each JSON record must be an object")
+        records.append(item)
+    return sorted(records, key=lambda item: str(item.get("id", "")))
+
+
 def records_from_jsonld(payload: Any) -> list[dict[str, Any]]:
     """Rebuild canonical records from an exported JSON-LD graph."""
     if not isinstance(payload, dict):

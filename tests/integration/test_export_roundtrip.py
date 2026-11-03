@@ -6,9 +6,11 @@ from click.testing import CliRunner
 from storygram.cli import main
 from storygram.export import (
     ExportError,
+    export_json,
     export_jsonld,
     export_markdown,
     export_yaml,
+    records_from_json,
     records_from_jsonld,
     records_from_markdown,
     records_from_yaml,
@@ -65,6 +67,19 @@ ASSERTION = {
     "updated_at": "2026-11-02T10:00:00+00:00",
     "visibility": "family",
 }
+
+
+def test_json_roundtrip_single_record(tmp_path):
+    root = make_archive(tmp_path)
+    write(root, "people/maria.json", PERSON)
+
+    exported = export_json(root)
+
+    assert records_from_json(json.dumps(exported)) == [PERSON]
+
+
+def test_json_parser_accepts_records_wrapper():
+    assert records_from_json(json.dumps({"records": [PERSON]})) == [PERSON]
 
 
 def test_yaml_roundtrip_single_record(tmp_path):

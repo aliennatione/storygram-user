@@ -301,3 +301,26 @@ Determine whether a larger local GGUF should replace the 1.5B smoke-test model, 
 3. Keep the prompt's field-level examples; prohibitions alone are not reliable for small models.
 4. Keep generation separate from approval. Always dry-run and review; dry-run validity is not truth.
 5. Next: run the same prompt against a second real capture if needed, then return to the remaining product gaps.
+
+## 2026-11-03 - export round-trips
+
+### Current objective
+
+Close the JSON-LD/YAML/Markdown export round-trip gap without changing the existing JSON export or the human approval gate.
+
+### Point of situation
+
+- `export_json` and `export_jsonld` output shapes were preserved; `--format` now also accepts `yaml` and `markdown`.
+- Added reversible module parsers: `records_from_yaml`, `records_from_jsonld` and `records_from_markdown`.
+- YAML is a lossless record sequence. JSON-LD reverses the existing `@id`/`@type` graph projection. Markdown uses YAML front matter plus a body for Episode `content.text` or `notes`, with `storygram_body` as the reconstruction marker.
+- Round-trip tests start from the smallest single Person case and extend to an Episode, a nested Assertion, multiple records, malformed input and CLI output.
+- The full suite is `103 passed`; ruff, format, mypy and Playwright E2E pass.
+- No canonical import CLI was added, so exported records still cannot bypass proposals, validation or human approval.
+- Lossiness is documented: Markdown body-only edits are ignored; JSON-LD is a local projection, not full RDF.
+
+### Calibration
+
+1. Keep JSON/JSON-LD output stable; add formats without changing existing contracts.
+2. Keep the front matter as the Markdown source of truth unless a reviewed editing model is introduced.
+3. Any future import path must create pending proposals or inbox captures, never canonical writes.
+4. Next product gaps: capture metadata, higher-level timelines and endpoint-aware Relationship records for genograms.

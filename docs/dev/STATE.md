@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-11-02
+Last updated: 2026-11-03
 
 ## Git
 
@@ -84,15 +84,16 @@ Last updated: 2026-11-02
 - `genogram` is explicitly experimental, scopes relations to `relation:*` assertions for the requested person, marks unsupported predicates and ignores unscoped Relationship records.
 - `get` and `list` now accept `--archive`, matching the documented examples.
 - New tests: `test_ingest.py` CLI coverage, `test_export.py`, `test_search.py`, `test_conflicts.py`, `test_timeline.py`, `test_genogram.py`, `test_read_cli.py`.
+- 2026-11-03 export round-trip unit: `export_yaml`, `export_markdown`, `records_from_yaml`, `records_from_jsonld` and `records_from_markdown` added in `export.py`; `export --format` now accepts `yaml` and `markdown`; existing `json`/`jsonld` output is unchanged except the added parsers. `tests/integration/test_export_roundtrip.py` covers Person, Episode and Assertion round-trips, malformed parser input and CLI output parsing. Full suite is now `103 passed`.
 
 ## Active
 
 - Model-quality unit: `qwen3-4b` is the single reference model. The prompt now produces dry-run-valid proposals for Italian, English and short captures. The local 1.5B model remains a smoke test; the local 3B model was stopped after it produced no tokens in more than 25 minutes on 1 CPU.
-- Current pending work is documentation sync for this unit. The next product work unit is the remaining product gaps: real JSON-LD/YAML/Markdown round-trips, capture metadata, higher-level timelines and endpoint-aware Relationship records.
+- Export round-trip unit is implemented and documented: JSON/JSON-LD/YAML/Markdown exports plus reversible module parsers; no CLI canonical import. The next product work units are a safe import path for exported records, capture metadata, higher-level timelines and endpoint-aware Relationship records.
 
 ## Next Steps
 
-1. Implement real JSON-LD and YAML/Markdown round-trip export, or explicitly keep JSON-only in `PRD.md`/docs.
+1. Decide whether to expose a safe import CLI for exported YAML/Markdown/JSON-LD; it must not bypass proposals, validation or human approval.
 2. Add capture metadata/checksums to `ingest` without allowing canonical writes.
 3. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram` beyond experimental.
 4. Keep approval UI/CLI-only; consider advisory (non-applying) model review later.
@@ -119,9 +120,18 @@ Last updated: 2026-11-02
 - Local 3B: load about 9 minutes / 1.86 GiB; no token in 25+ minutes under the 1-CPU quota; stopped and test resources removed.
 - Semantic quality is still limited: `qwen3-4b` produced `place:neapes` (typo) and previously invented a surname. Dry-run validity is not truth; human approval remains mandatory.
 
+## Export Round-Trips (2026-11-03)
+
+- `storygram export --format yaml` emits a YAML sequence of canonical records; `records_from_yaml` parses a sequence, a single mapping or `{records: [...]}`.
+- `storygram export --format markdown` emits blocks marked `<!-- storygram:record -->`, each with YAML front matter plus a body. Episode `content.text` and record `notes` move to the body; `storygram_body` records which field is in the body.
+- `records_from_jsonld` reverses the existing `@context`/`@graph` output by mapping `@id`/`@type` back to `id`/`type`. JSON-LD remains a local graph projection, not full RDF expansion.
+- Round-trip tests cover a Person (smallest case), an Episode with content text, an Assertion with nested valid/transaction time, multiple records, malformed parser input and CLI YAML/Markdown output.
+- Lossiness: Markdown body-only edits are ignored because the front matter is the source of truth; JSON/JSON-LD/YAML preserve record data. There is no CLI canonical import, so exported records still cannot bypass the proposal/approval gate.
+- Existing `export --format json` and `jsonld` structures are unchanged; the JSON export test remains green.
+
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest`: `90 passed`.
+- `PYTHONPATH=/data/src python -m pytest`: `103 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -170,7 +180,7 @@ Last updated: 2026-11-02
 - Working-tree cleanliness checks tracked files only, so ignored pending proposals do not block approval.
 - Pending proposals remain local and ignored by Git; only merged proposals are archived and committed.
 - `ingest` is intentionally a safe capture copy into `inbox/`; it does not add checksums or capture metadata yet.
-- `export` supports JSON and a minimal JSON-LD projection only; YAML/Markdown round-trips are not implemented.
+- `export` supports JSON, YAML, Markdown and a minimal JSON-LD projection. JSON/YAML/JSON-LD round-trip through module parsers; Markdown round-trips only through front matter, and there is no CLI import/canonical-write path yet.
 - `genogram` remains experimental until `Relationship` models endpoints and relation type.
 - `timeline` covers entity/place matches only; collection/archive-level timelines remain open.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.

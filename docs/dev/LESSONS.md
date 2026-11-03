@@ -95,3 +95,7 @@
 - The 3B GGUF is not viable on a 1-CPU cgroup: it loaded, used 1.86 GiB, and produced no token for more than 25 minutes. Do not promote a model solely because it fits in RAM.
 - Keep one model loaded on llama-swap. Switching models for A/B tests adds load latency; choose a reference and avoid switching during normal review.
 - Validate generated proposals on more than one fixture: Italian, English and a short capture. The English literal-value case exposed a prompt gap that the Italian case missed.
+- PyYAML `safe_dump` quotes ISO timestamp strings, so `safe_load` returns them as strings. Test nested `valid_time`/`transaction_time` values rather than assuming YAML round-trips.
+- A JSON-LD parser must pop `@id`/`@type` before merging the remaining node fields back, otherwise a malformed node could overwrite the canonical identity.
+- Markdown round-trip needs an explicit record marker and a `storygram_body` field. Without them, a body cannot be distinguished from ignored prose or reassigned to the right record field.
+- JSON-LD export being reversible does not make it full RDF expansion; document the projection boundary instead of implying semantic equivalence.

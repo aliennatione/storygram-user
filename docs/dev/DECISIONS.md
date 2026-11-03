@@ -155,3 +155,12 @@
 - Generation validates the proposal envelope, not operation schemas or semantics. A passing generation is not a passing dry-run, and a passing dry-run is not truth. Humans must run `proposal approve --dry-run` and review the result.
 - Keep the approval gate unchanged: no approve API endpoint and no auto-apply path.
 - `STORYGRAM_LLM_TIMEOUT`, `STORYGRAM_LLM_MAX_TOKENS` and the Compose `STORYGRAM_LLM_CTX_SIZE` are the supported generation controls.
+
+## Export Round-Trips (2026-11-03)
+
+- JSON export remains the canonical machine-readable list and its shape is unchanged.
+- YAML export is a `safe_dump` sequence parsed by `safe_load`; this preserves strings, including ISO timestamps, and nested objects. The parser also accepts a single mapping or `{records: [...]}` for hand-edited input.
+- JSON-LD remains the existing local `@context`/`@graph` projection. Round-trip parity comes from reversing `@id`/`@type` only; full RDF expansion/compaction is out of scope and documented as such.
+- Markdown is a set of blocks delimited by `<!-- storygram:record -->` / `<!-- /storygram:record -->` with YAML front matter and a rendered body. Episode `content.text` and record `notes` live in the body; `storygram_body` records which field was moved. The front matter is the source of truth, so body-only edits are intentionally not re-imported; the end marker keeps body trailing newlines exact.
+- Round-trip support lives in module parsers and is tested through export output. No CLI canonical import was added: imported data must still enter through proposals so the human approval gate cannot be bypassed.
+- The smallest round-trip case is a single Person; nested Assertion time objects and multiple records are covered to catch serialization regressions.

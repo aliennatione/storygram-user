@@ -74,7 +74,7 @@ The model is never committed and is mounted read-only into the inference contain
 These commands are deterministic and offline, but some remain narrower than `PRD.md`:
 
 - `storygram ingest episode FILE [--archive PATH] [--overwrite]` copies a capture into `inbox/` only. It never writes `data/` and refuses silent overwrites.
-- `storygram export [--format json|jsonld] [--visibility VALUE ...] [--archive PATH]` reads canonical records through the registry, sorts by ID and fails on malformed JSON. With a visibility filter, records lacking `visibility` are excluded. `jsonld` is a minimal `@id`/`@type` projection, not a full RDF round-trip.
+- `storygram export [--format json|jsonld|yaml|markdown] [--visibility VALUE ...] [--archive PATH]` reads canonical records through the registry, sorts by ID and fails on malformed JSON. With a visibility filter, records lacking `visibility` are excluded. `jsonld` stays a local `@id`/`@type` graph projection, not full RDF expansion. JSON, JSON-LD and YAML round-trip losslessly (JSON stays the native list); Markdown uses YAML front matter plus a rendered body, so the front matter is the source of truth and body-only edits are not re-imported. There is no CLI canonical import: review and approval still go through proposals.
 - `storygram rebuild [PATH]` rebuilds only the SQLite/FTS5 search index. It is idempotent, drops stale records and reports malformed inputs.
 - `storygram search QUERY [--archive PATH] [--rebuild]` matches exact IDs and types first, then indexed content. The index refreshes when canonical files change.
 - `storygram conflicts [--status VALUE] [--archive PATH]` merges explicit Conflict records with assertion-derived contradictions, deduplicates pairs and includes both assertions plus evidence.

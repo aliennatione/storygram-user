@@ -1,6 +1,6 @@
 # Session Handoff
 
-Last updated: 2026-11-02
+Last updated: 2026-11-03
 Branch: `feature/agent-proposal-flow`
 Recent commits: API/provider/withdraw series, legacy command hardening, then the local GGUF helper/profile commits. Use `git log --oneline -20`.
 
@@ -10,11 +10,12 @@ Recent commits: API/provider/withdraw series, legacy command hardening, then the
 - Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `90 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Python baseline: `103 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Export round-trips are implemented: JSON-LD/YAML/Markdown export plus reversible module parsers and tests. JSON/JSON-LD/YAML are lossless at record level; Markdown uses YAML front matter as source of truth. There is still no CLI canonical import, so the approval gate is unchanged.
 - Local GGUF helpers are tracked: `scripts/download-model.sh` downloads a checksummed Qwen 1.5B Q4_K_M file by default, and `scripts/llm-up.sh` starts the `llm` llama.cpp Compose profile with a read-only model mount. The model itself is untracked. The 1.5B file is a smoke test; the 3B file is not practical on 1 CPU.
 - The container deliverable was rebuilt and re-verified with the live OpenAI-compatible endpoint, then removed. Details and exact results are in `docs/dev/STATE.md` and `docs/dev/AUDIT.md`.
 - The 2026-11-01 API/provider/withdraw work and the legacy command hardening are committed in small atomic units.
-- Known product debt: `ingest` only copies to `inbox/`; `export` and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
+- Known product debt: `ingest` only copies to `inbox/`; exported YAML/Markdown have no CLI import path; media manifest and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
 
 ## Verified Container Run (2026-10-31)
 
@@ -60,11 +61,20 @@ Results:
 - Containers, project network, project volume and temporary Alpine image from this run were removed. The downloaded model and `storygram:local` remain.
 - The Ollama profile is now `--profile ollama`; `--profile llm` is the llama.cpp service.
 
+## Export Round-Trip Unit (2026-11-03)
+
+- `src/storygram/export.py` now provides `export_yaml`, `export_markdown`, `records_from_yaml`, `records_from_jsonld` and `records_from_markdown`.
+- `storygram export --format` accepts `json`, `jsonld`, `yaml` and `markdown`; JSON/JSON-LD output shape is unchanged.
+- YAML is a lossless sequence. JSON-LD is reversed from `@graph` nodes via `@id`/`@type` and remains a local projection. Markdown uses start/end markers, moves Episode `content.text` or `notes` into the body and records it in `storygram_body` front matter.
+- `tests/integration/test_export_roundtrip.py` covers the smallest Person case, nested Assertion values, Episode text, notes, trailing newlines, multiple records, malformed inputs and CLI output.
+- No canonical import command was added: exported records cannot bypass proposals or human approval.
+- Checks in this unit: `103 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
+
 ## Next Objective
 
 The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
 
-1. Implement real JSON-LD and YAML/Markdown round-trip export, or explicitly narrow the contract in `PRD.md`/docs.
+1. Decide whether to expose a safe import CLI for exported YAML/Markdown/JSON-LD that still goes through proposals and human approval.
 2. Add capture metadata/checksums to `ingest` while keeping `inbox/` as the only destination.
 3. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram`.
 4. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
@@ -202,7 +212,9 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 - LLM output can be envelope-valid but record-invalid; always dry-run. Never treat generation as approval.
 - The API key must stay in the environment; `.env` is gitignored and excluded from the build context.
 - `genogram` is experimental and ignores Relationship records until their schema models endpoints.
-- JSON-LD export is a minimal `@id`/`@type` projection, not a full RDF round-trip.
+- JSON-LD export is a minimal `@id`/`@type` projection, not a full RDF round-trip; `records_from_jsonld` reverses that projection only.
+- Markdown export treats YAML front matter as the source of truth; body-only edits are not re-imported.
+- There is no CLI canonical import for exported records; round-trips are library parsers plus export CLI output.
 - `ingest` never writes canonical data; review and propose separately.
 
 ## Cleanup

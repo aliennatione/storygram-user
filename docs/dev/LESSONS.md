@@ -99,3 +99,9 @@
 - A JSON-LD parser must pop `@id`/`@type` before merging the remaining node fields back, otherwise a malformed node could overwrite the canonical identity.
 - Markdown round-trip needs an explicit record marker and a `storygram_body` field. Without them, a body cannot be distinguished from ignored prose or reassigned to the right record field.
 - JSON-LD export being reversible does not make it full RDF expansion; document the projection boundary instead of implying semantic equivalence.
+- An import path must produce proposals, not canonical writes. Running the generated proposal through `plan_apply` before saving it prevents an import from creating a pending proposal that can never pass approval.
+- Evidence is checked against records already processed in the current proposal, not just canonical data. Ordering imported Episode/Source/Annotation records first makes them usable as evidence for later creates.
+- Proposal-level evidence is applied to every operation, including the capture operation itself, so it cannot be used to wire a capture that is created in the same proposal. Use operation-level evidence instead.
+- Importing an ID that already exists canonical data is a validation failure, not an upsert. Corrections still need supersession through an explicit proposal.
+- JSON export needs its own parser: the JSON list is not the same as a single record or `{records: [...]}`, but accepting all three keeps hand-edited files usable without weakening the native contract.
+- A file suffix is enough for format detection in normal use; an explicit `--format` escape hatch is still needed for exports stored with generic suffixes.

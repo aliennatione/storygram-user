@@ -10,7 +10,7 @@ Last updated: 2026-11-03
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
 - An OpenAI-compatible provider with bearer-token support was added alongside the Ollama provider.
-- The 2026-11-01 API/provider/withdraw work, the legacy command hardening and the 2026-11-02 model-quality fixes are committed in small atomic units. Only documentation updates for the model-quality unit are pending at the time of writing.
+- The 2026-11-01 API/provider/withdraw work, the legacy command hardening, the 2026-11-02 model-quality fixes and the 2026-11-03 export/import units are committed in small atomic units.
 - Python, lint, format, mypy and browser checks pass. The container image was rebuilt and exercised end-to-end with the live LLM endpoint through the host Docker socket, then removed.
 
 ## Environment
@@ -84,22 +84,23 @@ Last updated: 2026-11-03
 - `genogram` is explicitly experimental, scopes relations to `relation:*` assertions for the requested person, marks unsupported predicates and ignores unscoped Relationship records.
 - `get` and `list` now accept `--archive`, matching the documented examples.
 - New tests: `test_ingest.py` CLI coverage, `test_export.py`, `test_search.py`, `test_conflicts.py`, `test_timeline.py`, `test_genogram.py`, `test_read_cli.py`.
-- 2026-11-03 export round-trip unit: `export_yaml`, `export_markdown`, `records_from_yaml`, `records_from_jsonld` and `records_from_markdown` added in `export.py`; `export --format` now accepts `yaml` and `markdown`; existing `json`/`jsonld` output is unchanged except the added parsers. `tests/integration/test_export_roundtrip.py` covers Person, Episode and Assertion round-trips, malformed parser input and CLI output parsing. Full suite is now `103 passed`.
+- 2026-11-03 export round-trip unit: `export_yaml`, `export_markdown`, `records_from_yaml`, `records_from_jsonld` and `records_from_markdown` added in `export.py`; `export --format` now accepts `yaml` and `markdown`; existing `json`/`jsonld` output is unchanged except the added parsers. `tests/integration/test_export_roundtrip.py` covers Person, Episode and Assertion round-trips, malformed parser input and CLI output parsing.
+- 2026-11-03 safe import unit: `src/storygram/importer.py` reads JSON/JSON-LD/YAML/Markdown exports, validates every record schema, builds a create-only proposal and runs `plan_apply` before writing. `storygram import FILE` writes only `proposals/`; canonical `data/` is untouched until human approval. Imported Episode/Source/Annotation records are wired as evidence for later operations; `--evidence` supplies canonical capture IDs. `records_from_json` was added to complete the parser set. `tests/integration/test_import.py` covers all formats, pending-only writes, evidence wiring, duplicate/existing IDs, missing evidence, invalid schemas and explicit format override. Full suite is now `116 passed`.
 
 ## Active
 
 - Model-quality unit: `qwen3-4b` is the single reference model. The prompt now produces dry-run-valid proposals for Italian, English and short captures. The local 1.5B model remains a smoke test; the local 3B model was stopped after it produced no tokens in more than 25 minutes on 1 CPU.
-- Export round-trip unit is implemented and documented: JSON/JSON-LD/YAML/Markdown exports plus reversible module parsers; no CLI canonical import. The next product work units are a safe import path for exported records, capture metadata, higher-level timelines and endpoint-aware Relationship records.
+- Export round-trip unit is implemented and documented: JSON/JSON-LD/YAML/Markdown exports plus reversible module parsers.
+- Safe import unit is implemented: an export becomes a validated create-only pending proposal under `proposals/`; the human approval gate is unchanged. The next product work units are capture metadata, higher-level timelines and endpoint-aware Relationship records.
 
 ## Next Steps
 
-1. Decide whether to expose a safe import CLI for exported YAML/Markdown/JSON-LD; it must not bypass proposals, validation or human approval.
-2. Add capture metadata/checksums to `ingest` without allowing canonical writes.
-3. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram` beyond experimental.
-4. Keep approval UI/CLI-only; consider advisory (non-applying) model review later.
-5. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
-6. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
-7. Run the optional Ollama container profile only when network/time permit; it remains unverified.
+1. Add capture metadata/checksums to `ingest` without allowing canonical writes.
+2. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram` beyond experimental.
+3. Keep approval UI/CLI-only; consider advisory (non-applying) model review later.
+4. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
+5. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
+6. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
 ## Local GGUF Helpers (2026-11-02)
 
@@ -129,9 +130,20 @@ Last updated: 2026-11-03
 - Lossiness: Markdown body-only edits are ignored because the front matter is the source of truth; JSON/JSON-LD/YAML preserve record data. There is no CLI canonical import, so exported records still cannot bypass the proposal/approval gate.
 - Existing `export --format json` and `jsonld` structures are unchanged; the JSON export test remains green.
 
+## Safe Import (2026-11-03)
+
+- `storygram import FILE` accepts exported JSON, JSON-LD, YAML or Markdown; the format is inferred from the suffix or forced with `--format`.
+- It parses the export through the round-trip parsers, validates every record against its schema, rejects unknown/non-proposable types, duplicate IDs and IDs already canonical, then builds a create-only proposal with `status=proposed`.
+- The proposal is run through `plan_apply` (the same dry-run planner used by approval) before anything is written. Invalid proposals, including missing evidence, fail the import and leave no pending file.
+- Imported Episode/Source/Annotation records are ordered first and become operation-level evidence for later records; `--evidence` adds already-canonical capture IDs. Proposal-level evidence is not used because it would be evaluated before newly created records exist.
+- `import` writes only `proposals/`. It never writes `data/`, never approves and never creates a Git commit. Canonical records appear only after the normal human `proposal approve` path.
+- `--id` defaults to `proposal:import-<file-stem>`; `--title` overrides the generated title.
+- `records_from_json` was added as the missing symmetric parser for the native JSON export list; it also accepts a single record or `{records: [...]}`.
+- Tests cover JSON/JSON-LD/YAML/Markdown import, auto format detection, `--format` override for unknown suffixes, pending-only writes, approval after import, imported-Episode evidence wiring, missing evidence, invalid schema, duplicate IDs and IDs already in canonical data.
+
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest`: `103 passed`.
+- `PYTHONPATH=/data/src python -m pytest`: `116 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -180,7 +192,8 @@ Last updated: 2026-11-03
 - Working-tree cleanliness checks tracked files only, so ignored pending proposals do not block approval.
 - Pending proposals remain local and ignored by Git; only merged proposals are archived and committed.
 - `ingest` is intentionally a safe capture copy into `inbox/`; it does not add checksums or capture metadata yet.
-- `export` supports JSON, YAML, Markdown and a minimal JSON-LD projection. JSON/YAML/JSON-LD round-trip through module parsers; Markdown round-trips only through front matter, and there is no CLI import/canonical-write path yet.
+- `export` supports JSON, YAML, Markdown and a minimal JSON-LD projection. JSON/YAML/JSON-LD round-trip through module parsers; Markdown round-trips only through front matter.
+- `import` turns an export into a create-only pending proposal; it never writes canonical data. Records whose type requires evidence need either an imported Episode/Source/Annotation or `--evidence`; otherwise the import fails at validation.
 - `genogram` remains experimental until `Relationship` models endpoints and relation type.
 - `timeline` covers entity/place matches only; collection/archive-level timelines remain open.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.

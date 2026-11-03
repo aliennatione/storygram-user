@@ -164,3 +164,14 @@
 - Markdown is a set of blocks delimited by `<!-- storygram:record -->` / `<!-- /storygram:record -->` with YAML front matter and a rendered body. Episode `content.text` and record `notes` live in the body; `storygram_body` records which field was moved. The front matter is the source of truth, so body-only edits are intentionally not re-imported; the end marker keeps body trailing newlines exact.
 - Round-trip support lives in module parsers and is tested through export output. No CLI canonical import was added: imported data must still enter through proposals so the human approval gate cannot be bypassed.
 - The smallest round-trip case is a single Person; nested Assertion time objects and multiple records are covered to catch serialization regressions.
+
+## Safe Import (2026-11-03)
+
+- Import never writes canonical data. `storygram import` converts an export into a create-only pending proposal under `proposals/`; applying it still requires the normal human `proposal approve` path.
+- Every imported record is validated against its schema, and the whole generated proposal is run through `plan_apply` before the pending file is written. An export that would fail dry-run does not produce a pending proposal.
+- Only proposable record types can be imported. Proposal records are rejected, as are duplicate IDs within the export and IDs already present in canonical data.
+- Imported Episode/Source/Annotation records are ordered before dependent operations and attached as operation-level evidence. Proposal-level evidence is avoided because `plan_apply` validates it for every operation, including before a newly created capture exists.
+- `--evidence` lets the reviewer attach already-canonical capture IDs when the export contains only derived records.
+- Format is inferred from the suffix (`.json`, `.jsonld`, `.yaml`/`.yml`, `.md`/`.markdown`); `--format` overrides it for ambiguous files.
+- The proposal ID defaults to `proposal:import-<file-stem>` and is overridable. Import never auto-approves, never commits and never closes a proposal.
+- `records_from_json` completes the parser set for the native JSON export list and accepts a single record or `{records: [...]}` for hand-edited input.

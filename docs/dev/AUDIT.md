@@ -324,3 +324,25 @@ Close the JSON-LD/YAML/Markdown export round-trip gap without changing the exist
 2. Keep the front matter as the Markdown source of truth unless a reviewed editing model is introduced.
 3. Any future import path must create pending proposals or inbox captures, never canonical writes.
 4. Next product gaps: capture metadata, higher-level timelines and endpoint-aware Relationship records for genograms.
+
+## 2026-11-03 - safe import of exports
+
+### Current objective
+
+Add the smallest safe import step for exported records without bypassing proposals, validation or human approval.
+
+### Point of situation
+
+- Added `records_from_json` and a new `importer.py` that reads JSON, JSON-LD, YAML and Markdown exports.
+- Import validates each record schema, rejects non-proposable types, duplicate IDs and IDs already canonical, then runs the approval dry-run planner before writing.
+- The result is a create-only pending proposal under `proposals/`; canonical `data/` is untouched until a human approves it.
+- Imported evidence records are ordered first and attached as operation-level evidence; `--evidence` covers captures already canonical.
+- CLI: `storygram import FILE` with format inference, explicit override, proposal ID/title and JSON output.
+- Tests cover all formats, auto-detection, pending-only writes, post-import approval, evidence wiring, missing evidence, invalid schema, duplicate/existing IDs and format override.
+- Full suite `116 passed`; ruff, format, mypy and Playwright E2E pass.
+
+### Calibration
+
+1. Keep import proposal-only; never add a canonical write or auto-approval path.
+2. Keep the dry-run planner as the import precondition so pending proposals are immediately reviewable.
+3. Next product gaps: capture metadata/checksums, higher-level timelines and endpoint-aware Relationship records.

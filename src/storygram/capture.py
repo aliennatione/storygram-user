@@ -58,9 +58,11 @@ def ingest_capture(
     if existed and not overwrite:
         raise CaptureError(f"Capture already exists: {target}; use --overwrite to replace it")
 
-    inbox.mkdir(parents=True, exist_ok=True)
-    metadata_directory = inbox / CAPTURE_METADATA_DIRNAME
-    metadata_directory.mkdir(parents=True, exist_ok=True)
+    try:
+        inbox.mkdir(parents=True, exist_ok=True)
+        (inbox / CAPTURE_METADATA_DIRNAME).mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise CaptureError(f"Cannot prepare inbox for {source}: {exc}") from exc
     sidecar = metadata_path(root, source.name)
 
     temporary_target = target.with_name(f".{target.name}.tmp-{os.getpid()}")

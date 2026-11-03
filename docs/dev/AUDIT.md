@@ -360,6 +360,7 @@ Add capture metadata/checksums to `ingest` while keeping `inbox/` as the only de
 - Capture and sidecar use same-directory temp files and `os.replace`; a failed sidecar move removes the newly replaced capture and stale sidecar.
 - `ingest episode` now supports `--json`; plain output reports size, checksum and the sidecar path.
 - Refused overwrites keep both the original capture and metadata; accepted overwrites refresh both.
+- Inbox or metadata-directory preparation failures are wrapped in `CaptureError` with the source path.
 - No canonical record, proposal or Git commit is created by ingestion.
 - Tests cover checksum/size/MIME, binary content, JSON output, overwrite refresh and refused-overwrite preservation.
 - Full suite `121 passed`; ruff, format, mypy and Playwright E2E pass.

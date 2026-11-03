@@ -88,6 +88,7 @@ Results:
 - Sidecar format `storygram.capture/1` records filename, byte size, guessed MIME type, SHA-256 checksum object, `ingested_at` and `overwritten`.
 - Capture and sidecar are written to temp files and moved with `os.replace`; a failed metadata write removes a newly replaced capture and any stale sidecar.
 - `ingest episode` gained `--json`. Plain output reports size, checksum and sidecar path.
+- Inbox or metadata-directory preparation failures raise `CaptureError` with context instead of an unhandled traceback.
 - `inbox/` remains the only destination; canonical `data/` is untouched. A sidecar is not a canonical Episode and does not confirm any fact.
 - Tests cover checksum/size/MIME, binary content, JSON output, overwrite refresh and refused-overwrite preservation.
 - Checks in this unit: `121 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.

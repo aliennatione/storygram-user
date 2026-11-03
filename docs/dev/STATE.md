@@ -5,7 +5,7 @@ Last updated: 2026-11-03
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), then checksummed capture metadata (`9e143df`); see `git log --oneline -20`.
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), then checksummed capture metadata (`9e143df`) and its inbox error-handling fix (`23ea61b`); see `git log --oneline -20`.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
@@ -150,6 +150,7 @@ Last updated: 2026-11-03
 - A refused overwrite (`--overwrite` absent) leaves both the original capture and its sidecar untouched. An accepted overwrite refreshes the checksum and sets `overwritten: true`.
 - `ingest episode --json` returns the metadata plus the capture and sidecar paths.
 - `inbox/` remains the only destination: no canonical `data/` record, proposal or commit is created.
+- Inbox or metadata-directory preparation failures are reported as `CaptureError` instead of leaking a traceback.
 - MIME type is a best-effort guess from the filename and can be `null`.
 
 ## Checks

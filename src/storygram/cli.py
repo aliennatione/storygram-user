@@ -318,6 +318,55 @@ def export(fmt: str, visibility: tuple[str, ...], archive_path: str | None, as_j
         _emit(result, as_json)
 
 
+@main.command(name="import")
+@click.argument("file", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "jsonld", "yaml", "markdown"]),
+    default=None,
+    help="Export format; inferred from the file suffix when omitted",
+)
+@click.option("--id", "proposal_id", default=None, help="Pending proposal ID")
+@click.option("--title", default=None, help="Pending proposal title")
+@click.option(
+    "--evidence",
+    multiple=True,
+    help="Canonical Episode/Source/Annotation ID used as evidence for imported records",
+)
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--json", "as_json", is_flag=True)
+def import_cmd(
+    file: str,
+    fmt: str | None,
+    proposal_id: str | None,
+    title: str | None,
+    evidence: tuple[str, ...],
+    archive_path: str | None,
+    as_json: bool,
+) -> None:
+    """Import an export as a pending proposal without writing canonical data."""
+    from . import importer
+
+    try:
+        result = importer.import_records(
+            _root(archive_path),
+            Path(file),
+            fmt=fmt,
+            proposal_id=proposal_id,
+            title=title,
+            evidence=list(evidence),
+        )
+    except importer.ImportError as exc:
+        _fail(str(exc), as_json)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+    click.echo(f"Imported {result['records']} record(s) into {result['proposal_id']}")
+    click.echo(f"Pending proposal: {result['path']}")
+    click.echo(f"Next: storygram proposal approve {result['proposal_id']} --dry-run")
+
+
 @main.command()
 @click.option("--host", default="0.0.0.0", show_default=True)
 @click.option("--port", default=8080, type=int, show_default=True)

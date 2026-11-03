@@ -5,12 +5,12 @@ Last updated: 2026-11-03
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helper/profile commits, then prompt hardening and the `_new_record_path` crash fix (`157d313`, `186f700`, `a42249d`, `68089a6`); see `git log --oneline -20`.
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), then checksummed capture metadata (`9e143df`); see `git log --oneline -20`.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
 - An OpenAI-compatible provider with bearer-token support was added alongside the Ollama provider.
-- The 2026-11-01 API/provider/withdraw work, the legacy command hardening, the 2026-11-02 model-quality fixes and the 2026-11-03 export/import units are committed in small atomic units.
+- The 2026-11-01 API/provider/withdraw work, the legacy command hardening, the 2026-11-02 model-quality fixes and the 2026-11-03 export/import/capture units are committed in small atomic units.
 - Python, lint, format, mypy and browser checks pass. The container image was rebuilt and exercised end-to-end with the live LLM endpoint through the host Docker socket, then removed.
 
 ## Environment
@@ -86,21 +86,21 @@ Last updated: 2026-11-03
 - New tests: `test_ingest.py` CLI coverage, `test_export.py`, `test_search.py`, `test_conflicts.py`, `test_timeline.py`, `test_genogram.py`, `test_read_cli.py`.
 - 2026-11-03 export round-trip unit: `export_yaml`, `export_markdown`, `records_from_yaml`, `records_from_jsonld` and `records_from_markdown` added in `export.py`; `export --format` now accepts `yaml` and `markdown`; existing `json`/`jsonld` output is unchanged except the added parsers. `tests/integration/test_export_roundtrip.py` covers Person, Episode and Assertion round-trips, malformed parser input and CLI output parsing.
 - 2026-11-03 safe import unit: `src/storygram/importer.py` reads JSON/JSON-LD/YAML/Markdown exports, validates every record schema, builds a create-only proposal and runs `plan_apply` before writing. `storygram import FILE` writes only `proposals/`; canonical `data/` is untouched until human approval. Imported Episode/Source/Annotation records are wired as evidence for later operations; `--evidence` supplies canonical capture IDs. `records_from_json` was added to complete the parser set. `tests/integration/test_import.py` covers all formats, pending-only writes, evidence wiring, duplicate/existing IDs, missing evidence, invalid schemas and explicit format override. Full suite is now `116 passed`.
+- 2026-11-03 capture metadata unit: `src/storygram/capture.py` streams the capture into `inbox/` while computing SHA-256 and writes `inbox/.storygram/<filename>.json` with format `storygram.capture/1`, size, MIME type, checksum, `ingested_at` and `overwritten`. Capture and sidecar are written through same-directory temp files and `os.replace`; `--json` exposes the metadata. `tests/integration/test_ingest.py` covers checksums, binary content, JSON output, overwrite refresh and refused-overwrite preservation. Full suite is now `121 passed`.
 
 ## Active
 
 - Model-quality unit: `qwen3-4b` is the single reference model. The prompt now produces dry-run-valid proposals for Italian, English and short captures. The local 1.5B model remains a smoke test; the local 3B model was stopped after it produced no tokens in more than 25 minutes on 1 CPU.
 - Export round-trip unit is implemented and documented: JSON/JSON-LD/YAML/Markdown exports plus reversible module parsers.
-- Safe import unit is implemented: an export becomes a validated create-only pending proposal under `proposals/`; the human approval gate is unchanged. The next product work units are capture metadata, higher-level timelines and endpoint-aware Relationship records.
+- Safe import and capture metadata are implemented: an export becomes a validated create-only pending proposal, and `ingest` writes a checksummed inbox sidecar. The next product work units are higher-level timelines and endpoint-aware Relationship records.
 
 ## Next Steps
 
-1. Add capture metadata/checksums to `ingest` without allowing canonical writes.
-2. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram` beyond experimental.
-3. Keep approval UI/CLI-only; consider advisory (non-applying) model review later.
-4. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
-5. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
-6. Run the optional Ollama container profile only when network/time permit; it remains unverified.
+1. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram` beyond experimental.
+2. Keep approval UI/CLI-only; consider advisory (non-applying) model review later.
+3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
+4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
+5. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
 ## Local GGUF Helpers (2026-11-02)
 
@@ -141,9 +141,20 @@ Last updated: 2026-11-03
 - `records_from_json` was added as the missing symmetric parser for the native JSON export list; it also accepts a single record or `{records: [...]}`.
 - Tests cover JSON/JSON-LD/YAML/Markdown import, auto format detection, `--format` override for unknown suffixes, pending-only writes, approval after import, imported-Episode evidence wiring, missing evidence, invalid schema, duplicate IDs and IDs already in canonical data.
 
+## Capture Metadata (2026-11-03)
+
+- `src/storygram/capture.py` computes SHA-256 while streaming the source into a temp file, so the metadata describes the exact copied bytes without a second read.
+- Sidecar path: `inbox/.storygram/<filename>.json`; format identifier `storygram.capture/1`.
+- Fields: `filename`, `size`, `mime_type`, `checksum {algorithm: sha256, value}`, `ingested_at`, `overwritten`.
+- The capture and sidecar are moved into place with `os.replace`; if the metadata replace fails after the capture replace, the new capture and stale sidecar are removed and the command fails.
+- A refused overwrite (`--overwrite` absent) leaves both the original capture and its sidecar untouched. An accepted overwrite refreshes the checksum and sets `overwritten: true`.
+- `ingest episode --json` returns the metadata plus the capture and sidecar paths.
+- `inbox/` remains the only destination: no canonical `data/` record, proposal or commit is created.
+- MIME type is a best-effort guess from the filename and can be `null`.
+
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest`: `116 passed`.
+- `PYTHONPATH=/data/src python -m pytest`: `121 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -157,6 +168,7 @@ Last updated: 2026-11-03
 - In-container API withdraw: `200`; repeated withdraw: `409`.
 - Restart and `down`/`up` persistence: pending proposal survived.
 - Legacy CLI tests: ingest, export, search/rebuild, conflicts, timeline, genogram and read commands all pass.
+- Capture smoke test: `init` + `ingest episode --json` wrote `inbox/sample.txt` and `inbox/.storygram/sample.txt.json`, checksum matched the content, and `data/` contained 0 files.
 - Test container, network, volume, image, temp archives and ephemeral env file were removed.
 - `sh -n scripts/download-model.sh scripts/llm-up.sh`: passed.
 - `docker compose config` and `docker compose --profile llm config`: passed.
@@ -191,7 +203,8 @@ Last updated: 2026-11-03
 - Conflict detection is deliberately conservative and year-based; it is not a complete temporal reasoner.
 - Working-tree cleanliness checks tracked files only, so ignored pending proposals do not block approval.
 - Pending proposals remain local and ignored by Git; only merged proposals are archived and committed.
-- `ingest` is intentionally a safe capture copy into `inbox/`; it does not add checksums or capture metadata yet.
+- `ingest` writes a local `storygram.capture/1` sidecar with SHA-256, size, MIME type and timestamps under `inbox/.storygram/`. The sidecar is not a canonical Episode and is not validated by the record registry.
+- Capture MIME type is best-effort via Python `mimetypes`; unknown types are recorded as `null`.
 - `export` supports JSON, YAML, Markdown and a minimal JSON-LD projection. JSON/YAML/JSON-LD round-trip through module parsers; Markdown round-trips only through front matter.
 - `import` turns an export into a create-only pending proposal; it never writes canonical data. Records whose type requires evidence need either an imported Episode/Source/Annotation or `--evidence`; otherwise the import fails at validation.
 - `genogram` remains experimental until `Relationship` models endpoints and relation type.

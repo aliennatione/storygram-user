@@ -346,3 +346,26 @@ Add the smallest safe import step for exported records without bypassing proposa
 1. Keep import proposal-only; never add a canonical write or auto-approval path.
 2. Keep the dry-run planner as the import precondition so pending proposals are immediately reviewable.
 3. Next product gaps: capture metadata/checksums, higher-level timelines and endpoint-aware Relationship records.
+
+## 2026-11-03 - capture metadata and checksums
+
+### Current objective
+
+Add capture metadata/checksums to `ingest` while keeping `inbox/` as the only destination and preserving the human approval gate.
+
+### Point of situation
+
+- Added `src/storygram/capture.py`: streams the capture to a temp file while computing SHA-256, preserves source stat metadata, then moves the capture into `inbox/`.
+- Writes a versioned sidecar at `inbox/.storygram/<filename>.json` with filename, size, best-effort MIME type, SHA-256, `ingested_at` and `overwritten`.
+- Capture and sidecar use same-directory temp files and `os.replace`; a failed sidecar move removes the newly replaced capture and stale sidecar.
+- `ingest episode` now supports `--json`; plain output reports size, checksum and the sidecar path.
+- Refused overwrites keep both the original capture and metadata; accepted overwrites refresh both.
+- No canonical record, proposal or Git commit is created by ingestion.
+- Tests cover checksum/size/MIME, binary content, JSON output, overwrite refresh and refused-overwrite preservation.
+- Full suite `121 passed`; ruff, format, mypy and Playwright E2E pass.
+
+### Calibration
+
+1. Keep capture metadata in `inbox/`; never write it under `data/`.
+2. Do not treat a sidecar as a canonical Episode or as evidence until a reviewed proposal says so.
+3. Next product gaps: higher-level timelines and endpoint-aware Relationship records.

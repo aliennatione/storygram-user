@@ -105,3 +105,9 @@
 - Importing an ID that already exists canonical data is a validation failure, not an upsert. Corrections still need supersession through an explicit proposal.
 - JSON export needs its own parser: the JSON list is not the same as a single record or `{records: [...]}`, but accepting all three keeps hand-edited files usable without weakening the native contract.
 - A file suffix is enough for format detection in normal use; an explicit `--format` escape hatch is still needed for exports stored with generic suffixes.
+- Compute capture checksums during the copy stream. Hashing the source separately can describe bytes that were not the ones copied, and hashing the destination afterwards adds an unnecessary second read.
+- Keep capture metadata inside `inbox/` (for example `inbox/.storygram/`) so it is ignored by Git with the rest of the unreviewed captures and cannot be mistaken for canonical data.
+- Capture metadata is not a canonical Episode. Adding a checksum sidecar must not bypass the proposal/validation/approval path.
+- Write capture and sidecar through temp files and `os.replace`; if the sidecar replace fails after the capture replace, remove the new capture and stale sidecar so the archive does not keep mismatched metadata.
+- A refused overwrite must preserve the original metadata as well as the original bytes; a successful overwrite must refresh both and record `overwritten: true`.
+- Best-effort MIME detection from a filename is useful metadata but not a contract; store `null` when unknown instead of guessing or rejecting the capture.

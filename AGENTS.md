@@ -4,7 +4,7 @@
 
 Storygram is a local-first, file-based archive for life stories. `PRD.md` is the product source of truth; `PLAN.md` is the milestone/status map. The core must stay deterministic and usable offline without an LLM.
 
-Current state: functional MVP for proposals, validation, local web review and optional Ollama or OpenAI-compatible generation. The proposal path is tested end-to-end and the container deliverable is runtime-verified through the host Docker socket. Legacy commands are hardened and CLI-tested: `ingest episode` is inbox-only, export/search/rebuild/timeline/conflicts are deterministic, and genogram remains experimental. JSON-LD/YAML/Markdown round-trips are implemented, and `import` turns an export into a create-only pending proposal without writing canonical data. Higher-level timelines and capture checksums remain incomplete. Verify a command before documenting it as working.
+Current state: functional MVP for proposals, validation, local web review and optional Ollama or OpenAI-compatible generation. The proposal path is tested end-to-end and the container deliverable is runtime-verified through the host Docker socket. Legacy commands are hardened and CLI-tested: `ingest episode` is inbox-only, export/search/rebuild/timeline/conflicts are deterministic, and genogram remains experimental. JSON-LD/YAML/Markdown round-trips are implemented, `import` turns an export into a create-only pending proposal without writing canonical data, and `ingest` writes checksummed capture metadata under `inbox/.storygram/`. Higher-level timelines remain incomplete. Verify a command before documenting it as working.
 
 Durable context, in order:
 1. `AGENTS.md` - workflow and environment rules.
@@ -52,7 +52,7 @@ npm run test:e2e
 
 - Prefer `PYTHONPATH=/data/src python -m storygram ...` until the package is installed.
 - `npm run test:e2e` uses Node Playwright with `/usr/bin/chromium`; Python Playwright is not musllinux-compatible.
-- Current baseline: `116 passed`, ruff/format/mypy clean, Playwright edit/approve/reject flow passing.
+- Current baseline: `121 passed`, ruff/format/mypy clean, Playwright edit/approve/reject flow passing.
 - Never claim a check passed unless it actually ran in this environment.
 
 ## Docker from the Host Socket
@@ -70,7 +70,7 @@ Read `docs/dev/HANDOFF.md` before the first Docker command. Key rules:
 
 ## Repository Map
 
-- `src/storygram/`: `cli.py`, `web.py`, `proposals.py`, `llm.py`, `registry.py`, `validate.py`, `models.py`, `index.py`, `gitcheck.py`, `bitemporal.py`, `conflicts.py`, `export.py`, `importer.py`, `timeline.py`, `genogram.py`.
+- `src/storygram/`: `cli.py`, `web.py`, `proposals.py`, `llm.py`, `registry.py`, `validate.py`, `models.py`, `index.py`, `gitcheck.py`, `bitemporal.py`, `conflicts.py`, `export.py`, `importer.py`, `capture.py`, `timeline.py`, `genogram.py`.
 - `schema/`: canonical JSON Schemas. Root-level `*.schema.json` duplicates must stay byte-identical with `schema/`.
 - `data/`: canonical reviewed records only; currently empty.
 - `proposals/`: local pending proposals, gitignored. `data/proposals/` is the committed merged archive.
@@ -87,7 +87,7 @@ Read `docs/dev/HANDOFF.md` before the first Docker command. Key rules:
 - Proposal approval is atomic, creates one scoped Git commit by default, supports `--dry-run` and `--no-commit`.
 - The web UI supports create, edit pending proposals, Generate, dry-run, approve and reject.
 - JSON API supports `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`, `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject` and `POST /api/proposals/<id>/withdraw`; there is intentionally no approve endpoint.
-- `ingest episode` only copies into `inbox/`; `import` creates a validated create-only pending proposal from an export and never writes canonical data; `export`, `search`, `rebuild`, `timeline` and `conflicts` have focused CLI tests; `genogram` is experimental and requires endpoint-aware Relationship records.
+- `ingest episode` only copies into `inbox/` and writes a SHA-256 capture sidecar; `import` creates a validated create-only pending proposal from an export and never writes canonical data; `export`, `search`, `rebuild`, `timeline` and `conflicts` have focused CLI tests; `genogram` is experimental and requires endpoint-aware Relationship records.
 - `init` copies all 15 schemas through the registry and supports `$STORYGRAM_SCHEMA_DIR`.
 
 ## Domain Invariants

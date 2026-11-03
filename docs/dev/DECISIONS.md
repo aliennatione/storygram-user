@@ -175,3 +175,14 @@
 - Format is inferred from the suffix (`.json`, `.jsonld`, `.yaml`/`.yml`, `.md`/`.markdown`); `--format` overrides it for ambiguous files.
 - The proposal ID defaults to `proposal:import-<file-stem>` and is overridable. Import never auto-approves, never commits and never closes a proposal.
 - `records_from_json` completes the parser set for the native JSON export list and accepts a single record or `{records: [...]}` for hand-edited input.
+
+## Capture Metadata (2026-11-03)
+
+- `ingest episode` remains inbox-only. Capture metadata is a hidden sidecar under `inbox/.storygram/`, not a canonical record and not an Episode.
+- The checksum is computed while streaming the source into a temp capture, so it describes the exact bytes that are moved into `inbox/` without reading the source twice.
+- Sidecars use the versioned format identifier `storygram.capture/1` with filename, byte size, best-effort MIME type, SHA-256, `ingested_at` and `overwritten`. No absolute host paths are stored.
+- Capture and sidecar are written to same-directory temp files and moved with `os.replace`. If metadata cannot be moved into place after the capture, the new capture and any stale sidecar are removed and the command fails.
+- A refused overwrite leaves both the capture and its metadata unchanged. `--overwrite` refreshes both and records `overwritten: true`.
+- `--json` makes the metadata machine-readable; plain output reports size, checksum and sidecar path.
+- The sidecar is deliberately not registered as a canonical schema/type. Capture metadata supports later review; it does not confirm facts or write canonical data.
+- MIME type is best-effort from the filename and may be `null`; it is informational, not a validation gate.

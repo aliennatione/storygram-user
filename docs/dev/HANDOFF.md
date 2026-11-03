@@ -10,13 +10,13 @@ Recent commits: API/provider/withdraw series, legacy command hardening, then the
 - Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `116 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Python baseline: `121 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
 - Export round-trips are implemented: JSON-LD/YAML/Markdown export plus reversible module parsers and tests. JSON/JSON-LD/YAML are lossless at record level; Markdown uses YAML front matter as source of truth.
 - Safe import is implemented: `storygram import FILE` wraps JSON/JSON-LD/YAML/Markdown exports in a schema-validated, create-only pending proposal. It runs the approval dry-run planner before writing and touches only `proposals/`; canonical data still requires human approval.
 - Local GGUF helpers are tracked: `scripts/download-model.sh` downloads a checksummed Qwen 1.5B Q4_K_M file by default, and `scripts/llm-up.sh` starts the `llm` llama.cpp Compose profile with a read-only model mount. The model itself is untracked. The 1.5B file is a smoke test; the 3B file is not practical on 1 CPU.
 - The container deliverable was rebuilt and re-verified with the live OpenAI-compatible endpoint, then removed. Details and exact results are in `docs/dev/STATE.md` and `docs/dev/AUDIT.md`.
 - The 2026-11-01 API/provider/withdraw work and the legacy command hardening are committed in small atomic units.
-- Known product debt: `ingest` only copies to `inbox/` and has no capture checksums/metadata yet; media manifest and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
+- Known product debt: media manifest and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
 
 ## Verified Container Run (2026-10-31)
 
@@ -82,15 +82,24 @@ Results:
 - Tests: `tests/integration/test_import.py` covers all formats, pending-only writes, post-import approval, evidence wiring, missing evidence, invalid schema, duplicate/existing IDs and format override.
 - Checks in this unit: `116 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
 
+## Capture Metadata Unit (2026-11-03)
+
+- `src/storygram/capture.py` copies the capture with a streaming SHA-256 (no second read) and writes `inbox/.storygram/<filename>.json`.
+- Sidecar format `storygram.capture/1` records filename, byte size, guessed MIME type, SHA-256 checksum object, `ingested_at` and `overwritten`.
+- Capture and sidecar are written to temp files and moved with `os.replace`; a failed metadata write removes a newly replaced capture and any stale sidecar.
+- `ingest episode` gained `--json`. Plain output reports size, checksum and sidecar path.
+- `inbox/` remains the only destination; canonical `data/` is untouched. A sidecar is not a canonical Episode and does not confirm any fact.
+- Tests cover checksum/size/MIME, binary content, JSON output, overwrite refresh and refused-overwrite preservation.
+- Checks in this unit: `121 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
+
 ## Next Objective
 
 The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
 
-1. Add capture metadata/checksums to `ingest` while keeping `inbox/` as the only destination.
-2. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram`.
-3. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
-4. Keep the local GGUF helpers honest: they wire inference only. The 1.5B model is a smoke test, the 3B model is impractical on 1 CPU, and qwen3-4b is the single quality reference. Always dry-run generated proposals.
-5. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
+1. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram`.
+2. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
+3. Keep the local GGUF helpers honest: they wire inference only. The 1.5B model is a smoke test, the 3B model is impractical on 1 CPU, and qwen3-4b is the single quality reference. Always dry-run generated proposals.
+4. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
 
 ## Environment Check
 
@@ -227,7 +236,8 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 - Markdown export treats YAML front matter as the source of truth; body-only edits are not re-imported.
 - `import` only creates pending proposals; it never writes canonical data. Records that require evidence fail the import unless an imported capture or `--evidence` is supplied.
 - Imported evidence records are placed before dependent operations, because `plan_apply` checks evidence against records already created earlier in the same proposal.
-- `ingest` never writes canonical data; review and propose separately.
+- `ingest` writes only the raw capture plus `inbox/.storygram/<filename>.json`; the sidecar is local metadata, not a canonical Episode. Review and propose separately.
+- Capture sidecars are overwritten together with the capture only when `--overwrite` is explicit; a refused overwrite leaves both the capture and its metadata unchanged.
 
 ## Cleanup
 

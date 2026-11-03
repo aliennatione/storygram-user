@@ -286,7 +286,12 @@ def conflicts(status: str | None, archive_path: str | None, as_json: bool) -> No
 
 
 @main.command()
-@click.option("--format", "fmt", type=click.Choice(["json", "jsonld"]), default="json")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "jsonld", "yaml", "markdown"]),
+    default="json",
+)
 @click.option("--visibility", multiple=True, help="Only export these visibility values")
 @click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--json", "as_json", is_flag=True)
@@ -297,14 +302,20 @@ def export(fmt: str, visibility: tuple[str, ...], archive_path: str | None, as_j
     filters = set(visibility) if visibility else None
     root = _root(archive_path)
     try:
-        result = (
-            export_mod.export_jsonld(root, filters)
-            if fmt == "jsonld"
-            else export_mod.export_json(root, filters)
-        )
+        if fmt == "jsonld":
+            result: Any = export_mod.export_jsonld(root, filters)
+        elif fmt == "yaml":
+            result = export_mod.export_yaml(root, filters)
+        elif fmt == "markdown":
+            result = export_mod.export_markdown(root, filters)
+        else:
+            result = export_mod.export_json(root, filters)
     except export_mod.ExportError as exc:
         _fail(str(exc), as_json)
-    _emit(result, as_json)
+    if fmt in {"yaml", "markdown"}:
+        click.echo(result)
+    else:
+        _emit(result, as_json)
 
 
 @main.command()

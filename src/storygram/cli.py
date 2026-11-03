@@ -138,20 +138,27 @@ def ingest() -> None:
 @click.argument("file", type=click.Path(exists=True, dir_okay=False))
 @click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--overwrite", is_flag=True, help="Replace an existing capture with the same name")
-def ingest_episode(file: str, archive_path: str | None, overwrite: bool) -> None:
+@click.option("--json", "as_json", is_flag=True)
+def ingest_episode(file: str, archive_path: str | None, overwrite: bool, as_json: bool) -> None:
     """Copy an episode capture into inbox/ for later review.
 
-    Ingestion never writes canonical data and never confirms assertions.
+    Ingestion writes a checksummed metadata sidecar under inbox/.storygram/ and
+    never writes canonical data or confirms assertions.
     """
-    root = _root(archive_path)
-    source = Path(file)
-    destination = root / "inbox"
-    destination.mkdir(parents=True, exist_ok=True)
-    target = destination / source.name
-    if target.exists() and not overwrite:
-        _fail(f"Capture already exists: {target}; use --overwrite to replace it")
-    shutil.copy2(source, target)
-    click.echo(f"Ingested {source.name} to {destination}")
+    from . import capture
+
+    try:
+        result = capture.ingest_capture(_root(archive_path), Path(file), overwrite=overwrite)
+    except capture.CaptureError as exc:
+        _fail(str(exc), as_json)
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+    click.echo(
+        f"Ingested {result['filename']} to {Path(result['path']).parent} "
+        f"({result['size']} bytes, sha256 {result['checksum']['value']})"
+    )
+    click.echo(f"Capture metadata: {result['metadata_path']}")
 
 
 def _canonical_records(root: Path) -> list[dict[str, Any]]:

@@ -186,3 +186,14 @@
 - `--json` makes the metadata machine-readable; plain output reports size, checksum and sidecar path.
 - The sidecar is deliberately not registered as a canonical schema/type. Capture metadata supports later review; it does not confirm facts or write canonical data.
 - MIME type is best-effort from the filename and may be `null`; it is informational, not a validation gate.
+
+## Relationship Endpoints (2026-11-04)
+
+- A Relationship now models an optional endpoint triple: `subject`, `predicate` (`relation:*`) and `object`. This reuses the Assertion vocabulary so genogram code and reviewers do not need a second relation language.
+- The fields are optional but all-or-nothing. A record with any endpoint field must provide all three. This keeps bare legacy Relationship records valid while preventing half-modelled links.
+- Relationship remains a distinct canonical type rather than being folded into Assertion: it can be referenced as an entity, while Assertions remain propositions about entities, events or relationships.
+- `genogram` now reads complete Relationship records and `relation:*` assertions. It scopes both to the requested person, skips closed relations and warns about unsupported predicates and incomplete Relationship records.
+- Output keeps the existing `assertion_id` key for assertions, adds `relationship_id` for Relationship records, and always includes `record_id` and `record_type`. This preserves existing consumers while making the source explicit.
+- Genogram stays experimental. Endpoint modelling is a prerequisite, not a promotion: duplicate representations, temporal validity and real-fixture review remain open.
+- Generation continues to prefer Assertions. The prompt no longer states that Relationship has no endpoints, but still forbids model-generated Relationship records to keep the proposal path conservative.
+- This is a read-only product increment: no canonical write, proposal, approval or commit behavior changed.

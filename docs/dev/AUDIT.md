@@ -370,3 +370,28 @@ Add capture metadata/checksums to `ingest` while keeping `inbox/` as the only de
 1. Keep capture metadata in `inbox/`; never write it under `data/`.
 2. Do not treat a sidecar as a canonical Episode or as evidence until a reviewed proposal says so.
 3. Next product gaps: higher-level timelines and endpoint-aware Relationship records.
+
+## 2026-11-04 - endpoint-aware Relationship records
+
+### Current objective
+
+Close the Relationship endpoint gap that blocks a real genogram, without changing the human approval gate or writing canonical data.
+
+### Point of situation
+
+- `Relationship` previously carried only common metadata, so genogram could only use `relation:*` assertions and warned that every Relationship record was ignored.
+- The schema now models an optional `subject`/`predicate`/`object` triple. The fields are all-or-nothing: any endpoint field requires all three, while bare legacy records remain valid.
+- The root and `schema/` copies of `relationship.schema.json` are byte-identical.
+- `models.Relationship` mirrors the optional fields; validation remains schema-driven.
+- `genogram` now reads complete Relationship records and `relation:*` assertions, scopes both to the requested person, skips closed relations and warns on incomplete endpoints.
+- Output preserves `assertion_id` for assertions and adds `relationship_id`, `record_id` and `record_type`.
+- Generation still prefers Assertions; the prompt no longer claims Relationship lacks endpoints.
+- Tests cover endpoint validation, complete/incomplete Relationship records, person scoping, closed relations and the CLI warning path.
+- Full suite is `124 passed`; ruff, format, mypy and Playwright E2E pass.
+- No canonical write path, proposal flow, approval gate or commit behavior changed.
+
+### Calibration
+
+1. Keep Relationship endpoints optional-but-complete so existing archives do not break while new records are fully modelled.
+2. Keep genogram experimental until duplicate representations and temporal validity are reviewed against real fixtures.
+3. Next product gap: collection/archive-level timelines; place timelines already work through object-side assertion matches.

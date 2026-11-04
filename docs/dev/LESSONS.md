@@ -111,3 +111,9 @@
 - Write capture and sidecar through temp files and `os.replace`; if the sidecar replace fails after the capture replace, remove the new capture and stale sidecar so the archive does not keep mismatched metadata.
 - A refused overwrite must preserve the original metadata as well as the original bytes; a successful overwrite must refresh both and record `overwritten: true`.
 - Best-effort MIME detection from a filename is useful metadata but not a contract; store `null` when unknown instead of guessing or rejecting the capture.
+- A Relationship endpoint triple should be all-or-nothing. Optional fields keep legacy records valid, but a JSON Schema `if`/`then` must reject records that provide only one or two of `subject`, `predicate` and `object`.
+- Reusing `subject`/`predicate`/`object` for Relationship keeps the relation vocabulary consistent with Assertions, but output must still identify the source record type because both can describe the same link.
+- Genogram must scope Relationship records to the requested person just like assertions; otherwise adding endpoints silently returns every relationship in the archive.
+- Closed relations need filtering in genogram too. Adding relationship support without `superseded`/`archived`/`rejected` filtering would regress the same invariant already fixed for timelines.
+- Preserve existing genogram keys such as `assertion_id` when adding Relationship support; add `record_id`/`record_type` and a type-specific key instead of breaking consumers.
+- When a schema gains a capability, remove stale prompt text that says the capability is missing, even if the conservative generation guard remains.

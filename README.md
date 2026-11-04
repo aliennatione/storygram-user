@@ -80,7 +80,7 @@ These commands are deterministic and offline, but some remain narrower than `PRD
 - `storygram search QUERY [--archive PATH] [--rebuild]` matches exact IDs and types first, then indexed content. The index refreshes when canonical files change.
 - `storygram conflicts [--status VALUE] [--archive PATH]` merges explicit Conflict records with assertion-derived contradictions, deduplicates pairs and includes both assertions plus evidence.
 - `storygram timeline ID [--archive PATH]` excludes superseded, archived and rejected assertions, sorts by valid-time start and includes evidence fields.
-- `storygram genogram ID [--archive PATH]` is experimental: it uses `relation:*` assertions, marks unsupported predicates and ignores Relationship records until the schema models their endpoints.
+- `storygram genogram ID [--archive PATH]` is experimental: it reads `relation:*` assertions and endpoint-aware Relationship records, marks unsupported predicates and warns about Relationship records without complete endpoints.
 
 `validate`, `get`, `list` and `git-check` remain the stable read and validation surface.
 

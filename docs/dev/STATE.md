@@ -1,11 +1,11 @@
 # Current State
 
-Last updated: 2026-11-03
+Last updated: 2026-11-04
 
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), then checksummed capture metadata (`9e143df`) and its inbox error-handling fix (`23ea61b`); see `git log --oneline -20`.
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support on 2026-11-04; see `git log --oneline -20`.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
@@ -92,12 +92,13 @@ Last updated: 2026-11-03
 
 - Model-quality unit: `qwen3-4b` is the single reference model. The prompt now produces dry-run-valid proposals for Italian, English and short captures. The local 1.5B model remains a smoke test; the local 3B model was stopped after it produced no tokens in more than 25 minutes on 1 CPU.
 - Export round-trip unit is implemented and documented: JSON/JSON-LD/YAML/Markdown exports plus reversible module parsers.
-- Safe import and capture metadata are implemented: an export becomes a validated create-only pending proposal, and `ingest` writes a checksummed inbox sidecar. The next product work units are higher-level timelines and endpoint-aware Relationship records.
+- Safe import and capture metadata are implemented: an export becomes a validated create-only pending proposal, and `ingest` writes a checksummed inbox sidecar.
+- Relationship records now model optional `subject`/`predicate`/`object` endpoint triples, and `genogram` reads complete Relationship records as well as `relation:*` assertions. The next product work unit is higher-level place/collection/archive timelines.
 
 ## Next Steps
 
-1. Extend timelines to place/collection/archive level and model Relationship endpoints before promoting `genogram` beyond experimental.
-2. Keep approval UI/CLI-only; consider advisory (non-applying) model review later.
+1. Extend timelines to collection/archive level (place timelines already match assertions whose object is the place).
+2. Keep `genogram` experimental until the endpoint-aware output is reviewed against real fixtures; keep approval UI/CLI-only and consider advisory (non-applying) model review later.
 3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
 4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
 5. Run the optional Ollama container profile only when network/time permit; it remains unverified.
@@ -153,9 +154,20 @@ Last updated: 2026-11-03
 - Inbox or metadata-directory preparation failures are reported as `CaptureError` instead of leaking a traceback.
 - MIME type is a best-effort guess from the filename and can be `null`.
 
+## Relationship Endpoints (2026-11-04)
+
+- `schema/relationship.schema.json` and its root duplicate now model an optional endpoint triple: `subject`, `predicate` (`relation:*`) and `object`.
+- The triple is all-or-nothing: a Relationship with any endpoint field must provide all three. Bare legacy Relationship records remain schema-valid, so existing archives are not broken by the upgrade.
+- `models.Relationship` mirrors the new optional fields; schema validation remains the authoritative gate.
+- `genogram` reads complete Relationship records and `relation:*` assertions, scopes both to the requested person, marks unsupported predicates and warns about incomplete Relationship records instead of ignoring all Relationship records.
+- Closed relations (`superseded`, `archived`, `rejected`) are skipped for both record kinds. Output keeps `assertion_id` for assertions, adds `relationship_id` for Relationships, and always includes `record_id`/`record_type`.
+- Generation still prefers Assertions; the prompt no longer claims the schema has no endpoints but keeps the `NEVER create Relationship records` guard for model output.
+- This unit is read-only for canonical data: no ingestion, proposal, approval or commit behavior changed.
+- Tests cover endpoint validation, complete/incomplete Relationship records, person scoping, closed relations and the CLI warning path. Full suite is now `124 passed`.
+
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest`: `121 passed`.
+- `PYTHONPATH=/data/src python -m pytest`: `124 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -208,7 +220,8 @@ Last updated: 2026-11-03
 - Capture MIME type is best-effort via Python `mimetypes`; unknown types are recorded as `null`.
 - `export` supports JSON, YAML, Markdown and a minimal JSON-LD projection. JSON/YAML/JSON-LD round-trip through module parsers; Markdown round-trips only through front matter.
 - `import` turns an export into a create-only pending proposal; it never writes canonical data. Records whose type requires evidence need either an imported Episode/Source/Annotation or `--evidence`; otherwise the import fails at validation.
-- `genogram` remains experimental until `Relationship` models endpoints and relation type.
+- `genogram` remains experimental: it now reads endpoint-aware Relationship records and `relation:*` assertions, but duplicate relation representations and real-fixture review are still open.
+- Relationship endpoints are optional as a group; bare legacy records remain valid but produce a genogram warning because they cannot be scoped.
 - `timeline` covers entity/place matches only; collection/archive-level timelines remain open.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
 - The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping.

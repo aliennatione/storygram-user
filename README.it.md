@@ -80,7 +80,7 @@ Questi comandi sono deterministici e offline, ma alcuni restano più limitati di
 - `storygram search QUERY [--archive PATH] [--rebuild]` cerca prima ID e tipi esatti, poi nel contenuto indicizzato. L'indice si aggiorna quando cambiano i file canonici.
 - `storygram conflicts [--status VALUE] [--archive PATH]` unisce i Conflict espliciti con le contraddizioni derivate dalle asserzioni, deduplica le coppie e mostra entrambe le asserzioni con l'evidenza.
 - `storygram timeline ID [--archive PATH]` esclude le asserzioni superseded, archived e rejected, ordina per inizio del valid-time e include i campi di evidenza.
-- `storygram genogram ID [--archive PATH]` è sperimentale: usa le asserzioni `relation:*`, segnala i predicati non supportati e ignora i record Relationship finché lo schema non modella i loro estremi.
+- `storygram genogram ID [--archive PATH]` è sperimentale: legge le asserzioni `relation:*` e i record Relationship con estremi espliciti, segnala i predicati non supportati e avvisa sui record Relationship privi di estremi completi.
 
 `validate`, `get`, `list` e `git-check` restano la superficie stabile di lettura e validazione.
 

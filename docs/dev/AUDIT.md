@@ -570,3 +570,27 @@ Make the local web UI comfortably usable by a human for adding a memory, with En
 3. Translate labels, not canonical data.
 4. Use system Firefox/geckodriver on Alpine musl; do not rely on Playwright's glibc Firefox build.
 5. Re-run both browser flows after changing the layout, forms or language switch.
+
+## 2026-11-04 - assertion form, traceability, conflicts, agent CLI polish
+
+### Current objective
+
+Make the web UI comfortably usable by a human end to end (memory → evidence → people/entities/relationships/assertions → review → traceability → conflicts) and keep the agent CLI complete and machine-readable, without touching the approval gate.
+
+### Point of situation
+
+- `f8a9f19`: `/assertions/new` creates pending Assertion proposals with subject, `relation:*` predicate (datalist suggestions, schema pattern enforced), exactly one of object record or literal value, status, optional valid-time, visibility and notes. Evidence is validated against canonical Episode/Source/Annotation records and copied into `produced_by`/`supported_by`/`annotations`. The record detail page links to the form with a prefilled subject. Integration tests cover creation, approval, value mode, validation and Italian rendering; Chromium E2E approves an assertion.
+- `d66ffd3`: record detail lists pending and applied proposals whose operations touch the record; proposal detail lists affected records, linked to `/records/<id>` when canonical and marked `(pending)` before approval. A regression test walks create → pending marker → approval → bidirectional links.
+- `d7bfed2`: `/conflicts` reuses `conflicts.list_conflicts`, renders explicit and derived conflicts with assertion and evidence links, derives evidence from assertion records when a Conflict has none, and filters with `?status=`. It is GET-only (POST answers 404, matching timeline/genogram). Chromium E2E navigates it and applies the status filter.
+- `9055975`: `proposal show --json` emits the parsed proposal or a structured `{"ok": false, "errors": [...]}` with exit code 1, so agents can read proposals without scraping text.
+- `7566049`: new `src/storygram/media.py` plus `storygram media add|list`. Entries are content-addressed (`<slug>-<sha256[:8]>.json`), record URI/SHA-256/MIME/size/visibility/acquisition metadata, refuse silent overwrites (refresh needs `--overwrite`), and never copy the media file or touch `data/`.
+- `7a8c03e`: Firefox WebDriver flow extended through the source and assertion forms; its coverage claim in the docs is now accurate.
+- Checks: `170 passed`; ruff, format and mypy clean; Chromium Playwright flow passed; Firefox WebDriver flow passed.
+
+### Calibration
+
+1. Every browser write path still ends in `create_pending`; approval stays UI/CLI-only.
+2. Read-only views (timeline, genogram, conflicts) answer 404 to POST and never import a write handler.
+3. Evidence requirements belong to the domain registry, not to individual forms; forms only surface them.
+4. Manifests describe external files; they must not become a second copy of the media or a canonical record.
+5. Docs must state only flows that actually ran: verify Firefox coverage before claiming it.

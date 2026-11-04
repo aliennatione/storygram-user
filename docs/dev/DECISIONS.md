@@ -300,3 +300,32 @@
 
 - Place, Event, Organization and Period share the same minimal schema shape (`name`, `notes`, `visibility`, status and timestamps), so one Add entity form with a type selector avoids four near-identical forms.
 - The form creates pending proposals only, requires existing evidence, and keeps Person and Relationship as dedicated forms because their fields and validation differ.
+
+## Assertion Form (2026-11-04)
+
+- An Assertion needs exactly one of an object record or a literal value; the form enforces the choice because the schema requires `value` whenever `object` is absent or null.
+- The predicate is free text constrained to the schema pattern `relation:[A-Za-z0-9][A-Za-z0-9._~-]*`, with a datalist of common relations. The relationship form stays closed to `FAMILY_PREDICATES` because the genogram only renders those; assertions are broader by design.
+- Operation evidence (Episode/Source/Annotation) is also written into the record fields it semantically matches: episodes → `produced_by`, sources → `supported_by`, annotations → `annotations`. The proposal stays planner-valid and the record stays self-describing.
+- `transaction_time.recorded_at` is set to the creation time; corrections remain a new assertion with `supersedes`, never an edit.
+
+## Record and Proposal Cross-Links (2026-11-04)
+
+- A record page lists proposals from both `proposals/` (pending) and `data/proposals/` (applied), matching any operation whose `record.id`, `record_id` or `target_id` equals the record.
+- A proposal page links affected records only when they exist canonically; pending creates show a `(pending)` marker instead of a link that would 404.
+- Links are derived on read from proposal JSON; no index or schema change is needed and the view cannot write.
+
+## Read-only Conflicts View (2026-11-04)
+
+- `/conflicts` reuses `list_conflicts`, so the browser and the CLI always agree on deduplication and status filtering.
+- Evidence for an explicit Conflict falls back to the `produced_by`/`supported_by` of its assertions when the record has none, because a human inspecting a conflict needs the sources immediately.
+- The view is GET-only and answers 404 to POST, matching the existing timeline/genogram convention rather than introducing a new 405 style.
+
+## Media Manifest Commands (2026-11-04)
+
+- The manifest describes media kept outside Git: `media add` records URI, SHA-256, MIME type, size, visibility and acquisition metadata under `media-manifest/`, never copies the file and never writes `data/`.
+- Entries are content-addressed (`<slug>-<sha256[:8]>.json`) so the same file maps to the same entry and a different file with the same name cannot silently collide; refreshing requires `--overwrite`.
+- `media-manifest/` stays gitignored local metadata (per `AGENTS.md`), not a committed store; users who want manifests in Git can force-add specific entries.
+
+## Proposal Show JSON (2026-11-04)
+
+- `proposal show --json` returns the parsed proposal object, and errors as `{"ok": false, "errors": [...]}` with exit code 1, matching the `_fail` convention used by the other agent-facing commands.

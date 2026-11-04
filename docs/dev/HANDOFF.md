@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-04
 Branch: `feature/agent-proposal-flow`
-Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, endpoint-aware Relationship records, collection/archive timeline scopes, genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation, then read-only GUI record browsing plus timeline/genogram views on 2026-11-04. Use `git log --oneline -20`.
+Recent commits: read-only GUI record browsing plus timeline/genogram views, bilingual Add memory/source/entity/person/relationship forms, then on 2026-11-04 the assertion form (`f8a9f19`), record/proposal cross-links (`d66ffd3`), read-only conflicts view (`d7bfed2`), `proposal show --json` (`9055975`), media manifest commands (`7566049`) and the Firefox source/assertion E2E extension (`7a8c03e`). Use `git log --oneline -20`.
 
 ## Compacted Context
 
@@ -10,7 +10,7 @@ Recent commits: API/provider/withdraw series, legacy command hardening, local GG
 - Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, a bilingual Add memory form that creates pending Episode proposals, read-only record browsing plus timeline and experimental genogram views, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `161 passed`; ruff/format/mypy clean; Playwright edit/approve/reject/browse/export/timeline/genogram/add-memory/source/entity/person/relationship/Italian flow passing; Firefox WebDriver bilingual add-memory/source/person/relationship smoke flow passing.
+- Python baseline: `170 passed`; ruff/format/mypy clean; Playwright edit/approve/reject/browse/export/timeline/genogram/conflicts/add-memory/source/entity/person/relationship/assertion/Italian flow passing; Firefox WebDriver bilingual add-memory/source/person/relationship/assertion smoke flow passing.
 - Relationship records now carry an optional all-or-nothing `subject`/`predicate`/`object` triple plus optional `valid_time`/`transaction_time`; `genogram` reads complete records alongside `relation:*` assertions, deduplicates equivalent triples and aggregates all temporal intervals. It remains experimental.
 - Export round-trips are implemented: JSON-LD/YAML/Markdown export plus reversible module parsers and tests. JSON/JSON-LD/YAML are lossless at record level; Markdown uses YAML front matter as source of truth.
 - Safe import is implemented: `storygram import FILE` wraps JSON/JSON-LD/YAML/Markdown exports in a schema-validated, create-only pending proposal. It runs the approval dry-run planner before writing and touches only `proposals/`; canonical data still requires human approval.
@@ -21,10 +21,14 @@ Recent commits: API/provider/withdraw series, legacy command hardening, local GG
 - Add memory: `/memories/new` creates a pending Episode proposal only. It validates the text, type, visibility, participants and Episode schema before `create_pending`; it never writes canonical data or approves.
 - Add source: `/sources/new` creates a pending Source proposal without requiring prior evidence; a source is itself evidence and can support later person/relationship proposals.
 - Add entity: `/entities/new` creates a pending Place, Event, Organization or Period proposal with a name, notes, visibility and at least one existing Episode/Source/Annotation as evidence.
+- Add assertion: `/assertions/new` creates a pending Assertion with subject, `relation:*` predicate, an object record or a literal value (exactly one), status, optional valid-time and evidence; Episode/Source/Annotation evidence is also written into `produced_by`/`supported_by`/`annotations`. The record detail page links to it with a prefilled subject.
+- Record/proposal cross-links: record detail lists every pending or applied proposal whose operations touch the record; proposal detail lists affected records, linked when canonical and marked `(pending)` before approval.
+- Conflicts view: `/conflicts` is GET-only, merges explicit Conflict records with assertion-derived contradictions, filters by `?status=`, links assertions and evidence, and derives evidence from assertions when the conflict record has none.
 - Add person/relationship: `/people/new` and `/relationships/new` create pending Person/Relationship proposals backed by at least one existing Episode/Source/Annotation as evidence. Relationship predicates are the genogram-supported `relation:parent|child|spouse|sibling|partner`; optional `valid_time` start/end/precision is preserved. Neither form writes canonical data or approves.
 - Browser verification: Chromium uses Playwright; Firefox uses system Firefox with geckodriver/WebDriver because Playwright's bundled Firefox is a glibc build and does not run on Alpine musl. Fresh container prerequisites: `apk add chromium firefox geckodriver`, then `npm run test:e2e:all`.
 - Recent commits for this unit: `b374d5e` (bilingual Add memory form), `166543d` (Add memory/Italian/Firefox E2E).
-- Known product debt: media manifest and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
+- Agent CLI: `proposal show --json` returns machine-readable proposals and structured errors; `media add|list` writes content-addressed checksummed entries under `media-manifest/` (URI, SHA-256, MIME, size, visibility, acquisition metadata) for files kept outside Git and never touches `data/`.
+- Known product debt: creation forms for Annotation/Narrative/Collection/Conflict/MediaAsset are still JSON-editor only; several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
 
 ## Verified Container Run (2026-10-31)
 
@@ -169,13 +173,13 @@ Results:
 
 ## Next Objective
 
-The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
+The human GUI now covers memory, source, entity, person, relationship and assertion creation, record browsing, timeline, genogram, conflicts and bidirectional record/proposal traceability; the agent CLI covers the PRD baseline plus `--json` everywhere output matters. Continue with the remaining polish without redesigning the approval gate.
 
-1. Continue the read-only GUI: search/export and visibility filters, then links between records and related proposals. Keep all browser write paths behind proposals.
-2. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, temporal intervals are aggregated and timeline scopes are complete for the current model.
-3. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
+1. Optional GUI polish: creation forms for Annotation, Narrative, Collection, Conflict and MediaAsset (JSON editor covers them today) and media browsing. Keep all browser write paths behind proposals.
+2. Merge `feature/agent-proposal-flow` only when the user asks, and run the container regression procedure below after any `Dockerfile`/`compose.yaml`/entrypoint/packaging change.
+3. Keep `genogram` experimental until reviewed on real user data. Keep approval UI/CLI-only; an advisory, non-applying review endpoint is still open for discussion.
 4. Keep the local GGUF helpers honest: they wire inference only. The 1.5B model is a smoke test, the 3B model is impractical on 1 CPU, and qwen3-4b is the single quality reference. Always dry-run generated proposals.
-5. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
+5. Keep bilingual docs in sync and re-run Python, lint, format, mypy and both browser flows.
 
 ## Environment Check
 

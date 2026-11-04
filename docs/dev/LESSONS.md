@@ -167,3 +167,8 @@
 - Distinguish evidence records from semantic claims when setting `evidence_required`. A Source is evidence and should be creatable on its own; a Person or Relationship is a claim and needs evidence.
 - Cover standalone evidence import as well as form creation; otherwise the registry flag can regress only on one path.
 - Prefer a typed generic form when schemas are genuinely identical; keep dedicated forms where fields or validation diverge.
+- Build `<option>` lists per target `<select>`; a shared option string marks the same value `selected` in every select that reuses it.
+- When a test expects both an explicit and a derived conflict, give them different assertion pairs: `list_conflicts` deliberately drops a derived pair already covered by an explicit record.
+- Match the existing method-not-allowed convention per route family (404 for GET-only views here) instead of assuming a global 405 policy.
+- Doc patches with silent `str.replace` can no-op when the source wording drifted; grep the file for the new terms after editing bilingual docs.
+- Content-address manifest entries by checksum prefix: it prevents same-name collisions and makes re-registration an explicit overwrite.

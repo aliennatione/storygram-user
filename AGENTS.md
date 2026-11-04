@@ -54,7 +54,7 @@ npm run test:e2e:firefox
 - Prefer `PYTHONPATH=/data/src python -m storygram ...` until the package is installed.
 - `npm run test:e2e` uses Node Playwright with `/usr/bin/chromium`; Python Playwright is not musllinux-compatible.
 - `npm run test:e2e:firefox` uses WebDriver/geckodriver with system `/usr/bin/firefox`; install with `apk add firefox geckodriver`. `npm run test:e2e:all` runs both.
-- Current baseline: `161 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/export/timeline/genogram/add-memory/source/entity/person/relationship/Italian flows and the Firefox bilingual add-memory/source/person/relationship smoke flow passing.
+- Current baseline: `170 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/export/timeline/genogram/conflicts/add-memory/source/entity/person/relationship/assertion/Italian flows and the Firefox bilingual add-memory/source/person/relationship/assertion smoke flow passing.
 - Never claim a check passed unless it actually ran in this environment.
 
 ## Docker from the Host Socket
@@ -72,7 +72,7 @@ Read `docs/dev/HANDOFF.md` before the first Docker command. Key rules:
 
 ## Repository Map
 
-- `src/storygram/`: `cli.py`, `web.py`, `i18n.py`, `proposals.py`, `llm.py`, `registry.py`, `validate.py`, `models.py`, `index.py`, `gitcheck.py`, `bitemporal.py`, `conflicts.py`, `export.py`, `importer.py`, `capture.py`, `timeline.py`, `genogram.py`.
+- `src/storygram/`: `cli.py`, `web.py`, `i18n.py`, `media.py`, `proposals.py`, `llm.py`, `registry.py`, `validate.py`, `models.py`, `index.py`, `gitcheck.py`, `bitemporal.py`, `conflicts.py`, `export.py`, `importer.py`, `capture.py`, `timeline.py`, `genogram.py`.
 - `schema/`: canonical JSON Schemas. Root-level `*.schema.json` duplicates must stay byte-identical with `schema/`.
 - `data/`: canonical reviewed records only; currently empty.
 - `proposals/`: local pending proposals, gitignored. `data/proposals/` is the committed merged archive.
@@ -85,11 +85,11 @@ Read `docs/dev/HANDOFF.md` before the first Docker command. Key rules:
 
 ## CLI and Web Surface
 
-- Implemented and tested: `init`, `get`, `list`, `validate`, `git-check`, `web`, `proposal new|list|show|approve|reject|withdraw|generate`.
+- Implemented and tested: `init`, `get`, `list`, `validate`, `git-check`, `web`, `media add|list`, `proposal new|list|show|approve|reject|withdraw|generate`.
 - Proposal approval is atomic, creates one scoped Git commit by default, supports `--dry-run` and `--no-commit`.
-- The web UI supports a read-only `/records` browser (type/status/text filters, detail with raw JSON and reference/backlink links), read-only `/timeline` (archive/entity/place/collection scopes) and experimental `/genogram` views, an `/memories/new` form that creates pending Episode proposals, create/edit pending proposals, Generate, dry-run, approve and reject. Timeline and genogram are GET-only and cannot write canonical data. The header switches English/Italian via `/lang/en` and `/lang/it`; translations live in `i18n.py`.
+- The web UI supports a read-only `/records` browser (type/status/visibility/text filters, detail with raw JSON, reference/backlink links and related-proposal links), read-only `/timeline` (archive/entity/place/collection scopes), experimental `/genogram` and read-only `/conflicts` views, `/memories/new`, `/sources/new`, `/entities/new`, `/people/new`, `/relationships/new` and `/assertions/new` forms that create pending proposals only, create/edit pending proposals, Generate, dry-run, approve and reject. Record and proposal pages cross-link in both directions. Timeline, genogram and conflicts are GET-only and cannot write canonical data. The header switches English/Italian via `/lang/en` and `/lang/it`; translations live in `i18n.py`.
 - JSON API supports `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`, `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject` and `POST /api/proposals/<id>/withdraw`; there is intentionally no approve endpoint.
-- `ingest episode` only copies into `inbox/` and writes a SHA-256 capture sidecar; `import` creates a validated create-only pending proposal from an export and never writes canonical data; `export`, `search`, `rebuild`, `timeline` and `conflicts` have focused CLI tests; `timeline` supports entity/place/collection scopes plus `--all`; `genogram` is experimental, reads endpoint-aware Relationship records plus `relation:*` assertions, deduplicates equivalent triples with a `related_ids` list, prefers the most recently recorded Relationship, and exposes representative `valid_time`/`transaction_time` plus aggregated `valid_times`/`transaction_times`.
+- `ingest episode` only copies into `inbox/` and writes a SHA-256 capture sidecar; `import` creates a validated create-only pending proposal from an export and never writes canonical data; `export`, `search`, `rebuild`, `timeline` and `conflicts` have focused CLI tests; `timeline` supports entity/place/collection scopes plus `--all`; `media add|list` writes content-addressed checksummed entries under `media-manifest/` for files kept outside Git and never touches canonical `data/`; `genogram` is experimental, reads endpoint-aware Relationship records plus `relation:*` assertions, deduplicates equivalent triples with a `related_ids` list, prefers the most recently recorded Relationship, and exposes representative `valid_time`/`transaction_time` plus aggregated `valid_times`/`transaction_times`.
 - `init` copies all 15 schemas through the registry and supports `$STORYGRAM_SCHEMA_DIR`.
 
 ## Domain Invariants

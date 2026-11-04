@@ -115,17 +115,23 @@ Last updated: 2026-11-04
 - `a198d95`: the Add relationship form creates a pending Relationship proposal with subject, supported `relation:*` predicate, object, optional valid-time start/end/precision, visibility and evidence. `ea150f6` extends Chromium E2E through both forms.
 - `fd410ad`: the Add source form creates a pending Source proposal with title, source type, visibility and notes. `bbdf268` allows standalone Source creation without prior evidence: a Source is itself evidence and can support later person/relationship proposals. Import and web tests cover standalone source approval.
 - `68e2f02`: the Add entity form creates pending Place, Event, Organization or Period proposals with evidence, notes and visibility. Integration tests cover all four types and validation; Chromium E2E covers source and place creation.
-- Current baseline: `161 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
+- `f8a9f19`: the Add assertion form creates pending Assertion proposals with subject, relation predicate, object record or literal value, status, optional valid-time and evidence mapped into `produced_by`/`supported_by`/`annotations`. Record detail pages link to it with a prefilled subject.
+- `d66ffd3`: record detail lists the pending/applied proposals that created or touched the record; proposal detail lists affected records with links when canonical and `(pending)` markers before approval.
+- `d7bfed2`: read-only `/conflicts` view merges explicit Conflict records with assertion-derived contradictions, filters by status, links assertions and evidence, and answers 404 to POST like the other GET-only views.
+- `9055975`: `proposal show --json` emits machine-readable proposals and structured errors for agents.
+- `7566049`: `media add|list` writes content-addressed checksummed manifest entries under `media-manifest/` (URI, SHA-256, MIME, size, visibility, acquisition metadata) without copying media or touching `data/`.
+- `7a8c03e`: Firefox E2E now covers source and assertion forms in addition to memory/person/relationship.
+- Current baseline: `170 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
 
 ## Current Usable Flows
 
-- Human web flow: open the UI, choose EN/IT, add a memory and/or source, then add people and family relationships backed by that evidence, or use **Generate**; inspect the dry-run, approve/reject/withdraw, then browse **Records** with type/status/visibility/text filters, download the filtered export and open **Timeline** or **Genogram**. No browser route applies canonical data without the normal approval action.
-- Agent CLI flow: `init`, `proposal new|list|show|generate|approve|reject|withdraw`, `import`, `export`, `search`, `rebuild`, `timeline`, `genogram`, `ingest episode`. Agents can create pending proposals only; approval remains human-only.
+- Human web flow: open the UI, choose EN/IT, add a memory and/or source, then add people, entities, family relationships and assertions backed by that evidence, or use **Generate**; inspect the dry-run, approve/reject/withdraw, trace changes through record/proposal cross-links, then browse **Records** with type/status/visibility/text filters, download the filtered export and open **Timeline**, **Genogram** or the read-only **Conflicts** view. No browser route applies canonical data without the normal approval action.
+- Agent CLI flow: `init`, `proposal new|list|show|generate|approve|reject|withdraw` (with `--json` where output matters), `import`, `export`, `search`, `rebuild`, `timeline`, `genogram`, `conflicts`, `media add|list`, `ingest episode`. Agents can create pending proposals only; approval remains human-only.
 
 ## Resume Checklist After a Fresh Container
 
 1. `pip install --break-system-packages -e ".[dev]"`.
-2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `161 passed`).
+2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `170 passed`).
 3. `ruff check src tests && ruff format --check src tests && mypy src`.
 4. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` if `node_modules` is missing.
 5. `apk add chromium firefox geckodriver` for both browser flows; `npm run test:e2e:all`.
@@ -133,11 +139,12 @@ Last updated: 2026-11-04
 
 ## Next Steps
 
-1. Continue the human GUI: add forms for assertions/conflicts and links between records and related proposals. Keep all browser write paths behind proposals.
-2. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, Relationship temporal fields are modelled and all intervals are aggregated. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
-3. Re-run Python/lint/format/mypy and both browser flows after any change; keep bilingual docs in sync.
-4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
-5. Run the optional Ollama container profile only when network/time permit; it remains unverified.
+1. Optional GUI polish: creation forms for Annotation, Narrative, Collection, Conflict and MediaAsset records (the advanced JSON editor covers them today), plus media browsing in the UI. Keep all browser write paths behind proposals.
+2. Merge `feature/agent-proposal-flow` into `develop`/`main` only when the user asks; run the container regression procedure from `HANDOFF.md` before any release tag.
+3. Keep `genogram` experimental until reviewed on real user data. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
+4. Re-run Python/lint/format/mypy and both browser flows after any change; keep bilingual docs in sync.
+5. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
+6. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
 ## Local GGUF Helpers (2026-11-02)
 

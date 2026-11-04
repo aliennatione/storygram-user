@@ -127,6 +127,112 @@ try {
   assert.match(page.url(), /records\/episode%3Ae2e-note/);
   assert.match(await page.locator("h1").innerText(), /episode:e2e-note/);
 
+  const relations = {
+    id: "proposal:e2e-relations",
+    type: "Proposal",
+    status: "proposed",
+    created_at: now,
+    updated_at: now,
+    title: "Browser timeline and genogram flow",
+    operations: [
+      {
+        op: "create",
+        record_type: "Person",
+        evidence: ["episode:e2e-note"],
+        record: {
+          id: "person:e2e-anna",
+          type: "Person",
+          name: "Anna E2E",
+          status: "confirmed",
+          created_at: now,
+          updated_at: now,
+        },
+      },
+      {
+        op: "create",
+        record_type: "Person",
+        evidence: ["episode:e2e-note"],
+        record: {
+          id: "person:e2e-bruno",
+          type: "Person",
+          name: "Bruno E2E",
+          status: "confirmed",
+          created_at: now,
+          updated_at: now,
+        },
+      },
+      {
+        op: "create",
+        record_type: "Relationship",
+        evidence: ["episode:e2e-note"],
+        record: {
+          id: "relationship:e2e-parent",
+          type: "Relationship",
+          subject: "person:e2e-anna",
+          predicate: "relation:parent",
+          object: "person:e2e-bruno",
+          status: "reported",
+          valid_time: { start: "1987", end: "1995", precision: "year" },
+          transaction_time: { recorded_at: now, recorded_until: null },
+          created_at: now,
+          updated_at: now,
+        },
+      },
+      {
+        op: "create",
+        record_type: "Assertion",
+        evidence: ["episode:e2e-note"],
+        record: {
+          id: "assertion:e2e-parent",
+          type: "Assertion",
+          subject: "person:e2e-anna",
+          predicate: "relation:parent",
+          object: "person:e2e-bruno",
+          status: "reported",
+          valid_time: { start: "2000", end: "2010", precision: "year" },
+          transaction_time: {
+            recorded_at: "2026-02-01T00:00:00+00:00",
+            recorded_until: null,
+          },
+          produced_by: ["episode:e2e-note"],
+          created_at: now,
+          updated_at: now,
+        },
+      },
+    ],
+  };
+  await page.goto(`${server.base}proposals/new`);
+  await page.locator('textarea[name="json"]').fill(JSON.stringify(relations));
+  await page.getByRole("button", { name: "Save pending proposal" }).click();
+  await page.waitForSelector("text=Dry-run preview");
+  await page.getByRole("button", { name: "Approve without commit" }).click();
+  await page.waitForFunction(() => document.body.innerText.includes("merged"));
+
+  await page.getByRole("link", { name: "Timeline", exact: true }).click();
+  await page.waitForSelector('input[name="id"]');
+  assert.match(await page.locator("h1").innerText(), /Timeline/);
+  assert.match(await page.locator("body").innerText(), /assertion:e2e-parent/);
+  await page.locator('input[name="id"]').fill("person:e2e-anna");
+  await page.getByRole("button", { name: "Show timeline" }).click();
+  await page.waitForURL(/id=person%3Ae2e-anna/);
+  assert.match(await page.locator("body").innerText(), /assertion:e2e-parent/);
+  await page.getByRole("link", { name: "assertion:e2e-parent", exact: true }).click();
+  await page.waitForFunction(() => document.body.innerText.includes("Record JSON"));
+  assert.match(page.url(), /records\/assertion%3Ae2e-parent/);
+
+  await page.getByRole("link", { name: "Genogram", exact: true }).click();
+  await page.waitForSelector('input[name="id"]');
+  await page.locator('input[name="id"]').fill("person:e2e-anna");
+  await page.getByRole("button", { name: "Show genogram" }).click();
+  await page.waitForURL(/id=person%3Ae2e-anna/);
+  const genogramText = await page.locator("body").innerText();
+  assert.match(genogramText, /relation:parent/);
+  assert.match(genogramText, /Experimental/);
+  assert.match(genogramText, /1987/);
+  assert.match(genogramText, /2000/);
+  assert.match(genogramText, /relationship:e2e-parent/);
+  assert.match(genogramText, /assertion:e2e-parent/);
+
   await page.goto(`${server.base}proposals/new`);
   await page.locator('textarea[name="json"]').fill(
     JSON.stringify(proposal("proposal:e2e-2", "episode:e2e-note-2", "Browser reject flow")),
@@ -141,7 +247,9 @@ try {
   assert.equal(rejected.status, "rejected");
   assert.equal(rejected.notes, "duplicate");
 
-  console.log("Playwright e2e: edit, approve, reject and browse flows passed");
+  console.log(
+    "Playwright e2e: edit, approve, reject, browse, timeline and genogram flows passed",
+  );
 } finally {
   if (browser) await browser.close();
   if (server?.child) server.child.kill("SIGTERM");

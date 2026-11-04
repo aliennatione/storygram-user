@@ -21,7 +21,7 @@ from .llm import (
     provider_from_config,
     save_pending,
 )
-from .registry import RECORD_TYPES
+from .registry import RECORD_TYPES, iter_reference_strings
 
 MAX_BODY = 4 * 1024 * 1024
 
@@ -72,13 +72,20 @@ button.primary {{ background:var(--accent); color:white; border-color:var(--acce
 .ok {{ border-left:4px solid #1a7f37; padding:8px 12px; background:#1a7f3720; margin:12px 0; }}
 .muted {{ color:var(--muted); }}
 .badge {{ border:1px solid var(--line); border-radius:999px; padding:2px 8px; font-size:.85rem; }}
+.filters {{ display:flex; flex-wrap:wrap; gap:12px; align-items:end; margin:16px 0; }}
+.filters label {{ display:flex; flex-direction:column; gap:4px; font-size:.9rem; }}
+.filters input, .filters select {{
+  padding:7px 9px; border:1px solid var(--line); border-radius:6px;
+  background:Canvas; color:CanvasText;
+}}
+.warning {{ border-left:4px solid #9a6700; padding:8px 12px; background:#9a670020; margin:12px 0; }}
 </style>
 </head>
 <body>
 <header>
   <strong>Storygram</strong>
   <nav>
-    <a href="/">Home</a><a href="/proposals">Proposals</a>
+    <a href="/">Home</a><a href="/records">Records</a><a href="/proposals">Proposals</a>
     <a href="/proposals/new">New proposal</a>
     <a href="/proposals/generate">Generate</a>
   </nav>
@@ -97,6 +104,61 @@ def _errors_block(errors: list[str]) -> str:
 
 def _status_badge(status: Any) -> str:
     return f'<span class="badge">{_esc(status or "unknown")}</span>'
+
+
+def _query_value(query: str, key: str) -> str:
+    values = parse_qs(query, keep_blank_values=True).get(key)
+    return values[0].strip() if values else ""
+
+
+def _relative_label(root: Path, path: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
+def _record_href(record_id: str) -> str:
+    return f"/records/{quote(record_id, safe='')}"
+
+
+def _record_name(data: dict[str, Any]) -> str:
+    for key in ("title", "name", "summary"):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _record_search_text(data: dict[str, Any]) -> str:
+    parts = [data.get(key) for key in ("id", "type", "status", "title", "name", "summary", "notes")]
+    tags = data.get("tags")
+    if isinstance(tags, list):
+        parts.extend(tags)
+    return "\n".join(str(part) for part in parts if part is not None)
+
+
+def _warning_block(items: list[str]) -> str:
+    if not items:
+        return ""
+    rendered = "".join(f"<li>{_esc(item)}</li>" for item in items)
+    return (
+        '<div class="warning"><strong>Some records could not be loaded</strong>'
+        f"<ul>{rendered}</ul></div>"
+    )
+
+
+def _record_links(ids: list[str], known_ids: set[str]) -> str:
+    if not ids:
+        return '<p class="muted">None.</p>'
+    items = []
+    for record_id in ids:
+        if record_id in known_ids:
+            href = _record_href(record_id)
+            items.append(f'<li><a href="{_esc(href)}">{_esc(record_id)}</a></li>')
+        else:
+            items.append(f'<li><span class="muted">{_esc(record_id)} (missing)</span></li>')
+    return f"<ul>{''.join(items)}</ul>"
 
 
 def _proposal_rows(root: Path) -> str:
@@ -145,6 +207,7 @@ def render_home(root: Path) -> str:
 <table><thead><tr><th>Pending</th><th>Merged</th><th>Records</th></tr></thead>
 <tbody><tr><td>{len(pending)}</td><td>{len(applied)}</td><td>{len(records)}</td></tr></tbody></table>
 <p>
+  <a class="button" href="/records">Browse records</a>
   <a class="button primary" href="/proposals/new">Create proposal</a>
   <a class="button" href="/proposals/generate">Generate with Ollama</a>
   <a class="button" href="/proposals">View proposals</a>
@@ -152,6 +215,120 @@ def render_home(root: Path) -> str:
 <h2>Record counts</h2><ul>{"".join(counts)}</ul>
 """
     return _layout("Home", body)
+
+
+def render_records(root: Path, query: str = "") -> str:
+    record_type = _query_value(query, "type")
+    status = _query_value(query, "status")
+    needle = _query_value(query, "q")
+    records, load_errors = validate_mod.load_records(root)
+
+    filtered = []
+    for path, data in records:
+        if record_type and data.get("type") != record_type:
+            continue
+        if status and data.get("status") != status:
+            continue
+        if needle and needle.casefold() not in _record_search_text(data).casefold():
+            continue
+        filtered.append((path, data))
+    filtered.sort(key=lambda item: (str(item[1].get("id") or ""), _relative_label(root, item[0])))
+
+    rows = []
+    for path, data in filtered:
+        record_id = data.get("id")
+        if isinstance(record_id, str) and record_id:
+            href = _record_href(record_id)
+            id_cell = f'<a href="{_esc(href)}">{_esc(record_id)}</a>'
+        else:
+            id_cell = '<span class="muted">(missing id)</span>'
+        name = _record_name(data)
+        rows.append(
+            "<tr>"
+            f"<td>{id_cell}</td>"
+            f"<td>{_esc(data.get('type') or '')}</td>"
+            f"<td>{_status_badge(data.get('status'))}</td>"
+            f"<td>{_esc(name)}</td>"
+            f"<td>{_esc(data.get('updated_at') or '')}</td>"
+            f'<td class="muted">{_esc(_relative_label(root, path))}</td>'
+            "</tr>"
+        )
+
+    table = '<p class="muted">No records match these filters.</p>'
+    if rows:
+        table = (
+            "<table><thead><tr><th>ID</th><th>Type</th><th>Status</th>"
+            "<th>Name / title</th><th>Updated</th><th>File</th></tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table>"
+        )
+
+    type_options = "".join(
+        f'<option value="{_esc(item.name)}"'
+        f"{' selected' if item.name == record_type else ''}>{_esc(item.name)}</option>"
+        for item in RECORD_TYPES
+    )
+    body = f"""
+<h1>Records</h1>
+<p class="muted">
+Read-only canonical record browser. Showing {len(filtered)} of {len(records)} records.
+</p>
+{_warning_block(load_errors)}
+<form class="filters" method="get" action="/records">
+  <label>Type <select name="type"><option value="">All types</option>{type_options}</select></label>
+  <label>Status <input name="status" value="{_esc(status)}" placeholder="confirmed"></label>
+  <label>Search <input name="q" value="{_esc(needle)}" placeholder="id, name, notes"></label>
+  <button type="submit">Filter</button>
+  <a class="button" href="/records">Reset</a>
+</form>
+{table}
+"""
+    return _layout("Records", body)
+
+
+def render_record_detail(root: Path, record_id: str) -> tuple[int, str]:
+    records, load_errors = validate_mod.load_records(root)
+    match = next(
+        ((path, data) for path, data in records if data.get("id") == record_id),
+        None,
+    )
+    if match is None:
+        return 404, _layout(
+            "Not found",
+            f"<h1>Record not found</h1><p>{_esc(record_id or '(empty id)')}</p>"
+            '<p><a class="button" href="/records">Back to records</a></p>',
+        )
+
+    path, data = match
+    known_ids = {str(item.get("id")) for _, item in records if isinstance(item.get("id"), str)}
+    references = sorted(set(iter_reference_strings(data)))
+    backlinks = sorted(
+        {
+            str(item.get("id"))
+            for _, item in records
+            if isinstance(item.get("id"), str)
+            and item.get("id") != record_id
+            and record_id in set(iter_reference_strings(item))
+        }
+    )
+    name = _record_name(data) or record_id
+    visibility = data.get("visibility")
+    visibility_badge = f'<span class="badge">{_esc(visibility)}</span>' if visibility else ""
+    body = f"""
+<p><a class="button" href="/records">Back to records</a></p>
+<h1>{_esc(name)}</h1>
+<p><span class="badge">{_esc(data.get("type") or "unknown")}</span>
+{_status_badge(data.get("status"))} {visibility_badge}</p>
+<p class="muted">{_esc(record_id)} · {_esc(_relative_label(root, path))}</p>
+{_warning_block(load_errors)}
+<h2>References</h2>
+{_record_links(references, known_ids)}
+<h2>Referenced by</h2>
+{_record_links(backlinks, known_ids)}
+<h2>Record JSON</h2>
+<pre>{_esc(json.dumps(data, indent=2, ensure_ascii=False))}</pre>
+"""
+    return 200, _layout(record_id, body)
 
 
 def render_list(root: Path) -> str:
@@ -602,6 +779,14 @@ class StorygramHandler(BaseHTTPRequestHandler):
             return
         if path == "/":
             self._send(200, render_home(self.root))
+            return
+        if path == "/records":
+            self._send(200, render_records(self.root, parsed.query))
+            return
+        if path.startswith("/records/"):
+            record_id = path.removeprefix("/records/").strip("/")
+            status, body = render_record_detail(self.root, record_id)
+            self._send(status, body)
             return
         if path == "/proposals":
             self._send(200, render_list(self.root))

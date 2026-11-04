@@ -67,6 +67,24 @@ def post(url: str, data: dict[str, str]) -> tuple[int, str]:
         return exc.code, exc.read().decode()
 
 
+def write_record(root: Path, directory: str, filename: str, data: dict) -> Path:
+    path = root / "data" / directory / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def person(record_id: str, name: str, status: str = "confirmed") -> dict:
+    return {
+        "id": record_id,
+        "type": "Person",
+        "name": name,
+        "status": status,
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+
+
 def test_home_and_new_proposal(tmp_path: Path) -> None:
     server, thread, base = start(tmp_path)
     try:
@@ -273,6 +291,114 @@ def test_web_cannot_edit_applied_proposal(tmp_path: Path) -> None:
         )
         assert status == 409
         assert "already applied" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_records_browse_is_read_only(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        anna_path = write_record(
+            tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi")
+        )
+        write_record(
+            tmp_path,
+            "people",
+            "person_bruno.json",
+            person("person:bruno", "Bruno Bianchi", "archived"),
+        )
+        before = anna_path.read_text(encoding="utf-8")
+
+        status, body = get(base + "/records")
+        assert status == 200
+        assert "Read-only canonical record browser" in body
+        assert "person:anna" in body
+        assert "person:bruno" in body
+
+        status, body = get(base + "/records?" + urlencode({"type": "Person", "q": "anna"}))
+        assert status == 200
+        assert "person:anna" in body
+        assert "person:bruno" not in body
+
+        status, body = get(base + "/records?" + urlencode({"status": "archived"}))
+        assert status == 200
+        assert "person:bruno" in body
+        assert "person:anna" not in body
+
+        status, body = get(base + "/records/" + quote("person:anna", safe=""))
+        assert status == 200
+        assert "Anna Rossi" in body
+        assert "data/people/person_anna.json" in body
+        assert "Record JSON" in body
+        assert "&quot;id&quot;: &quot;person:anna&quot;" in body
+
+        status, body = get(base + "/records/" + quote("person:missing", safe=""))
+        assert status == 404
+        assert "Record not found" in body
+
+        status, body = post(base + "/records", {})
+        assert status == 404
+        assert anna_path.read_text(encoding="utf-8") == before
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_records_surface_load_errors(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+        broken = tmp_path / "data" / "people" / "broken.json"
+        broken.write_text("{not json", encoding="utf-8")
+
+        status, body = get(base + "/records")
+        assert status == 200
+        assert "Some records could not be loaded" in body
+        assert "invalid json" in body
+        assert "person:anna" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_record_detail_links_references_and_backlinks(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+        write_record(
+            tmp_path, "people", "person_bruno.json", person("person:bruno", "Bruno Bianchi")
+        )
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_anna_bruno.json",
+            {
+                "id": "assertion:anna-bruno",
+                "type": "Assertion",
+                "subject": "person:anna",
+                "predicate": "relation:sibling",
+                "object": "person:bruno",
+                "status": "reported",
+                "transaction_time": {"recorded_at": NOW},
+                "created_at": NOW,
+                "updated_at": NOW,
+            },
+        )
+
+        status, body = get(base + "/records/" + quote("person:anna", safe=""))
+        assert status == 200
+        assert "Referenced by" in body
+        assert "assertion:anna-bruno" in body
+
+        status, body = get(base + "/records/" + quote("assertion:anna-bruno", safe=""))
+        assert status == 200
+        assert "References" in body
+        assert "person:anna" in body
+        assert "person:bruno" in body
     finally:
         server.shutdown()
         server.server_close()

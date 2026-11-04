@@ -119,6 +119,14 @@ try {
   assert.ok(existsSync(join(root, "data", "proposals", "proposal_e2e-1.json")));
   assert.ok(!existsSync(join(root, "proposals", "proposal_e2e-1.json")));
 
+  await page.goto(`${server.base}records`);
+  await page.locator('input[name="q"]').fill("e2e-note");
+  await page.getByRole("button", { name: "Filter" }).click();
+  await page.getByRole("link", { name: "episode:e2e-note", exact: true }).click();
+  await page.waitForFunction(() => document.body.innerText.includes("Record JSON"));
+  assert.match(page.url(), /records\/episode%3Ae2e-note/);
+  assert.match(await page.locator("h1").innerText(), /episode:e2e-note/);
+
   await page.goto(`${server.base}proposals/new`);
   await page.locator('textarea[name="json"]').fill(
     JSON.stringify(proposal("proposal:e2e-2", "episode:e2e-note-2", "Browser reject flow")),
@@ -133,7 +141,7 @@ try {
   assert.equal(rejected.status, "rejected");
   assert.equal(rejected.notes, "duplicate");
 
-  console.log("Playwright e2e: edit, approve and reject flows passed");
+  console.log("Playwright e2e: edit, approve, reject and browse flows passed");
 } finally {
   if (browser) await browser.close();
   if (server?.child) server.child.kill("SIGTERM");

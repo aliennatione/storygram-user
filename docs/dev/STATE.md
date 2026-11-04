@@ -337,3 +337,12 @@ Last updated: 2026-11-04
 - Installed and verified in this container: Manim v0.22.1 (render OK), Slidev v53.0.0 (build OK), ffmpeg, texlive.
 - VCR not installable here (no snapd); documented Ubuntu snap instructions.
 - Output lives under `generated/demos/` (gitignored). No canonical data touched.
+
+## Demo Storygram (2026-11-04)
+
+- Creati due artefatti Manim in `generated/demos/manim/`:
+  - `storygram_timeline.py` (`StorygramTimeline`): timeline di eventi sintetici (1990/2000/2010/2020) con asserzioni subject→predicate→object; render OK (12.47s, 186 KB).
+  - `storygram_proposal_flow.py` (`StorygramProposalFlow`): flusso capture → pending proposal → dry-run → approve (umano) → record canonico; render OK (8.47s, 102 KB).
+- Creato corso Slidev bilingue in `generated/demos/vcr/storygram_intro/` (`en/index.md` inglese, `it/index.md` italiano, 9 slide: intro, invarianti, timeline, flusso proposal, CLI, demo); build OK in `en/dist/index.html` e `it/dist/index.html`.
+- Dati solo sintetici; nessuna scrittura in `data/`, `proposals/`, `inbox/`.
+- Verificati MP4 con ffprobe e build Slidev; ruff/format/mypy non coinvolti (output derivato).

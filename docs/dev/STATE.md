@@ -1,0 +1,356 @@
+# Current State
+
+Last updated: 2026-11-04
+
+## Git
+
+- Branch: `feature/agent-proposal-flow`
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), endpoint-aware Relationship records and genogram support, collection/archive timeline scopes, deterministic genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation, read-only GUI record browsing (`ad4d102`, `f151be0`), read-only GUI timeline/genogram views (`187b5cc`, `9e8fe63`, `c0b4f26`), then the bilingual Add memory form (`b374d5e`) and Chromium/Firefox E2E coverage (`166543d`) on 2026-11-04; see `git log --oneline -20`.
+- Web generation, read-only record browsing, container files, bilingual docs, pending editing and the JSON API are implemented.
+- Proposal engine, CLI, local web UI, read-only records browser, Playwright e2e tests, LLM adapter and container files are present.
+- The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
+- An OpenAI-compatible provider with bearer-token support was added alongside the Ollama provider.
+- The 2026-11-01 API/provider/withdraw work, the legacy command hardening, the 2026-11-02 model-quality fixes and the 2026-11-03 export/import/capture units are committed in small atomic units.
+- Python, lint, format, mypy and browser checks pass. The container image was rebuilt and exercised end-to-end with the live LLM endpoint through the host Docker socket, then removed.
+
+## Environment
+
+- Development container was regenerated on 2026-11-01. Alpine 3.24.2, running as root, repository at `/data` bind-mounted from the host.
+- Reinstalled after regeneration: `apk add --no-cache python3 py3-pip git nodejs npm chromium docker-cli docker-cli-compose jq`, then `pip install --break-system-packages -e '.[dev]'`.
+- Python 3.14.10, Git 2.54.0, pip 26.1.2, Node 24.22.1/npm 11.12.1, system Chromium, system Firefox 151.0.3 and geckodriver 0.36.0.
+- The Firefox smoke flow uses system Firefox through WebDriver/geckodriver. Playwright's bundled Firefox is a glibc build and cannot run on Alpine musl; do not rely on it. Install with `apk add firefox geckodriver`.
+- `gcompat`/`libc6-compat` were installed while investigating the Playwright Firefox build; the working Firefox path does not depend on them. A fresh container only needs system Firefox and geckodriver for the Firefox smoke test.
+- Tests use paths relative to `/data` and must be run from the repository root.
+- `/var/run/docker.sock` is the host socket. In this session it exposed Podman Engine 5.8.2 through its Docker-compatible API; Docker CLI was 29.9.2 and Compose v5.6.1. This is not Docker-in-Docker; never start `dockerd`.
+- Live LLM endpoint for verification: `http://100.64.0.8:8080/v1/chat/completions`, model `qwen3-4b` (llama-swap). The bearer key was supplied by the user, used only through an ephemeral env file, and is not stored in the repository. Keep one model loaded: switching models adds load latency and was explicitly avoided after the 4B reference was chosen.
+- Host cgroup: about 3.78 GiB RAM and a 1-core CPU quota (`cpu.max 100000 100000`). This makes the local 3B GGUF impractical even though it fits in memory.
+
+## Completed
+
+- Repository inventory covering all 15 record types.
+- `AGENTS.md` rewritten and committed.
+- `src/storygram/registry.py`: central type registry, directories, prefixes, metadata allowlists, supersede/archive/evidence policies.
+- `src/storygram/validate.py`: validates all record types, duplicate IDs, missing references, with `FormatChecker`.
+- `schema/proposal.schema.json` v1 with explicit operations and conditional shapes; root duplicate kept in sync.
+- `schema/assertion.schema.json`: corrected supersession rule. A superseded assertion must now close `transaction_time.recorded_until`; it no longer incorrectly requires `supersedes` on the old record.
+- `src/storygram/proposals.py`: proposal discovery, planning, dry-run, evidence checks, metadata policy, supersession, archive, conflict blocking, atomic writes, rollback, Git commit, rejection.
+- Pending proposal helpers: `create_pending` and `update_pending`, with atomic writes, ID immutability, created_at preservation and closed/applied guards.
+- `tests/integration/test_proposal_engine.py`: engine coverage for dry-run, apply, metadata policy, supersession, unmodelled/modelled conflicts, evidence, archive policy, Git commit, dirty tree and rejection.
+- `src/storygram/cli.py` rewritten without duplicate registrations.
+  - `init` creates every registry directory and copies all 15 schemas.
+  - `get` and `list` are real registry-backed commands.
+  - `git-check` is registered once.
+  - `proposal new|list|show|approve|reject|withdraw|generate` implemented.
+  - `approve` supports `--dry-run`, `--no-commit` and scoped Git commits.
+- `tests/integration/test_cli_proposals.py`: CLI coverage for init, proposal lifecycle, dry-run, no-commit, commit, reject and invalid input.
+- `src/storygram/web.py`: stdlib HTTP UI with home, read-only records list/detail, proposal list, JSON create form, Ollama Generate page, pending edit page, dry-run preview, approve (commit/no-commit) and reject.
+- JSON API: `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`, `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject`, `POST /api/proposals/<id>/withdraw`; no approve endpoint.
+- `src/storygram/cli.py`: `web` command serving the UI on `0.0.0.0:8080` by default.
+- `tests/integration/test_web.py`: HTTP tests for home, read-only records list/detail, filters, references/backlinks, load errors, create, edit, preview, approve, reject, withdraw, invalid JSON, generation, empty source and provider errors.
+- `tests/integration/test_api.py`: agent API create/read/update/list/generate/reject/withdraw, duplicate/closed/applied guards, error codes and absence of approve endpoint.
+- Web generation uses an injectable provider factory for tests; production resolves Ollama or an OpenAI-compatible provider from form/env values.
+- Documentation audit added in `docs/dev/AUDIT.md`.
+- `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, generate form, create, edit pending, approve without commit, record browse, reject.
+- `package.json` / `package-lock.json`: Playwright Node dependency and `npm run test:e2e`.
+- `.gitignore`: `node_modules/` ignored.
+- `src/storygram/llm.py`: provider-agnostic adapter, callable mock provider, stdlib Ollama provider, prompt builder, JSON extraction, normalization, pending-only save.
+- Adapter always forces `type=Proposal`, `status=proposed` and fresh timestamps; unknown model fields are dropped.
+- `proposal generate`: CLI command; supports `--file`, `--text`, `--provider`, `--model`, `--url`, deprecated `--ollama-url`, `--api-key`, `--no-save`, `--json` and the `$STORYGRAM_LLM_*` variables.
+- `tests/integration/test_llm_adapter.py`: generation, fenced/thinking JSON, unknown-field removal, pending-only writes, duplicate rejection, invalid/empty input, Ollama and OpenAI request/auth shapes, env config and error redaction.
+- `tests/integration/test_cli_proposals.py`: CLI generation saves pending only, `--no-save` writes nothing, and `init` honors `$STORYGRAM_SCHEMA_DIR`.
+- Schema lookup now supports archive-local schemas, `$STORYGRAM_SCHEMA_DIR`, repository/package paths and the current directory. This fixes packaged/container `init`.
+- `Dockerfile`: multi-stage Python 3.12 Alpine image, non-root user, Git plus tini, schemas copied to `/app/schema`, healthcheck on port 8080.
+- `docker-entrypoint.sh`: optional auto-init of `/data` and Git, initial schema commit, Git safe-directory config, then exec the CLI.
+- `compose.yaml`: persistent `storygram-data`, port 8080, optional `llm` profile with Ollama and persistent models.
+- `.dockerignore`: excludes repository-local data, generated output, caches, tests and development artifacts.
+- Bilingual README/docs rewritten around proposals, UI, adapter, tests and container usage; proposal contract lives in `docs/en/` and `docs/it/`.
+- Packaged wheel was built, installed in a temporary venv and exercised via `storygram init` with `$STORYGRAM_SCHEMA_DIR`.
+- Container verification through the host socket: image built; Compose started on port 18080; container ran as UID 100/GID 101; auto-init created `/data`, 15 schemas and Git with an initial schema commit; healthcheck reached `healthy`; HTTP worked inside the container; a synthetic proposal passed `new`/`list`/`dry-run`/`approve` with a scoped commit; data survived `restart` and `compose down`/`up`; a host bind mount initialized, served HTTP and persisted. Test resources were cleaned up.
+- User docs corrected: the image user is UID/GID 100:101, not 1000; the container section now records commands actually run.
+- 2026-11-01 API work: `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject` and `POST /api/proposals/<id>/withdraw`; no approve endpoint.
+- `withdrawn` is now a proposal status (schema root duplicate kept identical, `models.py` and engine guards updated).
+- `withdraw_proposal` and a shared close helper distinguish missing (404), already closed (409) and success.
+- CLI `proposal withdraw`; web detail page exposes Withdraw; web Generate form accepts provider, model and URL.
+- `OpenAICompatibleProvider` calls `/v1/chat/completions`, supports `Authorization: Bearer`, hides the key from its repr and error text, and is aliased as `LlamaCppProvider`.
+- Provider resolution: `$STORYGRAM_LLM_PROVIDER`, `$STORYGRAM_LLM_MODEL`, `$STORYGRAM_LLM_URL`, `$STORYGRAM_LLM_API_KEY`; Ollama still honors `$STORYGRAM_OLLAMA_*`. Default provider remains `ollama`.
+- Prompt now includes lowercase ID rules, `record_type` requirements, a minimal valid proposal shape, and strips `<thinking>` blocks before JSON extraction.
+- Compose passes the `STORYGRAM_LLM_*` variables into the app container; `.env` stays gitignored and excluded from the build context.
+- Tests: API generate/save/no-save/error, reject/withdraw, provider request/auth/error, thinking-block extraction, CLI withdraw, web withdraw.
+- Live verification: real qwen3-4b generation returned 201 and a pending proposal; withdraw returned 200 and a second withdraw 409.
+- Container re-verification: image rebuilt, app started on port 18080 with the live LLM env, reached healthy, reached the LLM endpoint, generated a pending proposal, withdrew it through the API, survived restart and `down`/`up`, then all test resources and the image were removed.
+- `ingest` now uses the PRD grammar `ingest episode FILE`, copies only into `inbox/`, adds `--archive`, refuses silent overwrites and cannot write canonical data.
+- `export` uses the registry, sorts by ID, fails on malformed JSON, adds `--archive`, excludes records without visibility when filtering, and emits a minimal JSON-LD `@id`/`@type` graph.
+- `rebuild` and `search` now use an idempotent SQLite/FTS5 index with a signature check, exact ID/type matching, content fallback, deterministic ordering and reports for malformed records.
+- `conflicts` merges explicit and assertion-derived contradictions, applies status filters to both, deduplicates unordered pairs and includes both assertion records plus evidence.
+- `timeline` excludes superseded/archived/rejected assertions, sorts by valid-time start, includes evidence fields and distinguishes unknown records from known records with no entries. It now supports entity, place, collection and archive scopes.
+- `genogram` is explicitly experimental, scopes `relation:*` assertions and endpoint-aware Relationship records to the requested person, marks unsupported predicates, warns about incomplete Relationship records and exposes representative plus aggregated temporal intervals.
+- `get` and `list` now accept `--archive`, matching the documented examples.
+- New tests: `test_ingest.py` CLI coverage, `test_export.py`, `test_search.py`, `test_conflicts.py`, `test_timeline.py`, `test_genogram.py`, `test_read_cli.py`.
+- 2026-11-03 export round-trip unit: `export_yaml`, `export_markdown`, `records_from_yaml`, `records_from_jsonld` and `records_from_markdown` added in `export.py`; `export --format` now accepts `yaml` and `markdown`; existing `json`/`jsonld` output is unchanged except the added parsers. `tests/integration/test_export_roundtrip.py` covers Person, Episode and Assertion round-trips, malformed parser input and CLI output parsing.
+- 2026-11-03 safe import unit: `src/storygram/importer.py` reads JSON/JSON-LD/YAML/Markdown exports, validates every record schema, builds a create-only proposal and runs `plan_apply` before writing. `storygram import FILE` writes only `proposals/`; canonical `data/` is untouched until human approval. Imported Episode/Source/Annotation records are wired as evidence for later operations; `--evidence` supplies canonical capture IDs. `records_from_json` was added to complete the parser set. `tests/integration/test_import.py` covers all formats, pending-only writes, evidence wiring, duplicate/existing IDs, missing evidence, invalid schemas and explicit format override. Full suite is now `116 passed`.
+- 2026-11-03 capture metadata unit: `src/storygram/capture.py` streams the capture into `inbox/` while computing SHA-256 and writes `inbox/.storygram/<filename>.json` with format `storygram.capture/1`, size, MIME type, checksum, `ingested_at` and `overwritten`. Capture and sidecar are written through same-directory temp files and `os.replace`; `--json` exposes the metadata. `tests/integration/test_ingest.py` covers checksums, binary content, JSON output, overwrite refresh and refused-overwrite preservation. Full suite is now `121 passed`.
+
+## Active
+
+- Model-quality unit: `qwen3-4b` is the single reference model. The prompt now produces dry-run-valid proposals for Italian, English and short captures. The local 1.5B model remains a smoke test; the local 3B model was stopped after it produced no tokens in more than 25 minutes on 1 CPU.
+- Export round-trip unit is implemented and documented: JSON/JSON-LD/YAML/Markdown exports plus reversible module parsers.
+- Safe import and capture metadata are implemented: an export becomes a validated create-only pending proposal, and `ingest` writes a checksummed inbox sidecar.
+- Relationship records now model optional `subject`/`predicate`/`object` endpoint triples and optional `valid_time`/`transaction_time`; `genogram` reads complete records as well as `relation:*` assertions, deduplicating equivalent triples and preserving all temporal intervals.
+- Timelines now support entity, place, collection and archive scopes. Collection timelines include direct `relation:member_of` members.
+
+## Bilingual Human Input and Firefox (2026-11-04)
+
+- Added `GET /memories/new` and `POST /memories/new`: a human-friendly Add memory form that creates a pending Episode proposal with title, episode type, captured date, text, participants, tags and visibility.
+- The form validates text, episode type, visibility, known participant IDs and the full Episode schema before calling `proposals.create_pending`. It writes only `proposals/`; canonical `data/` still requires human approval.
+- Added `src/storygram/i18n.py` with an English source dictionary, Italian translations and per-request language context helpers.
+- The header switches EN/IT through `/lang/en` and `/lang/it`; the switch stores a `storygram_lang` cookie and redirects to the current page. `?lang=it` also works for direct links and tests.
+- Translated navigation, headings, table headers, buttons, placeholders, status badges, episode types, visibility options and web-originated errors. Canonical IDs, type names and stored JSON stay unchanged.
+- Integration tests cover pending-only creation, approval after form input, known participants, validation errors, English default, Italian rendering and cookie-based switching.
+- Playwright Chromium covers Add memory, person/relationship forms, visibility export, Italian rendering and approval. A separate Firefox WebDriver flow covers bilingual home, Add memory, person/relationship forms, approval and records search.
+- Checks: `148 passed`; ruff, format and mypy clean; `npm run test:e2e` passed; `npm run test:e2e:firefox` passed; `npm run test:e2e:all` passed.
+- Commits: `b374d5e` (bilingual Add memory form), `166543d` (Add memory/Italian/Firefox E2E).
+- Follow-up `f416922`: schema format validation now enforces RFC3339 date-time and date values. Before this fix, `jsonschema` silently skipped `date-time` because the optional checker was absent; invalid `captured_at`/`created_at` values could reach proposals. Regression tests cover invalid dates, timezone-less timestamps and the Add memory form.
+- `04d0f16`: the Records browser filters by visibility and offers filtered JSON, JSON-LD, YAML and Markdown downloads through `GET /export`. Export responses use the correct content type and `Content-Disposition`; invalid formats/visibilities return 400. Integration and Chromium E2E cover the filter and export path.
+- `2a1e24c`: the Add person form creates a pending Person proposal backed by at least one existing Episode/Source/Annotation evidence record.
+- `a198d95`: the Add relationship form creates a pending Relationship proposal with subject, supported `relation:*` predicate, object, optional valid-time start/end/precision, visibility and evidence. `ea150f6` extends Chromium E2E through both forms.
+- `fd410ad`: the Add source form creates a pending Source proposal with title, source type, visibility and notes. `bbdf268` allows standalone Source creation without prior evidence: a Source is itself evidence and can support later person/relationship proposals. Import and web tests cover standalone source approval.
+- `68e2f02`: the Add entity form creates pending Place, Event, Organization or Period proposals with evidence, notes and visibility. Integration tests cover all four types and validation; Chromium E2E covers source and place creation.
+- `f8a9f19`: the Add assertion form creates pending Assertion proposals with subject, relation predicate, object record or literal value, status, optional valid-time and evidence mapped into `produced_by`/`supported_by`/`annotations`. Record detail pages link to it with a prefilled subject.
+- `d66ffd3`: record detail lists the pending/applied proposals that created or touched the record; proposal detail lists affected records with links when canonical and `(pending)` markers before approval.
+- `d7bfed2`: read-only `/conflicts` view merges explicit Conflict records with assertion-derived contradictions, filters by status, links assertions and evidence, and answers 404 to POST like the other GET-only views.
+- `9055975`: `proposal show --json` emits machine-readable proposals and structured errors for agents.
+- `7566049`: `media add|list` writes content-addressed checksummed manifest entries under `media-manifest/` (URI, SHA-256, MIME, size, visibility, acquisition metadata) without copying media or touching `data/`.
+- `7a8c03e`: Firefox E2E now covers source and assertion forms in addition to memory/person/relationship.
+- New forms: `/annotations/new` (Annotation: targets + evidence, evidence mapped into episode_ids/source_ids), `/narratives/new` (Narrative: author/language/perspective/content_location/related records), `/conflicts/new` (Conflict: assertions + relation/reason/status), and a read-only `/media` page listing checksummed manifest entries. Collection is now part of the generic entity form.
+- Follow-up: `/media-assets/new` (and aliases `/media/new`, `/mediaassets/new`) creates a pending MediaAsset proposal with visibility, notes and required evidence. Nav links and i18n added. Baseline now 177 passed.
+- Current baseline: `177 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
+- Final container smoke test after the annotation/narrative/conflict/media unit: image rebuilt, project `storygram-final` on port 18080 reached `healthy`, and `/annotations/new`, `/narratives/new`, `/conflicts/new`, `/media` all returned 200 with their titles. Test project, volume and image removed.
+
+## Current Usable Flows
+
+- Human web flow: open the UI, choose EN/IT, add a memory and/or source, then add people, entities, family relationships and assertions backed by that evidence, or use **Generate**; inspect the dry-run, approve/reject/withdraw, trace changes through record/proposal cross-links, then browse **Records** with type/status/visibility/text filters, download the filtered export and open **Timeline**, **Genogram** or the read-only **Conflicts** view. No browser route applies canonical data without the normal approval action.
+- Agent CLI flow: `init`, `proposal new|list|show|generate|approve|reject|withdraw` (with `--json` where output matters), `import`, `export`, `search`, `rebuild`, `timeline`, `genogram`, `conflicts`, `media add|list`, `ingest episode`. Agents can create pending proposals only; approval remains human-only.
+
+## Resume Checklist After a Fresh Container
+
+1. `pip install --break-system-packages -e ".[dev]"`.
+2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `177 passed`).
+3. `ruff check src tests && ruff format --check src tests && mypy src`.
+4. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` if `node_modules` is missing.
+5. `apk add chromium firefox geckodriver` for both browser flows; `npm run test:e2e:all`.
+6. Do not commit `archive/`, `chatgpt.md` or `session-ses_*.md`.
+
+## Ollama Profile Verification (2026-11-04)
+
+- Started `storygram-ollama` project on port 18082 with `--profile ollama`; image built as `storygram:local`.
+- Ollama service and app container reached `Up`; app called Ollama at `http://ollama:11434`.
+- Pulled `tinyllama` successfully. Generation via the app timed out on the 1-CPU quota, so the profile is wired but not quality-verified.
+- Removed the test project, network and volumes. The Ollama profile remains optional and unverified for model quality; `qwen3-4b` stays the reference via OpenAI-compatible endpoint.
+
+## Next Steps
+
+1. Optional GUI polish: creation forms for Annotation, Narrative, Collection, Conflict and MediaAsset records (the advanced JSON editor covers them today), plus media browsing in the UI. Keep all browser write paths behind proposals.
+2. Merge `feature/agent-proposal-flow` into `develop`/`main` only when the user asks; run the container regression procedure from `HANDOFF.md` before any release tag.
+3. Keep `genogram` experimental until reviewed on real user data. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
+4. Re-run Python/lint/format/mypy and both browser flows after any change; keep bilingual docs in sync.
+5. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
+6. Run the optional Ollama container profile only when network/time permit; it remains unverified.
+
+## Local GGUF Helpers (2026-11-02)
+
+- Added `scripts/download-model.sh` and `scripts/llm-up.sh`, both tracked and executable.
+- `download-model.sh` downloads `qwen2.5-1.5b-instruct-q4_k_m.gguf` into `${STORYGRAM_MODELS_DIR:-${STORYGRAM_MODEL_DIR:-<repo>/models}}` and verifies SHA256 `6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e`.
+- `llm-up.sh` derives the host-side model path from the development container's `/data` mount when `STORYGRAM_MODELS_DIR` is omitted, then starts the `llm` Compose profile with `STORYGRAM_LLM_PROVIDER=openai`, `STORYGRAM_LLM_URL=http://llm:8080` and the GGUF filename without extension as the model name.
+- `compose.yaml` now has an `llm` llama.cpp service using `samueltallet/alpine-llama-cpp-server:latest`, a read-only bind mount, and `LLAMA_ARG_MODEL`/`LLAMA_ARG_HOST`/`LLAMA_ARG_PORT`/`LLAMA_ARG_JINJA`; the Ollama service moved to the `ollama` profile so the names do not collide.
+- The helper scripts were syntax-checked, and `docker compose config` passed for the default and `llm` profiles. A stubbed `docker` verified the derived host path and exported provider variables without starting containers.
+
+## Local Model Quality (2026-11-02)
+
+- Reference model: `qwen3-4b` on the configured OpenAI-compatible endpoint. Keep it loaded; do not switch to 8B/14B during normal review.
+- Prompt hardening added: Episode `content.text`, evidence on operations, no Relationship records, `relation:*` predicates, `transaction_time.recorded_at` as record time, `valid_time` for source dates, no Period records, only IDs created in the proposal or known, literal facts in `value` without an invented object prefix, and no invented surnames.
+- Fixtures: Italian (Maria/Luca/Torino), English (Elena/Naples/Milan/nurse), short capture (garden photo).
+- `qwen3-4b` dry-run: Italian passed with 6 operations; English passed after the literal-value example; short capture returned only Episode and passed.
+- `qwen3-8b` was not selected: the English fixture failed envelope validation with a `record_type` of `Occupation`.
+- Local 1.5B with the hardened prompt: returned only Episode with `content.text` in about 76 seconds; dry-run passed.
+- Local 3B: load about 9 minutes / 1.86 GiB; no token in 25+ minutes under the 1-CPU quota; stopped and test resources removed.
+- Semantic quality is still limited: `qwen3-4b` produced `place:neapes` (typo) and previously invented a surname. Dry-run validity is not truth; human approval remains mandatory.
+
+## Export Round-Trips (2026-11-03)
+
+- `storygram export --format yaml` emits a YAML sequence of canonical records; `records_from_yaml` parses a sequence, a single mapping or `{records: [...]}`.
+- `storygram export --format markdown` emits blocks marked `<!-- storygram:record -->`, each with YAML front matter plus a body. Episode `content.text` and record `notes` move to the body; `storygram_body` records which field is in the body.
+- `records_from_jsonld` reverses the existing `@context`/`@graph` output by mapping `@id`/`@type` back to `id`/`type`. JSON-LD remains a local graph projection, not full RDF expansion.
+- Round-trip tests cover a Person (smallest case), an Episode with content text, an Assertion with nested valid/transaction time, multiple records, malformed parser input and CLI YAML/Markdown output.
+- Lossiness: Markdown body-only edits are ignored because the front matter is the source of truth; JSON/JSON-LD/YAML preserve record data. There is no CLI canonical import, so exported records still cannot bypass the proposal/approval gate.
+- Existing `export --format json` and `jsonld` structures are unchanged; the JSON export test remains green.
+
+## Safe Import (2026-11-03)
+
+- `storygram import FILE` accepts exported JSON, JSON-LD, YAML or Markdown; the format is inferred from the suffix or forced with `--format`.
+- It parses the export through the round-trip parsers, validates every record against its schema, rejects unknown/non-proposable types, duplicate IDs and IDs already canonical, then builds a create-only proposal with `status=proposed`.
+- The proposal is run through `plan_apply` (the same dry-run planner used by approval) before anything is written. Invalid proposals, including missing evidence, fail the import and leave no pending file.
+- Imported Episode/Source/Annotation records are ordered first and become operation-level evidence for later records; `--evidence` adds already-canonical capture IDs. Proposal-level evidence is not used because it would be evaluated before newly created records exist.
+- `import` writes only `proposals/`. It never writes `data/`, never approves and never creates a Git commit. Canonical records appear only after the normal human `proposal approve` path.
+- `--id` defaults to `proposal:import-<file-stem>`; `--title` overrides the generated title.
+- `records_from_json` was added as the missing symmetric parser for the native JSON export list; it also accepts a single record or `{records: [...]}`.
+- Tests cover JSON/JSON-LD/YAML/Markdown import, auto format detection, `--format` override for unknown suffixes, pending-only writes, approval after import, imported-Episode evidence wiring, missing evidence, invalid schema, duplicate IDs and IDs already in canonical data.
+
+## Capture Metadata (2026-11-03)
+
+- `src/storygram/capture.py` computes SHA-256 while streaming the source into a temp file, so the metadata describes the exact copied bytes without a second read.
+- Sidecar path: `inbox/.storygram/<filename>.json`; format identifier `storygram.capture/1`.
+- Fields: `filename`, `size`, `mime_type`, `checksum {algorithm: sha256, value}`, `ingested_at`, `overwritten`.
+- The capture and sidecar are moved into place with `os.replace`; if the metadata replace fails after the capture replace, the new capture and stale sidecar are removed and the command fails.
+- A refused overwrite (`--overwrite` absent) leaves both the original capture and its sidecar untouched. An accepted overwrite refreshes the checksum and sets `overwritten: true`.
+- `ingest episode --json` returns the metadata plus the capture and sidecar paths.
+- `inbox/` remains the only destination: no canonical `data/` record, proposal or commit is created.
+- Inbox or metadata-directory preparation failures are reported as `CaptureError` instead of leaking a traceback.
+- MIME type is a best-effort guess from the filename and can be `null`.
+
+## Timeline Scopes (2026-11-04)
+
+- `build_timeline(root, None)` builds an archive-level timeline over every open assertion; `storygram timeline --all` exposes it.
+- A collection timeline includes assertions about the collection itself and about records that assert `relation:member_of` the collection. Membership is one level deep and is expressed as a normal Assertion, so no canonical schema change was needed.
+- `storygram timeline ID` still requires an ID; `--all` and an ID are mutually exclusive and one of them is required.
+- Closed assertions remain excluded in every scope. Sorting by valid-time start then assertion ID and evidence fields are unchanged.
+- Tests cover archive-level inclusion, collection membership, closed membership, CLI scope selection, conflicting/missing scope errors and the empty-archive message. Full suite is now `129 passed`.
+- This unit is read-only: no ingestion, proposal, approval or canonical write behavior changed.
+
+## Relationship Endpoints (2026-11-04)
+
+- `schema/relationship.schema.json` and its root duplicate now model an optional endpoint triple: `subject`, `predicate` (`relation:*`) and `object`.
+- The triple is all-or-nothing: a Relationship with any endpoint field must provide all three. Bare legacy Relationship records remain schema-valid, so existing archives are not broken by the upgrade.
+- `models.Relationship` mirrors the new optional fields; schema validation remains the authoritative gate.
+- `genogram` reads complete Relationship records and `relation:*` assertions, scopes both to the requested person, marks unsupported predicates and warns about incomplete Relationship records instead of ignoring all Relationship records.
+- Closed relations (`superseded`, `archived`, `rejected`) are skipped for both record kinds. Output keeps `assertion_id` for assertions, adds `relationship_id` for Relationships, and always includes `record_id`/`record_type`.
+- Generation still prefers Assertions; the prompt no longer claims the schema has no endpoints but keeps the `NEVER create Relationship records` guard for model output.
+- This unit is read-only for canonical data: no ingestion, proposal, approval or commit behavior changed.
+- Tests cover endpoint validation, complete/incomplete Relationship records, person scoping, closed relations and the CLI warning path. Full suite was `124 passed` for that unit.
+
+## Genogram Deduplication (2026-11-04)
+
+- `genogram` groups relations by `(subject, predicate, object)` and emits one entry per equivalent triple.
+- A `Relationship` representative is preferred over an `Assertion`; the temporal review below refines the tie-break to the most recent transaction time before `record_id`.
+- Every entry now carries `related_ids`, the sorted list of all contributing record IDs. Representative keys such as `relationship_id` or `assertion_id` remain unchanged.
+- Distinct predicates between the same endpoints are not merged. Closed-status filtering and person scoping still apply before deduplication.
+- This unit is read-only: no schema change, canonical write, proposal, approval or commit behaviour changed.
+- Tests cover cross-type deduplication, multiple duplicate assertions, deterministic representative selection and distinct predicates. Full suite is now `131 passed`.
+
+## Relationship Temporal Fields (2026-11-04)
+
+- `schema/relationship.schema.json` and its root duplicate now accept optional `valid_time` and `transaction_time` objects using the same shapes as Assertion.
+- Both fields remain optional so legacy Relationship records stay valid; when present, their inner shapes are validated (`transaction_time.recorded_at` is required, `valid_time.precision` is constrained).
+- `models.Relationship` mirrors the fields as optional `ValidTime`/`TransactionTime` models.
+- `genogram` now copies `valid_time` and `transaction_time` into every relation entry when the source record provides them.
+- Deduplication remains keyed by the exact relation triple. The representative record supplies the temporal fields; `related_ids` preserves every contributing record.
+- This unit is read-only for canonical data: no ingestion, proposal, approval or commit behaviour changed.
+- Tests cover schema acceptance/rejection, model alignment and genogram output. Full suite is now `134 passed`.
+
+## Genogram Temporal Review (2026-11-04)
+
+- Added `tests/fixtures/genogram_family.json`: four people, a place, two spouse intervals for the same pair, duplicate Assertion/Relationship parent records, an archived spouse and an unsupported `relation:lived_in`.
+- Decision: edge identity remains the exact `(subject, predicate, object)` triple. Temporal intervals do not split edges, and no `--at` filter is added in this unit.
+- Every deduplicated entry now includes `valid_times` and `transaction_times`, sorted and deduplicated across all contributing records. Singular `valid_time`/`transaction_time` remain from the representative.
+- Representative selection is Relationship before Assertion, then latest `transaction_time.recorded_at`, then smallest `record_id`. This supersedes the previous `record_id`-only tie-break.
+- Closed relations are filtered before deduplication, so archived/superseded/rejected intervals never enter the aggregated arrays.
+- The realistic fixture test validates each record and checks interval aggregation, representative recency, archived exclusion and unsupported-predicate warnings.
+- Genogram remains experimental; there is no temporal filter yet and review on real user data is still open.
+- Full suite is now `135 passed`.
+
+## Read-only GUI Phase 1 (2026-11-04)
+
+- Added `GET /records` and `GET /records/<id>` to `web.py`; both are server-rendered with the existing stdlib layout and expose no write route.
+- List filters are exact `type` and `status` plus a case-insensitive text query over id/type/status/title/name/summary/notes/tags. Sorting is deterministic by id, then relative path.
+- Detail shows type/status/visibility, the relative canonical file, raw JSON, references and backlinks. Missing references are marked; unknown IDs return 404.
+- Malformed record files are surfaced as warnings without hiding valid records; the browser never writes canonical data.
+- Home and navigation link to Records. Integration tests cover list, filters, detail, missing IDs, no POST route, load errors and reference/backlink links; Playwright covers the browse flow.
+- Checks at that unit: `138 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse passing.
+
+## Read-only GUI Phase 2 (2026-11-04)
+
+- Added `GET /timeline` with archive scope by default and `?id=...` for entity, place and collection scopes, reusing `timeline.build_timeline`. Unknown IDs return 404; known records with no entries render an empty message; malformed records remain visible as load warnings.
+- Timeline rows show valid time, the assertion link, subject/predicate/object links, status, transaction time and deduplicated `produced_by`/`supported_by` evidence links. Closed assertions remain excluded by the deterministic builder.
+- Added `GET /genogram?id=...`, reusing `genogram.build_genogram`. A missing ID returns 400 with an input form; an unknown ID returns 404; a known person with no relations renders an empty message.
+- Genogram rows show predicate, direction, subject/object links, a supported/unsupported badge, the source record and `related_ids`, plus representative `valid_time`/`transaction_time` and aggregated `valid_times`/`transaction_times`. Experimental status and warnings are explicit.
+- Navigation and the home page link to Timeline and Genogram. Both routes are GET-only; there is no POST handler and no canonical write path.
+- Integration tests cover archive/entity/collection timeline scopes, evidence and record links, unknown IDs, missing genogram input, unknown people, warnings, supported badges and temporal aggregation. Playwright creates and approves a synthetic relation proposal, then navigates timeline and genogram through the real UI.
+- Checks: `142 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/timeline/genogram passing.
+
+## Checks
+
+- `PYTHONPATH=/data/src python -m pytest`: `142 passed`.
+- `npm run test:e2e`: Playwright edit, approve, reject, browse, timeline and genogram flows passed.
+- `ruff check src tests`: passed.
+- `ruff format --check src tests`: passed.
+- `mypy src`: passed.
+- Live CLI generation against `qwen3-4b`: returned `ok: true` and a pending proposal.
+- Live API generation: `201`, saved pending; `withdraw`: `200`; repeated `withdraw`: `409`.
+- `docker build -t storygram:local /data`: passed after the compose/provider changes.
+- Compose run on port 18080 with the live LLM env: `healthy`, UID `100`, `init-ok`, `http-ok`.
+- In-container LLM reachability: `/v1/models` returned 4 models.
+- In-container generation: `ok: true`; generated pending proposal saved.
+- In-container API withdraw: `200`; repeated withdraw: `409`.
+- Restart and `down`/`up` persistence: pending proposal survived.
+- Legacy CLI tests: ingest, export, search/rebuild, conflicts, timeline, genogram and read commands all pass.
+- Capture smoke test: `init` + `ingest episode --json` wrote `inbox/sample.txt` and `inbox/.storygram/sample.txt.json`, checksum matched the content, and `data/` contained 0 files.
+- Test container, network, volume, image, temp archives and ephemeral env file were removed.
+- `sh -n scripts/download-model.sh scripts/llm-up.sh`: passed.
+- `docker compose config` and `docker compose --profile llm config`: passed.
+- `scripts/llm-up.sh` with a stubbed `docker`: derived `/mnt/c/Users/erobi/Desktop/storygram_test/models`, set `openai` / `http://llm:8080` / `qwen2.5-1.5b-instruct-q4_k_m`, and passed `--profile llm up -d`.
+- Local `llm` profile with `models/qwen2.5-1.5b-instruct-q4_k_m.gguf`: model loaded in about 2m36s, `/health` returned `{"status":"ok"}`, `/v1/models` listed the GGUF, and the read-only mount worked.
+- App container on port 18080 with the local profile: reached `healthy`; in-container `proposal generate` returned a valid proposal envelope.
+- The 1.5B model with the hardened prompt returned only a minimal Episode with `content.text`; it passes dry-run but does not extract people, places or assertions. This is a model-quality limit, not a wiring failure.
+- With the hardened prompt, `qwen3-4b` produced six operations (Episode, two People, Place, two Assertions) for the Italian fixture and passed dry-run. The English fixture also passed after adding a literal-value example; `place:neapes` remained a model typo, so human review is still required.
+- `qwen3-14b` and `qwen3-8b` were tested during prompt tuning but are not the chosen reference; avoid switching models on the shared server.
+- Optional Ollama profile: not run.
+- Remote prompt A/B: `qwen3-4b` passed dry-run on Italian, English and short-capture fixtures; `qwen3-8b` failed envelope validation on the English fixture and was not selected.
+- Local 3B GGUF: model loaded (about 9 minutes, 1.86 GiB), then produced no token for more than 25 minutes under the 1-CPU quota; stopped and removed. It was not promoted to default.
+- Test containers, project network, the project volume created by this run, and the temporary Alpine image were removed; `storygram:local` and the downloaded GGUF remain.
+- 2026-11-04 post-unit container regression through the host socket (Podman 5.8.2, Docker CLI 29.9.2, Compose v5.6.1): `docker build -t storygram:local /data` passed; Compose project `storygram-test` on port 18080 reached `healthy`; UID `100`, `init-ok`, clean Git tree and `http-ok` inside the container; `proposal new|list|approve --dry-run|approve --no-commit` applied `episode:docker-check`; the new `media add|list` wrote and listed a content-addressed SHA-256 entry; `proposal show --json` returned the merged proposal; `GET /conflicts` rendered; after `restart` the episode and the media entry persisted and the container was `healthy` again. Test project, volume, network and image were removed afterwards.
+
+## Known Limitations
+
+- The default provider is Ollama, but live verification used the OpenAI-compatible `qwen3-4b` endpoint and later the local `llm` llama.cpp profile. The Ollama profile (`--profile ollama`) was not exercised.
+- LLM generation validates the proposal envelope only; operation records can still fail the dry-run. The hardened prompt makes `qwen3-4b` outputs dry-run valid on the tested fixtures, but this is not a guarantee for every capture. The local 1.5B model usually returns only an Episode.
+- `qwen3-4b` can still invent a surname or misspell a place name (for example `place:neapes`); dry-run validity is not semantic correctness. Human review remains mandatory.
+- The local 3B model is not usable on the current 1-CPU quota. It loaded but produced no tokens in 25+ minutes; do not set it as the default.
+- There is intentionally no automate-approval or approve endpoint. A model may suggest or classify, but only a human UI/CLI action can apply canonical data.
+- `STORYGRAM_LLM_API_KEY` is read from the environment; never place it in Git. `.env` is gitignored and excluded from the Docker build context.
+- The verified daemon is Podman Engine 5.8.2 exposed through its Docker-compatible API, not a native Docker Engine. Record this distinction in future runs.
+- `scripts/llm-up.sh` assumes the development repository is mounted at `/data` when deriving the host model path; otherwise set `STORYGRAM_MODELS_DIR` explicitly.
+- The local GGUF must exist on the host daemon's side of the bind mount. A development-container path is not a host path.
+- The local Qwen 1.5B model loads in about 2m36s and may trigger transient app healthcheck failures under CPU contention; wait for both services before testing generation. Generation of a minimal Episode took about 76 seconds in the last run.
+- Do not switch models on the llama-swap server during a session; loading a different model adds latency and the user asked to keep the 4B reference stable.
+- Host-published ports may not be reachable from the development container; validate through container exec/health and treat host UI access separately.
+- Bind mounts resolve on the host daemon, not inside the development container. The helper's `/hosttmp/...` path is not the host path; derive or use a fixed host `/tmp` path as documented in `HANDOFF.md`.
+- `apply_proposal` commit message is `feat(proposal): apply <id>`.
+- The archived proposal records `applied_at`, but not the resulting commit hash, to keep the archive and data commit atomic.
+- Conflict detection is deliberately conservative and year-based; it is not a complete temporal reasoner.
+- Working-tree cleanliness checks tracked files only, so ignored pending proposals do not block approval.
+- Pending proposals remain local and ignored by Git; only merged proposals are archived and committed.
+- `ingest` writes a local `storygram.capture/1` sidecar with SHA-256, size, MIME type and timestamps under `inbox/.storygram/`. The sidecar is not a canonical Episode and is not validated by the record registry.
+- Capture MIME type is best-effort via Python `mimetypes`; unknown types are recorded as `null`.
+- `export` supports JSON, YAML, Markdown and a minimal JSON-LD projection. JSON/YAML/JSON-LD round-trip through module parsers; Markdown round-trips only through front matter.
+- `import` turns an export into a create-only pending proposal; it never writes canonical data. Records whose type requires evidence need either an imported Episode/Source/Annotation or `--evidence`; otherwise the import fails at validation.
+- `genogram` remains experimental: it reads endpoint-aware Relationship records and `relation:*` assertions, deduplicates equivalent triples and aggregates all temporal intervals, but has no temporal filter and real user-data review is still open.
+- Relationship endpoints are optional as a group; bare legacy records remain valid but produce a genogram warning because they cannot be scoped.
+- Timeline collection membership is expressed through `relation:member_of` assertions, one level deep; nested collections and Collection `member_ids` are not modelled.
+- Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
+- The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping. The read-only GUI now covers records, timeline and experimental genogram; search/export and visibility filters remain open.
+- The API cannot approve; approval remains UI/CLI only.
+
+## Demo Authoring (2026-11-04)
+
+- Added optional skill `demo-authoring` (Manim + VCR + Slidev fallback), `/demo` command, templates and `scripts/demo_tools.py`.
+- Installed and verified in this container: Manim v0.22.1 (render OK), Slidev v53.0.0 (build OK), ffmpeg, texlive.
+- VCR not installable here (no snapd); documented Ubuntu snap instructions.
+- Output lives under `generated/demos/` (gitignored). No canonical data touched.
+
+## Demo Storygram (2026-11-04)
+
+- Creati due artefatti Manim in `generated/demos/manim/`:
+  - `storygram_timeline.py` (`StorygramTimeline`): timeline di eventi sintetici (1990/2000/2010/2020) con asserzioni subject→predicate→object; render OK (12.47s, 186 KB).
+  - `storygram_proposal_flow.py` (`StorygramProposalFlow`): flusso capture → pending proposal → dry-run → approve (umano) → record canonico; render OK (8.47s, 102 KB).
+- Creato corso Slidev bilingue in `generated/demos/vcr/storygram_intro/` (`en/index.md` inglese, `it/index.md` italiano, 9 slide: intro, invarianti, timeline, flusso proposal, CLI, demo); build OK in `en/dist/index.html` e `it/dist/index.html`.
+- Dati solo sintetici; nessuna scrittura in `data/`, `proposals/`, `inbox/`.
+- Verificati MP4 con ffprobe e build Slidev; ruff/format/mypy non coinvolti (output derivato).

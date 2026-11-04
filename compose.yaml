@@ -1,0 +1,47 @@
+name: storygram
+
+services:
+  storygram:
+    build: .
+    image: storygram:local
+    ports:
+      - "${STORYGRAM_PORT:-8080}:8080"
+    volumes:
+      - storygram-data:/data
+    environment:
+      STORYGRAM_OLLAMA_URL: "http://ollama:11434"
+      STORYGRAM_OLLAMA_MODEL: "${STORYGRAM_OLLAMA_MODEL:-llama3.2}"
+      STORYGRAM_LLM_PROVIDER: "${STORYGRAM_LLM_PROVIDER:-ollama}"
+      STORYGRAM_LLM_MODEL: "${STORYGRAM_LLM_MODEL:-}"
+      STORYGRAM_LLM_URL: "${STORYGRAM_LLM_URL:-}"
+      STORYGRAM_LLM_API_KEY: "${STORYGRAM_LLM_API_KEY:-}"
+      STORYGRAM_LLM_TIMEOUT: "${STORYGRAM_LLM_TIMEOUT:-}"
+      STORYGRAM_LLM_MAX_TOKENS: "${STORYGRAM_LLM_MAX_TOKENS:-}"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+  llm:
+    image: samueltallet/alpine-llama-cpp-server:latest
+    profiles: ["llm"]
+    volumes:
+      - type: bind
+        source: "${STORYGRAM_MODELS_DIR:-./models}"
+        target: /models
+        read_only: true
+    environment:
+      LLAMA_ARG_MODEL: "/models/${STORYGRAM_LLM_MODEL_FILE:-qwen2.5-1.5b-instruct-q4_k_m.gguf}"
+      LLAMA_ARG_HOST: "0.0.0.0"
+      LLAMA_ARG_PORT: "8080"
+      LLAMA_ARG_CTX_SIZE: "${STORYGRAM_LLM_CTX_SIZE:-8192}"
+      LLAMA_ARG_JINJA: "true"
+    restart: unless-stopped
+
+volumes:
+  storygram-data:
+  ollama-models:

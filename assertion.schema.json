@@ -44,7 +44,7 @@
     "transactionTime": {"type": "object", "additionalProperties": false, "required": ["recorded_at"], "properties": {"recorded_at": {"type": "string", "format": "date-time"}, "recorded_until": {"type": ["string", "null"], "format": "date-time"}}}
   },
   "allOf": [
-    {"if": {"properties": {"status": {"const": "superseded"}}}, "then": {"required": ["supersedes"]}},
+    {"if": {"properties": {"status": {"const": "superseded"}}}, "then": {"properties": {"transaction_time": {"required": ["recorded_until"]}}}},
     {"if": {"properties": {"object": {"const": null}}}, "then": {"required": ["value"]}}
   ]
 }

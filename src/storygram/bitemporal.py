@@ -1,7 +1,7 @@
 """Bitemporal helpers."""
+
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 
@@ -13,6 +13,9 @@ def is_current_transaction(assertion: dict[str, Any]) -> bool:
 def supersedes_chain(assertions: list[dict[str, Any]]) -> dict[str, list[str]]:
     children: dict[str, list[str]] = {}
     for a in assertions:
+        child_id = a.get("id")
+        if not isinstance(child_id, str):
+            continue
         for s in a.get("supersedes") or []:
-            children.setdefault(s, []).append(a.get("id"))
+            children.setdefault(s, []).append(child_id)
     return children

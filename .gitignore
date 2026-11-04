@@ -27,6 +27,7 @@ ENV/
 .venv
 
 # Testing
+node_modules/
 .pytest_cache/
 .coverage
 htmlcov/
@@ -56,6 +57,10 @@ proposals/*
 !proposals/.gitkeep
 media-manifest/*
 !media-manifest/.gitkeep
+
+# Local models
+models/
+*.gguf
 
 # Secrets
 .env

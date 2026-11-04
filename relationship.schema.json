@@ -2,16 +2,30 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://storygram.local/schema/relationship.schema.json",
   "title": "Storygram Relationship",
+  "description": "A relationship between two Storygram entities with an explicit relation predicate and endpoints.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "type", "status", "created_at", "updated_at"],
   "properties": {
     "id": {"type": "string", "pattern": "^relationship:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
     "type": {"const": "Relationship"},
+    "subject": {"$ref": "#/$defs/entityRef"},
+    "predicate": {"type": "string", "pattern": "^relation:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "object": {"$ref": "#/$defs/entityRef"},
+    "valid_time": {"$ref": "#/$defs/validTime"},
+    "transaction_time": {"$ref": "#/$defs/transactionTime"},
     "status": {"type": "string", "enum": ["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]},
     "created_at": {"type": "string", "format": "date-time"},
     "updated_at": {"type": "string", "format": "date-time"},
     "visibility": {"type": "string", "enum": ["private", "restricted", "family", "public"]},
     "notes": {"type": "string"}
-  }
+  },
+  "$defs": {
+    "entityRef": {"type": "string", "pattern": "^(person|organization|place|period|event|relationship|source|media|episode|assertion|annotation|narrative|collection|proposal):[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "validTime": {"type": "object", "additionalProperties": false, "properties": {"start": {"type": "string"}, "end": {"type": "string"}, "precision": {"type": "string", "enum": ["day", "month", "year", "decade", "approximate", "unknown"]}, "expression": {"type": "string"}, "calendar": {"type": "string"}}},
+    "transactionTime": {"type": "object", "additionalProperties": false, "required": ["recorded_at"], "properties": {"recorded_at": {"type": "string", "format": "date-time"}, "recorded_until": {"type": ["string", "null"], "format": "date-time"}}}
+  },
+  "allOf": [
+    {"if": {"anyOf": [{"required": ["subject"]}, {"required": ["predicate"]}, {"required": ["object"]}]}, "then": {"required": ["subject", "predicate", "object"]}}
+  ]
 }

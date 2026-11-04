@@ -1,4 +1,5 @@
 """Pydantic models."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -43,7 +44,9 @@ class Episode(BaseModel):
     ]
     title: str | None = None
     description: str | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     captured_at: str | None = None  # allow date or datetime or year
@@ -69,8 +72,20 @@ class Assertion(BaseModel):
     predicate: str = Field(pattern=r"^relation:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     object: str | None = None
     value: Any | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "superseded", "archived"]
-    certainty: Literal["unknown", "possible", "probable", "reported", "confirmed", "disputed", "rejected"] | None = None
+    status: Literal[
+        "draft",
+        "proposed",
+        "reported",
+        "confirmed",
+        "disputed",
+        "rejected",
+        "superseded",
+        "archived",
+    ]
+    certainty: (
+        Literal["unknown", "possible", "probable", "reported", "confirmed", "disputed", "rejected"]
+        | None
+    ) = None
     confidence: Literal["low", "medium", "high"] | None = None
     source_quality: Literal["unknown", "low", "medium", "high"] | None = None
     valid_time: ValidTime | None = None
@@ -95,8 +110,23 @@ class Source(BaseModel):
     id: str = Field(pattern=r"^source:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Source"]
     title: str
-    source_type: Literal["oral", "written", "archival", "registry", "photograph", "audio", "video", "website", "other"] | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    source_type: (
+        Literal[
+            "oral",
+            "written",
+            "archival",
+            "registry",
+            "photograph",
+            "audio",
+            "video",
+            "website",
+            "other",
+        ]
+        | None
+    ) = None
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -106,7 +136,9 @@ class Source(BaseModel):
 class Annotation(BaseModel):
     id: str = Field(pattern=r"^annotation:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Annotation"]
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     target_ids: list[str] | None = None
@@ -120,7 +152,9 @@ class Person(BaseModel):
     id: str = Field(pattern=r"^person:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Person"]
     name: str | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -131,7 +165,9 @@ class Organization(BaseModel):
     id: str = Field(pattern=r"^organization:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Organization"]
     name: str | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -142,7 +178,9 @@ class Place(BaseModel):
     id: str = Field(pattern=r"^place:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Place"]
     name: str | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -153,7 +191,9 @@ class Period(BaseModel):
     id: str = Field(pattern=r"^period:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Period"]
     name: str | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -164,7 +204,9 @@ class Event(BaseModel):
     id: str = Field(pattern=r"^event:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Event"]
     name: str | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -174,7 +216,14 @@ class Event(BaseModel):
 class Relationship(BaseModel):
     id: str = Field(pattern=r"^relationship:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Relationship"]
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    subject: str | None = None
+    predicate: str | None = Field(default=None, pattern=r"^relation:[A-Za-z0-9][A-Za-z0-9._~-]*$")
+    object: str | None = None
+    valid_time: ValidTime | None = None
+    transaction_time: TransactionTime | None = None
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -184,7 +233,9 @@ class Relationship(BaseModel):
 class MediaAsset(BaseModel):
     id: str = Field(pattern=r"^media:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["MediaAsset"]
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -194,7 +245,9 @@ class MediaAsset(BaseModel):
 class Narrative(BaseModel):
     id: str = Field(pattern=r"^narrative:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Narrative"]
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     author: str | None = None
@@ -211,7 +264,9 @@ class Collection(BaseModel):
     id: str = Field(pattern=r"^collection:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Collection"]
     name: str | None = None
-    status: Literal["draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"]
+    status: Literal[
+        "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
+    ]
     created_at: datetime
     updated_at: datetime
     visibility: Literal["private", "restricted", "family", "public"] | None = None
@@ -221,7 +276,16 @@ class Collection(BaseModel):
 class Proposal(BaseModel):
     id: str = Field(pattern=r"^proposal:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Proposal"]
-    status: Literal["draft", "proposed", "under_review", "approved", "rejected", "merged", "archived"]
+    status: Literal[
+        "draft",
+        "proposed",
+        "under_review",
+        "approved",
+        "rejected",
+        "withdrawn",
+        "merged",
+        "archived",
+    ]
     created_at: datetime
     updated_at: datetime
     target_ids: list[str] | None = None

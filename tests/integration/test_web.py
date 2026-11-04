@@ -803,6 +803,14 @@ def test_web_add_memory_validates_input(tmp_path: Path) -> None:
         assert status == 400
         assert "Unknown participant: person:missing" in body
         assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/memories/new",
+            {"text": "A memory", "captured_at": "not-a-date"},
+        )
+        assert status == 400
+        assert "schema validation error" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
     finally:
         server.shutdown()
         server.server_close()

@@ -86,3 +86,39 @@ def test_relationship_model_accepts_temporal_fields():
     assert record.valid_time.start == "1987"
     assert record.transaction_time is not None
     assert record.transaction_time.recorded_at.isoformat() == "2026-01-01T00:00:00+00:00"
+
+
+def test_episode_captured_at_rejects_invalid_dates(tmp_path: Path):
+    record_type = TYPE_BY_NAME["Episode"]
+    base = {
+        "id": "episode:date-check",
+        "type": "Episode",
+        "episode_type": "memory",
+        "status": "reported",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "content": {"text": "Date validation"},
+    }
+    for value in ("not-a-date", "2026-13-40", "2026-11-04T25:00:00+00:00"):
+        assert validate.validate_instance(tmp_path, {**base, "captured_at": value}, record_type)
+    for value in ("1987", "1987-05-01", "1987-05-01T10:30:00+00:00", "1987-05-01T10:30:00Z"):
+        assert (
+            validate.validate_instance(tmp_path, {**base, "captured_at": value}, record_type) == []
+        )
+
+
+def test_created_at_requires_rfc3339_timezone(tmp_path: Path):
+    record_type = TYPE_BY_NAME["Episode"]
+    base = {
+        "id": "episode:date-check",
+        "type": "Episode",
+        "episode_type": "memory",
+        "status": "reported",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "content": {"text": "Date validation"},
+    }
+    assert validate.validate_instance(
+        tmp_path, {**base, "created_at": "2026-01-01T00:00:00"}, record_type
+    )
+    assert validate.validate_instance(tmp_path, {**base, "updated_at": "not-a-date"}, record_type)

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,34 @@ except Exception:  # pragma: no cover - dependency is optional at runtime
     FormatChecker = None  # type: ignore[assignment,misc]
     json_validate = None  # type: ignore[assignment]
     ValidationError = Exception  # type: ignore[assignment,misc]
+
+_FORMAT_CHECKER = None
+if FormatChecker is not None:
+    _FORMAT_CHECKER = FormatChecker()
+
+    @_FORMAT_CHECKER.checks("date-time", raises=ValueError)
+    def _check_date_time(value: object) -> bool:
+        if not isinstance(value, str):
+            return True
+        if (
+            re.fullmatch(
+                r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})",
+                value,
+            )
+            is None
+        ):
+            return False
+        datetime.fromisoformat(value.replace("Z", "+00:00").replace("z", "+00:00"))
+        return True
+
+    @_FORMAT_CHECKER.checks("date", raises=ValueError)
+    def _check_date(value: object) -> bool:
+        if not isinstance(value, str):
+            return True
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) is None:
+            return False
+        date.fromisoformat(value)
+        return True
 
 
 def load_schema(schema_path: Path) -> dict[str, Any] | None:
@@ -79,8 +109,7 @@ def _validate_instance(root: Path, data: dict[str, Any], record_type: RecordType
             return [f"type must be {record_type.name}"]
         return []
     try:
-        checker = FormatChecker() if FormatChecker is not None else None
-        json_validate(instance=data, schema=schema, format_checker=checker)
+        json_validate(instance=data, schema=schema, format_checker=_FORMAT_CHECKER)
     except ValidationError as exc:
         return [f"schema validation error: {exc.message}"]
     return []

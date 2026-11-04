@@ -54,7 +54,7 @@ npm run test:e2e:firefox
 - Prefer `PYTHONPATH=/data/src python -m storygram ...` until the package is installed.
 - `npm run test:e2e` uses Node Playwright with `/usr/bin/chromium`; Python Playwright is not musllinux-compatible.
 - `npm run test:e2e:firefox` uses WebDriver/geckodriver with system `/usr/bin/firefox`; install with `apk add firefox geckodriver`. `npm run test:e2e:all` runs both.
-- Current baseline: `149 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/timeline/genogram/add-memory/Italian flows and the Firefox add-memory smoke flow passing.
+- Current baseline: `153 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/timeline/genogram/add-memory/Italian flows and the Firefox add-memory smoke flow passing.
 - Never claim a check passed unless it actually ran in this environment.
 
 ## Docker from the Host Socket

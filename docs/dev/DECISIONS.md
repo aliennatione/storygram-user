@@ -279,3 +279,12 @@
 - Export links preserve the active filters, so a human can inspect a subset and download exactly that subset in JSON, JSON-LD, YAML or Markdown.
 - Export responses are attachments with explicit content types. Invalid formats or visibility values return 400 instead of silently exporting the whole archive.
 - The export route never writes canonical data; it is a read projection like the records, timeline and genogram pages.
+
+## Evidence-Backed Person and Relationship Forms (2026-11-04)
+
+- Person and Relationship creation are semantic changes, so the web forms require at least one existing Episode, Source or Annotation as evidence. The operation carries the selected evidence IDs into the proposal; approval still runs the normal planner.
+- The Add person form accepts a name, optional notes and visibility. It generates a readable slug plus a short random token for the ID, so names remain recognizable without relying on a global counter.
+- The Add relationship form exposes only the predicates the experimental genogram understands (`relation:parent`, `child`, `spouse`, `sibling`, `partner`). Free-form predicates remain available through the advanced JSON editor.
+- Subject and object are selected from active Person records. The form rejects identical endpoints, unknown people, unsupported predicates, invalid visibility and missing evidence before writing.
+- Optional `valid_time` is preserved as start/end/precision. Empty temporal fields are omitted rather than stored as empty strings.
+- Both forms create pending proposals only. They do not write canonical data or auto-approve, preserving the human gate.

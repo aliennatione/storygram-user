@@ -160,3 +160,7 @@
 - Reuse the CLI export module in the web route. A second export implementation would drift on ordering, visibility and format details.
 - Preserve active filters in export links; otherwise the downloaded file no longer matches what the user is looking at.
 - Reject invalid export parameters explicitly. Falling back to an unfiltered export can leak records the user did not intend to share.
+- Semantic forms need evidence at creation time. Requiring it in the form is clearer than letting the approval dry-run fail later.
+- Filter selectable entities to active records and validate them server-side; a disabled option or missing select value is not validation.
+- Reject identical relationship endpoints and unsupported predicates before creating a proposal. Early validation keeps the review queue clean.
+- Omit empty optional temporal fields instead of storing empty strings; schema-valid emptiness and meaningful absence are different.

@@ -136,3 +136,7 @@
 - Prefer the most recent `transaction_time.recorded_at` as the representative tie-break, not lexical `record_id`; the newest record is more likely to reflect the current representation.
 - Keep type priority before recency when deduplicating Relationship and Assertion: the dedicated canonical type remains the representative even if an assertion was recorded later.
 - Realistic fixtures reveal semantics that unit-level duplicate tests miss. Two spouse intervals for the same pair exposed the difference between structural deduplication and temporal identity.
+- A read-only archive browser must surface malformed-record load errors while still rendering valid records; otherwise the UI hides archive damage.
+- Raw JSON plus reference and backlink links is a cheap, honest record detail view. It avoids duplicating schema rendering before the field-level UI is designed.
+- Keep browser routes strictly read-only in the first GUI slice. A missing POST route is a stronger safety property than a disabled button.
+- Server-rendered HTML with the stdlib is enough for deterministic local browsing; do not add a frontend build until interactivity or large-result paging requires it.

@@ -37,7 +37,7 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-The web UI exposes the same engine, including a **Generate** page for local/Ollama or OpenAI-compatible models and an edit link for pending proposals:
+The web UI exposes the same engine, including a read-only **Records** browser with type/status/text filters, record detail with raw JSON plus reference and backlink links, a **Generate** page for local/Ollama or OpenAI-compatible models and an edit link for pending proposals:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080

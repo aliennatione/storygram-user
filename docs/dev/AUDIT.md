@@ -490,3 +490,26 @@ Review genogram behaviour on a realistic family fixture and decide whether tempo
 2. Aggregate intervals whenever a representative is chosen so the view does not silently lose history.
 3. Defer `--at` until interval-overlap semantics for approximate/open dates are designed.
 4. Keep genogram experimental until it is reviewed on real user data, not only synthetic fixtures.
+
+## 2026-11-04 - read-only GUI phase 1
+
+### Current objective
+
+Start the PRD M5 human interface with the smallest useful, safety-preserving slice: browse canonical records without adding any write path.
+
+### Point of situation
+
+- Added `GET /records` with exact type/status filters and a case-insensitive text query over id/type/status/title/name/summary/notes/tags; sorting is deterministic by id then relative path.
+- Added `GET /records/<id>` with type/status/visibility, relative canonical file, raw JSON, references and backlinks. Unknown IDs return 404; missing references are marked.
+- Malformed record files are surfaced as warnings while valid records remain visible.
+- No POST route or canonical write path was added. Home and navigation link to Records.
+- Integration tests cover list, filters, detail, missing IDs, no POST route, load errors and references/backlinks. Playwright covers the browse flow after approval.
+- Checks: `138 passed`; ruff, format, mypy and Playwright edit/approve/reject/browse pass.
+- Timeline/genogram, search/export and visibility filters remain open GUI slices.
+
+### Calibration
+
+1. Keep the browser read-only until proposal-backed editing is designed.
+2. Reuse the deterministic archive loader and surface load errors; do not hide malformed records.
+3. Treat raw JSON as the source of truth and derive only navigation links.
+4. Add visibility filtering with search/export, not as an isolated UI toggle.

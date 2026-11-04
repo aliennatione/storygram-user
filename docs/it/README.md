@@ -37,7 +37,7 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-La UI web usa lo stesso motore, inclusa una pagina **Generate** per modelli locali/Ollama o compatibili OpenAI e un link di modifica per le proposte pendenti:
+La UI web usa lo stesso motore, inclusa una pagina **Records** in sola lettura con filtri per tipo/stato/testo, dettaglio con JSON grezzo e link a riferimenti e backlink, una pagina **Generate** per modelli locali/Ollama o compatibili OpenAI e un link di modifica per le proposte pendenti:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080

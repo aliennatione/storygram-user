@@ -5,9 +5,9 @@ Last updated: 2026-11-04
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support, followed by collection/archive timeline scopes, deterministic genogram deduplication, optional Relationship temporal fields and genogram temporal interval aggregation on 2026-11-04; see `git log --oneline -20`.
-- Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
-- Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support, followed by collection/archive timeline scopes, deterministic genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation and read-only GUI record browsing on 2026-11-04; see `git log --oneline -20`.
+- Web generation, read-only record browsing, container files, bilingual docs, pending editing and the JSON API are implemented.
+- Proposal engine, CLI, local web UI, read-only records browser, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
 - An OpenAI-compatible provider with bearer-token support was added alongside the Ollama provider.
 - The 2026-11-01 API/provider/withdraw work, the legacy command hardening, the 2026-11-02 model-quality fixes and the 2026-11-03 export/import/capture units are committed in small atomic units.
@@ -41,14 +41,14 @@ Last updated: 2026-11-04
   - `proposal new|list|show|approve|reject|withdraw|generate` implemented.
   - `approve` supports `--dry-run`, `--no-commit` and scoped Git commits.
 - `tests/integration/test_cli_proposals.py`: CLI coverage for init, proposal lifecycle, dry-run, no-commit, commit, reject and invalid input.
-- `src/storygram/web.py`: stdlib HTTP UI with home, proposal list, JSON create form, Ollama Generate page, pending edit page, dry-run preview, approve (commit/no-commit) and reject.
+- `src/storygram/web.py`: stdlib HTTP UI with home, read-only records list/detail, proposal list, JSON create form, Ollama Generate page, pending edit page, dry-run preview, approve (commit/no-commit) and reject.
 - JSON API: `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`, `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject`, `POST /api/proposals/<id>/withdraw`; no approve endpoint.
 - `src/storygram/cli.py`: `web` command serving the UI on `0.0.0.0:8080` by default.
-- `tests/integration/test_web.py`: HTTP tests for home, create, edit, preview, approve, reject, withdraw, invalid JSON, generation, empty source and provider errors.
+- `tests/integration/test_web.py`: HTTP tests for home, read-only records list/detail, filters, references/backlinks, load errors, create, edit, preview, approve, reject, withdraw, invalid JSON, generation, empty source and provider errors.
 - `tests/integration/test_api.py`: agent API create/read/update/list/generate/reject/withdraw, duplicate/closed/applied guards, error codes and absence of approve endpoint.
 - Web generation uses an injectable provider factory for tests; production resolves Ollama or an OpenAI-compatible provider from form/env values.
 - Documentation audit added in `docs/dev/AUDIT.md`.
-- `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, generate form, create, edit pending, approve without commit, reject.
+- `tests/e2e/web.mjs`: Playwright browser flow against the real server: home, generate form, create, edit pending, approve without commit, record browse, reject.
 - `package.json` / `package-lock.json`: Playwright Node dependency and `npm run test:e2e`.
 - `.gitignore`: `node_modules/` ignored.
 - `src/storygram/llm.py`: provider-agnostic adapter, callable mock provider, stdlib Ollama provider, prompt builder, JSON extraction, normalization, pending-only save.
@@ -98,10 +98,11 @@ Last updated: 2026-11-04
 
 ## Next Steps
 
-1. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, Relationship temporal fields are modelled and all intervals are aggregated. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
-2. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
-3. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
-4. Run the optional Ollama container profile only when network/time permit; it remains unverified.
+1. Continue the read-only GUI: timeline/genogram views, search/export and visibility filters, then links between records and related proposals. Keep all browser write paths behind proposals.
+2. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, Relationship temporal fields are modelled and all intervals are aggregated. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
+3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
+4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
+5. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 
 ## Local GGUF Helpers (2026-11-02)
 
@@ -204,10 +205,19 @@ Last updated: 2026-11-04
 - Genogram remains experimental; there is no temporal filter yet and review on real user data is still open.
 - Full suite is now `135 passed`.
 
+## Read-only GUI Phase 1 (2026-11-04)
+
+- Added `GET /records` and `GET /records/<id>` to `web.py`; both are server-rendered with the existing stdlib layout and expose no write route.
+- List filters are exact `type` and `status` plus a case-insensitive text query over id/type/status/title/name/summary/notes/tags. Sorting is deterministic by id, then relative path.
+- Detail shows type/status/visibility, the relative canonical file, raw JSON, references and backlinks. Missing references are marked; unknown IDs return 404.
+- Malformed record files are surfaced as warnings without hiding valid records; the browser never writes canonical data.
+- Home and navigation link to Records. Integration tests cover list, filters, detail, missing IDs, no POST route, load errors and reference/backlink links; Playwright covers the browse flow.
+- Checks: `138 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse passing.
+
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest`: `135 passed`.
-- `npm run test:e2e`: Playwright edit, approve and reject flows passed.
+- `PYTHONPATH=/data/src python -m pytest`: `138 passed`.
+- `npm run test:e2e`: Playwright edit, approve, reject and browse flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
 - `mypy src`: passed.
@@ -263,5 +273,5 @@ Last updated: 2026-11-04
 - Relationship endpoints are optional as a group; bare legacy records remain valid but produce a genogram warning because they cannot be scoped.
 - Timeline collection membership is expressed through `relation:member_of` assertions, one level deep; nested collections and Collection `member_ids` are not modelled.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
-- The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping.
+- The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping. The read-only GUI currently covers records only; timeline/genogram, search/export and visibility filters remain open.
 - The API cannot approve; approval remains UI/CLI only.

@@ -234,3 +234,13 @@
 - Representative selection is Relationship before Assertion, then the latest `transaction_time.recorded_at`, then the smallest `record_id`. Type priority keeps the canonical relation record; recency makes the singular temporal fields meaningful.
 - No `--at` filter is added in this unit. Temporal filtering needs explicit overlap semantics for year/month/decade/approximate precision and open intervals, so it is deferred.
 - Closed records are filtered before aggregation. The genogram remains experimental until reviewed on real user data.
+
+## Read-only GUI Browse (2026-11-04)
+
+- The first human-interface slice is a server-rendered read-only browser, not a JavaScript application. The stdlib HTTP server, existing layout and deterministic archive loader already cover the need without adding a frontend build or a second source of truth.
+- Routes are `GET /records` and `GET /records/<id>`; there is no POST route and no canonical write path. Browsing cannot approve, create, edit or delete records.
+- The list reuses `validate.load_records` so malformed files are surfaced as warnings while valid records remain browseable. Hiding load errors would make the GUI look healthier than the archive.
+- Filters are exact `type` and `status` plus a case-insensitive text query over id/type/status/title/name/summary/notes/tags. Sorting is deterministic by id, then relative path.
+- The detail view treats raw JSON as the source of truth and adds only derived reference and backlink links. Missing references are marked instead of silently omitted.
+- Visibility filtering is deferred. The UI is unauthenticated and intended for a controlled local network or container port mapping; adding a visibility selector belongs with search/export, where the filter semantics are shared.
+- Timeline, genogram, search and export views remain later GUI slices. This unit deliberately stops at canonical record browsing.

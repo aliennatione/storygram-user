@@ -15,7 +15,9 @@ storygram validate ./archive
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
 ```
 
-Open `http://localhost:8080`, paste or generate a proposal and review the dry-run before approving. Approval is the only path into `data/`.
+Open `http://localhost:8080`, browse canonical records read-only, then paste or generate a proposal and review the dry-run before approving. Approval is the only path into `data/`.
+
+The **Records** page filters by type, status or text and opens a read-only detail with raw JSON plus reference and backlink links. It exposes no write route; canonical changes still require a proposal and human approval.
 
 ## Proposal Workflow
 

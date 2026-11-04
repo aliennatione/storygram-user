@@ -236,16 +236,28 @@ def _record_exists(root: Path, record_id: str) -> bool:
 
 
 @main.command()
-@click.argument("record_id")
+@click.argument("record_id", required=False)
 @click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--all", "all_records", is_flag=True, help="Build an archive-level timeline")
 @click.option("--json", "as_json", is_flag=True)
-def timeline(record_id: str, archive_path: str | None, as_json: bool) -> None:
-    """Generate a timeline for an entity or place."""
+def timeline(
+    record_id: str | None, archive_path: str | None, all_records: bool, as_json: bool
+) -> None:
+    """Generate an entity, place, collection or archive timeline."""
     from .timeline import build_timeline
 
+    if bool(record_id) == all_records:
+        _fail("Provide either a record ID or --all", as_json)
     root = _root(archive_path)
-    result = build_timeline(root, record_id)
+    result = build_timeline(root, None if all_records else record_id)
     if not result:
+        if all_records:
+            if as_json:
+                click.echo("[]")
+            else:
+                click.echo("No timeline entries in archive")
+            return
+        assert record_id is not None
         if _record_exists(root, record_id):
             if as_json:
                 click.echo("[]")

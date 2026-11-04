@@ -38,8 +38,10 @@ def relationship(
     predicate: str | None,
     obj: str | None,
     status: str = "reported",
+    valid_time: dict | None = None,
+    transaction_time: dict | None = None,
 ) -> dict:
-    return {
+    data = {
         "id": relationship_id,
         "type": "Relationship",
         "subject": subject,
@@ -47,6 +49,11 @@ def relationship(
         "object": obj,
         "status": status,
     }
+    if valid_time is not None:
+        data["valid_time"] = valid_time
+    if transaction_time is not None:
+        data["transaction_time"] = transaction_time
+    return data
 
 
 def test_genogram_scopes_assertions_to_person(tmp_path):
@@ -160,6 +167,34 @@ def test_genogram_keeps_distinct_predicates_for_same_endpoints(tmp_path):
         "assertion:parent",
         "assertion:spouse",
     ]
+
+
+def test_genogram_exposes_relationship_temporal_fields(tmp_path):
+    root = make_archive(tmp_path)
+    write(
+        root,
+        "relationships/parent.json",
+        relationship(
+            "relationship:parent",
+            "person:anna",
+            "relation:parent",
+            "person:bruno",
+            valid_time={"start": "1987", "end": "1995", "precision": "year"},
+            transaction_time={
+                "recorded_at": "2026-01-01T00:00:00+00:00",
+                "recorded_until": None,
+            },
+        ),
+    )
+
+    result = build_genogram(root, "person:anna")
+
+    relation = result["relations"][0]
+    assert relation["valid_time"] == {"start": "1987", "end": "1995", "precision": "year"}
+    assert relation["transaction_time"] == {
+        "recorded_at": "2026-01-01T00:00:00+00:00",
+        "recorded_until": None,
+    }
 
 
 def test_genogram_warns_on_incomplete_relationship_endpoints(tmp_path):

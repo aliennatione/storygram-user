@@ -56,6 +56,8 @@ def _relation(
         "object": obj,
         "direction": direction,
         "status": data.get("status"),
+        "valid_time": data.get("valid_time"),
+        "transaction_time": data.get("transaction_time"),
         "supported": supported,
     }
 

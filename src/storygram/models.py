@@ -219,6 +219,8 @@ class Relationship(BaseModel):
     subject: str | None = None
     predicate: str | None = Field(default=None, pattern=r"^relation:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     object: str | None = None
+    valid_time: ValidTime | None = None
+    transaction_time: TransactionTime | None = None
     status: Literal[
         "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
     ]

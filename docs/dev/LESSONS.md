@@ -172,3 +172,6 @@
 - Match the existing method-not-allowed convention per route family (404 for GET-only views here) instead of assuming a global 405 policy.
 - Doc patches with silent `str.replace` can no-op when the source wording drifted; grep the file for the new terms after editing bilingual docs.
 - Content-address manifest entries by checksum prefix: it prevents same-name collisions and makes re-registration an explicit overwrite.
+- VCR blocks (`terminal`, `playwright`, `speech`) must be wrapped in HTML comments for Slidev fallback builds, otherwise Shiki fails on unknown languages.
+- Manim on Alpine needs build-base for pycairo; texlive formats partially fail but rendering works.
+- Container volatility: document installed system deps in STATE.md; re-run `demo_tools.py status` before use.

@@ -595,3 +595,9 @@ Make the web UI comfortably usable by a human end to end (memory â†’ evidence â†
 3. Evidence requirements belong to the domain registry, not to individual forms; forms only surface them.
 4. Manifests describe external files; they must not become a second copy of the media or a canonical record.
 5. Docs must state only flows that actually ran: verify Firefox coverage before claiming it.
+
+### Demo Authoring (2026-11-04)
+
+- Optional skill only; no canonical data writes; output in gitignored `generated/demos/`.
+- Manim v0.22.1 render verified; Slidev v53.0.0 build verified.
+- VCR documented as Ubuntu/snap-only; not claimed available on Alpine.

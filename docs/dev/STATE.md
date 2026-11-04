@@ -330,3 +330,10 @@ Last updated: 2026-11-04
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
 - The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping. The read-only GUI now covers records, timeline and experimental genogram; search/export and visibility filters remain open.
 - The API cannot approve; approval remains UI/CLI only.
+
+## Demo Authoring (2026-11-04)
+
+- Added optional skill `demo-authoring` (Manim + VCR + Slidev fallback), `/demo` command, templates and `scripts/demo_tools.py`.
+- Installed and verified in this container: Manim v0.22.1 (render OK), Slidev v53.0.0 (build OK), ffmpeg, texlive.
+- VCR not installable here (no snapd); documented Ubuntu snap instructions.
+- Output lives under `generated/demos/` (gitignored). No canonical data touched.

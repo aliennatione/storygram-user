@@ -367,3 +367,10 @@ Suggested opening prompt (Italian):
 > Conferma branch `feature/agent-proposal-flow` e che non ci siano modifiche tracciate pendenti.
 > Il lavoro su `qwen3-4b` e sul prompt è chiuso: non cambiare modello e non cambiare il gate umano.
 > Prossimo obiettivo: chiudere il gap di export round-trip JSON-LD/YAML/Markdown richiesto da `PRD.md`, senza rompere l'export JSON. Prima ispeziona PRD e test esistenti, poi proponi un piano atomico e inizia dal caso più piccolo con test di andata/ritorno. Esegui test, ruff, mypy ed E2E, e aggiorna `docs/dev/`.
+
+## Demo Authoring (2026-11-04)
+
+- New skill: `.opencode/skills/demo-authoring/SKILL.md`; command `.opencode/commands/demo.md`; helper `scripts/demo_tools.py`.
+- Tools verified: `status` shows manim+slidev available, vcr unavailable on Alpine.
+- Example render succeeded: `generated/demos/manim/demo_prova.py` -> MP4.
+- Example slidev build succeeded: `generated/demos/vcr/storygram-intro`.

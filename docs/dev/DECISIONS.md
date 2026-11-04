@@ -329,3 +329,11 @@
 ## Proposal Show JSON (2026-11-04)
 
 - `proposal show --json` returns the parsed proposal object, and errors as `{"ok": false, "errors": [...]}` with exit code 1, matching the `_fail` convention used by the other agent-facing commands.
+
+## Demo Authoring Skill (2026-11-04)
+
+- Added an optional opencode skill `demo-authoring` under `.opencode/skills/` plus a `/demo` command, templates and `scripts/demo_tools.py`.
+- Scope is derived output only (`generated/demos/`); the skill never writes canonical data and does not touch the core.
+- Manim is installed and verified in this container (v0.22.1) via system packages + pip.
+- VCR is snap/Ubuntu-only and cannot run on Alpine; a Slidev fallback is provided and verified (v53.0.0).
+- Added `skills.paths` to `.opencode/opencode.jsonc` for explicit discovery.

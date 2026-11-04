@@ -136,6 +136,32 @@ try {
   const exportedRecords = await exported.json();
   assert.ok(exportedRecords.some((record) => record.id === "episode:e2e-note"));
 
+  for (const name of ["Nonna Form", "Nonno Form"]) {
+    await page.goto(`${server.base}people/new`);
+    await page.locator('input[name="name"]').fill(name);
+    await page.locator('input[name="evidence"][value="episode:e2e-note"]').check();
+    await page.getByRole("button", { name: "Save pending proposal" }).click();
+    await page.waitForSelector("text=Dry-run preview");
+    await page.getByRole("button", { name: "Approve without commit" }).click();
+    await page.waitForFunction(() => document.body.innerText.includes("merged"));
+  }
+  const formPeople = readdirSync(join(root, "data", "people"))
+    .map((file) => JSON.parse(readFileSync(join(root, "data", "people", file), "utf8")))
+    .map((record) => record.id)
+    .sort();
+  assert.equal(formPeople.length, 2);
+
+  await page.goto(`${server.base}relationships/new`);
+  await page.selectOption('select[name="subject"]', formPeople[0]);
+  await page.selectOption('select[name="predicate"]', "relation:parent");
+  await page.selectOption('select[name="object"]', formPeople[1]);
+  await page.locator('input[name="evidence"][value="episode:e2e-note"]').check();
+  await page.getByRole("button", { name: "Save pending proposal" }).click();
+  await page.waitForSelector("text=Dry-run preview");
+  await page.getByRole("button", { name: "Approve without commit" }).click();
+  await page.waitForFunction(() => document.body.innerText.includes("merged"));
+  assert.equal(readdirSync(join(root, "data", "relationships")).length, 1);
+
   const relations = {
     id: "proposal:e2e-relations",
     type: "Proposal",
@@ -295,7 +321,7 @@ try {
   assert.equal(rejected.notes, "duplicate");
 
   console.log(
-    "Playwright e2e: edit, approve, reject, browse, visibility export, timeline, genogram, add memory and Italian UI flows passed",
+    "Playwright e2e: edit, approve, reject, browse, visibility export, person/relationship forms, timeline, genogram, add memory and Italian UI flows passed",
   );
 } finally {
   if (browser) await browser.close();

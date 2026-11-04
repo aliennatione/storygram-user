@@ -3,8 +3,10 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
+from storygram import validate
 from storygram.cli import main
 from storygram.genogram import build_genogram
+from storygram.registry import TYPE_BY_NAME
 
 
 def make_archive(tmp_path: Path) -> Path:
@@ -17,6 +19,18 @@ def write(root: Path, relative: str, data: dict) -> None:
     path = root / "data" / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def load_fixture(root: Path, name: str) -> Path:
+    data = json.loads(Path("tests/fixtures", name).read_text(encoding="utf-8"))
+    for record in data["records"]:
+        record_type = TYPE_BY_NAME[record["type"]]
+        assert validate.validate_instance(root, record, record_type) == []
+        filename = f"{record['id'].split(':', 1)[1]}.json"
+        path = root / "data" / record_type.directory / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record), encoding="utf-8")
+    return root
 
 
 def assertion(
@@ -146,6 +160,8 @@ def test_genogram_deduplicates_equivalent_relationship_and_assertion(tmp_path):
         "assertion:parent-copy",
         "relationship:parent",
     ]
+    assert relation["valid_times"] == []
+    assert relation["transaction_times"] == []
 
 
 def test_genogram_keeps_distinct_predicates_for_same_endpoints(tmp_path):
@@ -195,6 +211,60 @@ def test_genogram_exposes_relationship_temporal_fields(tmp_path):
         "recorded_at": "2026-01-01T00:00:00+00:00",
         "recorded_until": None,
     }
+    assert relation["valid_times"] == [{"start": "1987", "end": "1995", "precision": "year"}]
+    assert relation["transaction_times"] == [
+        {
+            "recorded_at": "2026-01-01T00:00:00+00:00",
+            "recorded_until": None,
+        }
+    ]
+
+
+def test_genogram_realistic_family_fixture_aggregates_temporal_intervals(tmp_path):
+    root = load_fixture(tmp_path, "genogram_family.json")
+
+    result = build_genogram(root, "person:anna")
+
+    relations = result["relations"]
+    assert len(relations) == 4
+    assert all(item["record_id"] != "relationship:anna-davide-archived" for item in relations)
+
+    spouse = next(item for item in relations if item["predicate"] == "relation:spouse")
+    assert spouse["record_id"] == "relationship:anna-bruno-2000"
+    assert spouse["valid_time"] == {"start": "2000", "end": "2010", "precision": "year"}
+    assert spouse["valid_times"] == [
+        {"start": "1980", "end": "1990", "precision": "year"},
+        {"start": "2000", "end": "2010", "precision": "year"},
+    ]
+    assert spouse["transaction_times"] == [
+        {"recorded_at": "2026-01-01T00:00:00+00:00", "recorded_until": None},
+        {"recorded_at": "2026-02-01T00:00:00+00:00", "recorded_until": None},
+    ]
+    assert spouse["related_ids"] == [
+        "relationship:anna-bruno-1980",
+        "relationship:anna-bruno-2000",
+    ]
+
+    parent = next(
+        item
+        for item in relations
+        if item["predicate"] == "relation:parent" and item["direction"] == "outgoing"
+    )
+    assert parent["record_id"] == "relationship:anna-carla"
+    assert parent["valid_times"] == [{"start": "1987", "precision": "year"}]
+    assert parent["transaction_times"] == [
+        {"recorded_at": "2026-01-01T00:00:00+00:00", "recorded_until": None},
+        {"recorded_at": "2026-03-01T00:00:00+00:00", "recorded_until": None},
+    ]
+    assert parent["related_ids"] == ["assertion:anna-carla", "relationship:anna-carla"]
+
+    incoming = next(item for item in relations if item["direction"] == "incoming")
+    assert incoming["record_id"] == "relationship:davide-anna"
+    assert incoming["valid_times"] == []
+
+    lived = next(item for item in relations if item["predicate"] == "relation:lived_in")
+    assert lived["supported"] is False
+    assert "Unsupported relation predicate: relation:lived_in" in result["warnings"]
 
 
 def test_genogram_warns_on_incomplete_relationship_endpoints(tmp_path):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,64 @@ def _relation(
     }
 
 
+def _recorded_at(entry: dict[str, Any]) -> datetime | None:
+    transaction_time = entry.get("transaction_time")
+    if not isinstance(transaction_time, dict):
+        return None
+    recorded_at = transaction_time.get("recorded_at")
+    if not isinstance(recorded_at, str):
+        return None
+    try:
+        value = datetime.fromisoformat(recorded_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def _representative_key(entry: dict[str, Any]) -> tuple[int, int, float, str]:
+    recorded_at = _recorded_at(entry)
+    if recorded_at is None:
+        timestamp = 0.0
+    else:
+        try:
+            timestamp = -recorded_at.timestamp()
+        except (OSError, OverflowError, ValueError):
+            timestamp = 0.0
+    return (
+        0 if entry["record_type"] == "Relationship" else 1,
+        0 if recorded_at is not None else 1,
+        timestamp,
+        str(entry["record_id"]),
+    )
+
+
+def _canonical_interval(value: dict[str, Any]) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _interval_sort_key(field: str, value: dict[str, Any]) -> tuple[str, str, str]:
+    if field == "valid_time":
+        return (
+            str(value.get("start") or ""),
+            str(value.get("end") or ""),
+            _canonical_interval(value),
+        )
+    return (
+        str(value.get("recorded_at") or ""),
+        str(value.get("recorded_until") or ""),
+        _canonical_interval(value),
+    )
+
+
+def _unique_intervals(entries: list[dict[str, Any]], field: str) -> list[dict[str, Any]]:
+    unique: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        value = entry.get(field)
+        if isinstance(value, dict):
+            unique.setdefault(_canonical_interval(value), value)
+    return sorted(unique.values(), key=lambda value: _interval_sort_key(field, value))
+
+
 def _deduplicate(relations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for entry in relations:
@@ -70,14 +129,9 @@ def _deduplicate(relations: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     merged = []
     for entries in groups.values():
-        preferred = sorted(
-            entries,
-            key=lambda entry: (
-                0 if entry["record_type"] == "Relationship" else 1,
-                str(entry["record_id"]),
-            ),
-        )[0]
-        representative = dict(preferred)
+        representative = dict(sorted(entries, key=_representative_key)[0])
+        representative["valid_times"] = _unique_intervals(entries, "valid_time")
+        representative["transaction_times"] = _unique_intervals(entries, "transaction_time")
         representative["related_ids"] = sorted(
             {str(entry["record_id"]) for entry in entries if entry.get("record_id") is not None}
         )

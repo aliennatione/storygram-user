@@ -123,6 +123,7 @@ Last updated: 2026-11-04
 - `7a8c03e`: Firefox E2E now covers source and assertion forms in addition to memory/person/relationship.
 - New forms: `/annotations/new` (Annotation: targets + evidence, evidence mapped into episode_ids/source_ids), `/narratives/new` (Narrative: author/language/perspective/content_location/related records), `/conflicts/new` (Conflict: assertions + relation/reason/status), and a read-only `/media` page listing checksummed manifest entries. Collection is now part of the generic entity form.
 - Current baseline: `176 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
+- Final container smoke test after the annotation/narrative/conflict/media unit: image rebuilt, project `storygram-final` on port 18080 reached `healthy`, and `/annotations/new`, `/narratives/new`, `/conflicts/new`, `/media` all returned 200 with their titles. Test project, volume and image removed.
 
 ## Current Usable Flows
 

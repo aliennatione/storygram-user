@@ -19,98 +19,259 @@ def w(root: Path, directory: str, filename: str, data: dict) -> None:
 
 
 def full_archive(root: Path) -> None:
-    w(root, "episodes", "episode_1.json", {
-        "id": "episode:memory", "type": "Episode", "episode_type": "memory",
-        "status": "reported", "created_at": NOW, "updated_at": NOW,
-        "content": {"text": "Family memory."},
-    })
-    w(root, "sources", "source_1.json", {
-        "id": "source:register", "type": "Source", "title": "Register",
-        "status": "reported", "created_at": NOW, "updated_at": NOW,
-    })
-    w(root, "people", "person_anna.json", {
-        "id": "person:anna", "type": "Person", "name": "Anna",
-        "status": "confirmed", "created_at": NOW, "updated_at": NOW,
-    })
-    w(root, "people", "person_luca.json", {
-        "id": "person:luca", "type": "Person", "name": "Luca",
-        "status": "confirmed", "created_at": NOW, "updated_at": NOW,
-    })
-    w(root, "places", "place_torino.json", {
-        "id": "place:torino", "type": "Place", "name": "Torino",
-        "status": "confirmed", "created_at": NOW, "updated_at": NOW,
-    })
-    w(root, "events", "event_birth.json", {
-        "id": "event:birth", "type": "Event", "name": "Birth",
-        "status": "confirmed", "created_at": NOW, "updated_at": NOW,
-    })
-    w(root, "organizations", "org_family.json", {
-        "id": "organization:family", "type": "Organization", "name": "Family",
-        "status": "confirmed", "created_at": NOW, "updated_at": NOW,
-    })
-    w(root, "periods", "period_childhood.json", {
-        "id": "period:childhood", "type": "Period", "name": "Childhood",
-        "status": "confirmed", "created_at": NOW, "updated_at": NOW,
-    })
-    w(root, "collections", "collection_family.json", {
-        "id": "collection:family", "type": "Collection", "name": "Family collection",
-        "status": "confirmed", "created_at": NOW, "updated_at": NOW,
-    })
-    w(root, "relationships", "rel_parent.json", {
-        "id": "relationship:parent", "type": "Relationship",
-        "subject": "person:anna", "predicate": "relation:parent", "object": "person:luca",
-        "status": "confirmed", "created_at": NOW, "updated_at": NOW,
-        "valid_time": {"start": "1990", "precision": "year"},
-        "transaction_time": {"recorded_at": NOW},
-    })
-    w(root, "assertions", "assertion_parent.json", {
-        "id": "assertion:parent", "type": "Assertion",
-        "subject": "person:anna", "predicate": "relation:parent", "object": "person:luca",
-        "status": "reported", "created_at": NOW, "updated_at": NOW,
-        "transaction_time": {"recorded_at": NOW},
-        "produced_by": ["episode:memory"], "supported_by": ["source:register"],
-    })
-    w(root, "assertions", "assertion_member.json", {
-        "id": "assertion:member", "type": "Assertion",
-        "subject": "person:luca", "predicate": "relation:member_of", "object": "collection:family",
-        "status": "reported", "created_at": NOW, "updated_at": NOW,
-        "transaction_time": {"recorded_at": NOW},
-    })
-    w(root, "annotations", "annotation_1.json", {
-        "id": "annotation:note", "type": "Annotation",
-        "status": "reported", "created_at": NOW, "updated_at": NOW,
-        "target_ids": ["person:anna"], "episode_ids": ["episode:memory"],
-    })
-    w(root, "narratives", "narrative_1.json", {
-        "id": "narrative:story", "type": "Narrative", "status": "reported",
-        "created_at": NOW, "updated_at": NOW, "author": "Anna",
-        "related_ids": ["person:anna"],
-    })
-    w(root, "media-assets", "media_1.json", {
-        "id": "media:asset-1", "type": "MediaAsset", "status": "reported",
-        "created_at": NOW, "updated_at": NOW, "visibility": "family", "notes": "photo",
-    })
-    w(root, "conflicts", "conflict_1.json", {
-        "id": "conflict:1", "type": "Conflict",
-        "assertions": ["assertion:parent", "assertion:parent2"],
-        "status": "open", "created_at": NOW, "updated_at": NOW,
-        "relation": "contradicts", "reason": "competing",
-    })
+    w(
+        root,
+        "episodes",
+        "episode_1.json",
+        {
+            "id": "episode:memory",
+            "type": "Episode",
+            "episode_type": "memory",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "content": {"text": "Family memory."},
+        },
+    )
+    w(
+        root,
+        "sources",
+        "source_1.json",
+        {
+            "id": "source:register",
+            "type": "Source",
+            "title": "Register",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    w(
+        root,
+        "people",
+        "person_anna.json",
+        {
+            "id": "person:anna",
+            "type": "Person",
+            "name": "Anna",
+            "status": "confirmed",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    w(
+        root,
+        "people",
+        "person_luca.json",
+        {
+            "id": "person:luca",
+            "type": "Person",
+            "name": "Luca",
+            "status": "confirmed",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    w(
+        root,
+        "places",
+        "place_torino.json",
+        {
+            "id": "place:torino",
+            "type": "Place",
+            "name": "Torino",
+            "status": "confirmed",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    w(
+        root,
+        "events",
+        "event_birth.json",
+        {
+            "id": "event:birth",
+            "type": "Event",
+            "name": "Birth",
+            "status": "confirmed",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    w(
+        root,
+        "organizations",
+        "org_family.json",
+        {
+            "id": "organization:family",
+            "type": "Organization",
+            "name": "Family",
+            "status": "confirmed",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    w(
+        root,
+        "periods",
+        "period_childhood.json",
+        {
+            "id": "period:childhood",
+            "type": "Period",
+            "name": "Childhood",
+            "status": "confirmed",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    w(
+        root,
+        "collections",
+        "collection_family.json",
+        {
+            "id": "collection:family",
+            "type": "Collection",
+            "name": "Family collection",
+            "status": "confirmed",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    w(
+        root,
+        "relationships",
+        "rel_parent.json",
+        {
+            "id": "relationship:parent",
+            "type": "Relationship",
+            "subject": "person:anna",
+            "predicate": "relation:parent",
+            "object": "person:luca",
+            "status": "confirmed",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "valid_time": {"start": "1990", "precision": "year"},
+            "transaction_time": {"recorded_at": NOW},
+        },
+    )
+    w(
+        root,
+        "assertions",
+        "assertion_parent.json",
+        {
+            "id": "assertion:parent",
+            "type": "Assertion",
+            "subject": "person:anna",
+            "predicate": "relation:parent",
+            "object": "person:luca",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "transaction_time": {"recorded_at": NOW},
+            "produced_by": ["episode:memory"],
+            "supported_by": ["source:register"],
+        },
+    )
+    w(
+        root,
+        "assertions",
+        "assertion_member.json",
+        {
+            "id": "assertion:member",
+            "type": "Assertion",
+            "subject": "person:luca",
+            "predicate": "relation:member_of",
+            "object": "collection:family",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "transaction_time": {"recorded_at": NOW},
+        },
+    )
+    w(
+        root,
+        "annotations",
+        "annotation_1.json",
+        {
+            "id": "annotation:note",
+            "type": "Annotation",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "target_ids": ["person:anna"],
+            "episode_ids": ["episode:memory"],
+        },
+    )
+    w(
+        root,
+        "narratives",
+        "narrative_1.json",
+        {
+            "id": "narrative:story",
+            "type": "Narrative",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "author": "Anna",
+            "related_ids": ["person:anna"],
+        },
+    )
+    w(
+        root,
+        "media-assets",
+        "media_1.json",
+        {
+            "id": "media:asset-1",
+            "type": "MediaAsset",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "visibility": "family",
+            "notes": "photo",
+        },
+    )
+    w(
+        root,
+        "conflicts",
+        "conflict_1.json",
+        {
+            "id": "conflict:1",
+            "type": "Conflict",
+            "assertions": ["assertion:parent", "assertion:parent2"],
+            "status": "open",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "relation": "contradicts",
+            "reason": "competing",
+        },
+    )
     # competing assertion for conflict detection
-    w(root, "assertions", "assertion_parent2.json", {
-        "id": "assertion:parent2", "type": "Assertion",
-        "subject": "person:anna", "predicate": "relation:parent", "object": "person:luca",
-        "status": "reported", "created_at": NOW, "updated_at": NOW,
-        "transaction_time": {"recorded_at": NOW},
-        "value": "different",
-    })
+    w(
+        root,
+        "assertions",
+        "assertion_parent2.json",
+        {
+            "id": "assertion:parent2",
+            "type": "Assertion",
+            "subject": "person:anna",
+            "predicate": "relation:parent",
+            "object": "person:luca",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "transaction_time": {"recorded_at": NOW},
+            "value": "different",
+        },
+    )
 
 
 def test_full_archive_validates_and_derives(tmp_path: Path) -> None:
     root = tmp_path
     (root / "data").mkdir()
-    from storygram.cli import main
     from click.testing import CliRunner
+
+    from storygram.cli import main
+
     CliRunner().invoke(main, ["init", str(root)])
     full_archive(root)
 

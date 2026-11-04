@@ -61,6 +61,7 @@ ITALIAN: dict[str, str] = {
     "Event": "Evento",
     "Organization": "Organizzazione",
     "Period": "Periodo",
+    "Collection": "Collezione",
     "Unsupported entity type: {value}": "Tipo di entità non supportato: {value}",
     "New {type}: {name}": "Nuovo record {type}: {name}",
     "Created from the Add entity form.": "Creato dal modulo Aggiungi entità.",
@@ -85,6 +86,52 @@ ITALIAN: dict[str, str] = {
     "Add a memory or source before adding this record.": (
         "Aggiungi una memoria o una fonte prima di aggiungere questo record."
     ),
+    "Media": "Media",
+    "File": "File",
+    "MIME": "MIME",
+    "Size": "Dimensione",
+    "SHA-256": "SHA-256",
+    "URI": "URI",
+    "No media registered.": "Nessun media registrato.",
+    "Checksummed manifests for media files kept outside Git.": (
+        "Manifest checksummati per i file media conservati fuori da Git."
+    ),
+    "Add conflict": "Aggiungi conflitto",
+    "Add an explicit conflict as a pending proposal. It enters canonical data "
+    "only after a human approves the proposal.": (
+        "Aggiungi un conflitto esplicito come proposta in attesa. Entra nei "
+        "dati canonici solo dopo l'approvazione umana della proposta."
+    ),
+    "At least two assertions are required": "Sono richieste almeno due asserzioni",
+    "Unsupported relation: {value}": "Relazione non supportata: {value}",
+    "New conflict: {count} assertions": "Nuovo conflitto: {count} asserzioni",
+    "Created from the Add conflict form.": "Creato dal modulo Aggiungi conflitto.",
+    "Add narrative": "Aggiungi narrazione",
+    "Add a narrative as a pending proposal. It enters canonical data only "
+    "after a human approves the proposal.": (
+        "Aggiungi una narrazione come proposta in attesa. Entra nei dati canonici "
+        "solo dopo l'approvazione umana della proposta."
+    ),
+    "Author": "Autore",
+    "Language": "Lingua",
+    "Perspective": "Prospettiva",
+    "Content location": "Posizione del contenuto",
+    "Related records": "Record correlati",
+    "New narrative: {author}": "Nuova narrazione: {author}",
+    "Created from the Add narrative form.": "Creata dal modulo Aggiungi narrazione.",
+    "Optional notes about this narrative": "Note opzionali su questa narrazione",
+    "Add annotation": "Aggiungi annotazione",
+    "Add an annotation as a pending proposal. Choose the records it annotates "
+    "and the evidence behind it. It enters canonical data only after approval.": (
+        "Aggiungi un'annotazione come proposta in attesa. Scegli i record che "
+        "annota e l'evidenza di supporto. Entra nei dati canonici solo dopo "
+        "l'approvazione."
+    ),
+    "Targets": "Obiettivi",
+    "At least one target is required": "È richiesto almeno un obiettivo",
+    "New annotation: {count} target(s)": "Nuova annotazione: {count} obiettivi",
+    "Created from the Add annotation form.": "Creata dal modulo Aggiungi annotazione.",
+    "Optional notes about this annotation": "Note opzionali su questa annotazione",
     "Add assertion": "Aggiungi asserzione",
     "Add an assertion as a pending proposal. Choose a subject, a relation "
     "predicate and either an object record or a literal value. It enters "
@@ -242,7 +289,6 @@ ITALIAN: dict[str, str] = {
     "No records match these filters.": "Nessun record corrisponde ai filtri.",
     "Name / title": "Nome / titolo",
     "Updated": "Aggiornato",
-    "File": "File",
     "Read-only canonical record browser. Showing {shown} of {total} records.": (
         "Browser dei record canonici in sola lettura. Mostrati {shown} di {total} record."
     ),
@@ -291,7 +337,6 @@ ITALIAN: dict[str, str] = {
     "Source record": "Record di origine",
     "Valid time / valid_times": "Tempo valido / valid_times",
     "Transaction time / transaction_times": "Tempo di registrazione / transaction_times",
-    "Related records": "Record correlati",
     "Genogram: {person}": "Genogramma: {person}",
     "Experimental": "Sperimentale",
     (

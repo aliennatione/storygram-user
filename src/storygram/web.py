@@ -38,6 +38,7 @@ from .llm import (
     provider_from_config,
     save_pending,
 )
+from .media import list_media
 from .registry import RECORD_TYPES, TYPE_BY_NAME, iter_reference_strings
 from .timeline import build_timeline
 
@@ -59,7 +60,24 @@ ENTITY_TYPES = {
     "Event": "event",
     "Organization": "organization",
     "Period": "period",
+    "Collection": "collection",
 }
+ANNOTATION_TARGET_TYPES = (
+    "Episode",
+    "Assertion",
+    "Person",
+    "Organization",
+    "Place",
+    "Period",
+    "Event",
+    "Relationship",
+    "Source",
+    "MediaAsset",
+    "Annotation",
+    "Narrative",
+    "Collection",
+    "Conflict",
+)
 ASSERTION_ENTITY_TYPES = (
     "Person",
     "Organization",
@@ -196,6 +214,10 @@ form input, form select {{
     <a href="/entities/new">{_t("Add entity")}</a>
     <a href="/relationships/new">{_t("Add relationship")}</a>
     <a href="/assertions/new">{_t("Add assertion")}</a>
+    <a href="/annotations/new">{_t("Add annotation")}</a>
+    <a href="/narratives/new">{_t("Add narrative")}</a>
+    <a href="/conflicts/new">{_t("Add conflict")}</a>
+    <a href="/media">{_t("Media")}</a>
     <a href="/proposals/new">{_t("New proposal")}</a>
     <a href="/proposals/generate">{_t("Generate")}</a>
   </nav>
@@ -425,6 +447,10 @@ def render_home(root: Path) -> str:
   <a class="button" href="/entities/new">{_t("Add entity")}</a>
   <a class="button" href="/relationships/new">{_t("Add relationship")}</a>
   <a class="button" href="/assertions/new">{_t("Add assertion")}</a>
+  <a class="button" href="/annotations/new">{_t("Add annotation")}</a>
+  <a class="button" href="/narratives/new">{_t("Add narrative")}</a>
+  <a class="button" href="/conflicts/new">{_t("Add conflict")}</a>
+  <a class="button" href="/media">{_t("Media")}</a>
   <a class="button" href="/proposals/new">{_t("Create proposal")}</a>
   <a class="button" href="/proposals/generate">{_t("Generate with Ollama")}</a>
   <a class="button" href="/proposals">{_t("View proposals")}</a>
@@ -1050,6 +1076,22 @@ def render_relationship_form(
     return _layout(_t("Add relationship"), body)
 
 
+def _targetable_records(root: Path) -> list[tuple[str, str, str]]:
+    records, _ = validate_mod.load_records(root)
+    items: list[tuple[str, str, str]] = []
+    for _, data in records:
+        record_id = data.get("id")
+        record_type = data.get("type")
+        if (
+            not isinstance(record_id, str)
+            or record_type not in ANNOTATION_TARGET_TYPES
+            or data.get("status") in {"archived", "rejected", "superseded"}
+        ):
+            continue
+        items.append((record_id, str(record_type), _record_name(data)))
+    return sorted(items, key=lambda item: (item[1], item[2].casefold(), item[0]))
+
+
 def _assertable_records(root: Path) -> list[tuple[str, str, str]]:
     records, _ = validate_mod.load_records(root)
     items: list[tuple[str, str, str]] = []
@@ -1295,6 +1337,465 @@ def render_assertion_form(
 </form>
 """
     return _layout(_t("Add assertion"), body)
+
+
+def _annotation_proposal(
+    root: Path, values: dict[str, str], targets: list[str], evidence: list[str]
+) -> tuple[dict[str, Any] | None, list[str]]:
+    notes = values.get("notes", "").strip()
+    visibility = values.get("visibility", "").strip()
+    evidence = list(dict.fromkeys(item for item in evidence if item))
+    targets = list(dict.fromkeys(item for item in targets if item))
+
+    known_targets = {record_id for record_id, _, _ in _targetable_records(root)}
+    known_evidence = {record_id for record_id, _, _ in _evidence_records(root)}
+    errors: list[str] = []
+    if not targets:
+        errors.append(_t("At least one target is required"))
+    for record_id in targets:
+        if record_id not in known_targets:
+            errors.append(_t("Unknown record: {value}", value=record_id))
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    if not evidence:
+        errors.append(_t("Evidence is required"))
+    for record_id in evidence:
+        if record_id not in known_evidence:
+            errors.append(_t("Unknown evidence: {value}", value=record_id))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    slug = _slug(" ".join(targets)) or "annotation"
+    record: dict[str, Any] = {
+        "id": f"annotation:{slug[:24]}-{token}",
+        "type": "Annotation",
+        "status": "reported",
+        "created_at": now,
+        "updated_at": now,
+        "target_ids": targets,
+    }
+    episode_ids = sorted(item for item in evidence if item.startswith("episode:"))
+    source_ids = sorted(item for item in evidence if item.startswith("source:"))
+    if episode_ids:
+        record["episode_ids"] = episode_ids
+    if source_ids:
+        record["source_ids"] = source_ids
+    if notes:
+        record["notes"] = notes
+    if visibility:
+        record["visibility"] = visibility
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["Annotation"])
+    if record_errors:
+        return None, record_errors
+
+    proposal = {
+        "id": f"proposal:annotation-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t("New annotation: {count} target(s)", count=len(targets)),
+        "rationale": _t("Created from the Add annotation form."),
+        "operations": [
+            {
+                "op": "create",
+                "record_type": "Annotation",
+                "record": record,
+                "evidence": evidence,
+            }
+        ],
+    }
+    return proposal, []
+
+
+def render_annotation_form(
+    root: Path,
+    values: dict[str, str] | None = None,
+    errors: list[str] | None = None,
+    selected_targets: list[str] | None = None,
+    selected_evidence: list[str] | None = None,
+) -> str:
+    values = values or {}
+    visibility = values.get("visibility") or ""
+    notes_value = _esc(values.get("notes", ""))
+    targets = _targetable_records(root)
+    warning = ""
+    if not targets:
+        warning = (
+            f'<p class="warning">{_t("Add at least one record before adding an annotation.")}</p>'
+        )
+    selected = set(selected_targets or [])
+    target_options = "".join(
+        f'<label class="checkbox"><input type="checkbox" name="targets" '
+        f'value="{_esc(record_id)}"{" checked" if record_id in selected else ""}> '
+        f"{_esc(record_type)} · {_esc(name or record_id)} · {_esc(record_id)}</label>"
+        for record_id, record_type, name in targets
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    evidence_block = _evidence_fieldset(root, selected_evidence)
+    intro = _t(
+        "Add an annotation as a pending proposal. Choose the records it annotates "
+        "and the evidence behind it. It enters canonical data only after approval."
+    )
+    body = f"""
+<h1>{_t("Add annotation")}</h1>
+<p class="muted">{intro}</p>
+{warning}
+{_errors_block(errors or [])}
+<form method="post" action="/annotations/new">
+<fieldset><legend>{_t("Targets")}</legend>
+{target_options or f'<p class="muted">{_t("None.")}</p>'}
+</fieldset>
+<p>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true"
+    placeholder="{_t("Optional notes about this annotation")}">{notes_value}</textarea>
+</label>
+{evidence_block}
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add annotation"), body)
+
+
+def _narrative_proposal(
+    root: Path,
+    values: dict[str, str],
+    related: list[str],
+    evidence: list[str],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    author = values.get("author", "").strip()
+    language = values.get("language", "").strip()
+    perspective = values.get("perspective", "").strip()
+    content_location = values.get("content_location", "").strip()
+    visibility = values.get("visibility", "").strip()
+    notes = values.get("notes", "").strip()
+    evidence = list(dict.fromkeys(item for item in evidence if item))
+    related = list(dict.fromkeys(item for item in related if item))
+
+    known_records = {record_id for record_id, _, _ in _targetable_records(root)}
+    known_evidence = {record_id for record_id, _, _ in _evidence_records(root)}
+    errors: list[str] = []
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    for record_id in related:
+        if record_id not in known_records:
+            errors.append(_t("Unknown record: {value}", value=record_id))
+    if not evidence:
+        errors.append(_t("Evidence is required"))
+    for record_id in evidence:
+        if record_id not in known_evidence:
+            errors.append(_t("Unknown evidence: {value}", value=record_id))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    slug = _slug(author or "narrative") or "narrative"
+    record: dict[str, Any] = {
+        "id": f"narrative:{slug[:24]}-{token}",
+        "type": "Narrative",
+        "status": "reported",
+        "created_at": now,
+        "updated_at": now,
+    }
+    if author:
+        record["author"] = author
+    if language:
+        record["language"] = language
+    if perspective:
+        record["perspective"] = perspective
+    if content_location:
+        record["content_location"] = content_location
+    if related:
+        record["related_ids"] = related
+    source_ids = sorted(item for item in evidence if item.startswith("source:"))
+    if source_ids:
+        record["source_ids"] = source_ids
+    if visibility:
+        record["visibility"] = visibility
+    if notes:
+        record["notes"] = notes
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["Narrative"])
+    if record_errors:
+        return None, record_errors
+
+    proposal = {
+        "id": f"proposal:narrative-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t("New narrative: {author}", author=author or _t("Narrative")),
+        "rationale": _t("Created from the Add narrative form."),
+        "operations": [
+            {
+                "op": "create",
+                "record_type": "Narrative",
+                "record": record,
+                "evidence": evidence,
+            }
+        ],
+    }
+    return proposal, []
+
+
+def render_narrative_form(
+    root: Path,
+    values: dict[str, str] | None = None,
+    errors: list[str] | None = None,
+    selected_related: list[str] | None = None,
+    selected_evidence: list[str] | None = None,
+) -> str:
+    values = values or {}
+    visibility = values.get("visibility") or ""
+    notes_value = _esc(values.get("notes", ""))
+    records = _targetable_records(root)
+    warning = ""
+    if not records:
+        warning = (
+            f'<p class="warning">{_t("Add at least one record before adding a narrative.")}</p>'
+        )
+    selected = set(selected_related or [])
+    related_options = "".join(
+        f'<label class="checkbox"><input type="checkbox" name="related" '
+        f'value="{_esc(record_id)}"{" checked" if record_id in selected else ""}> '
+        f"{_esc(record_type)} · {_esc(name or record_id)} · {_esc(record_id)}</label>"
+        for record_id, record_type, name in records
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    evidence_block = _evidence_fieldset(root, selected_evidence)
+    intro = _t(
+        "Add a narrative as a pending proposal. It enters canonical data only "
+        "after a human approves the proposal."
+    )
+    body = f"""
+<h1>{_t("Add narrative")}</h1>
+<p class="muted">{intro}</p>
+{warning}
+{_errors_block(errors or [])}
+<form method="post" action="/narratives/new">
+<p>
+<label>{_t("Author")}
+  <input name="author" value="{_esc(values.get("author", ""))}"></label>
+<label>{_t("Language")}
+  <input name="language" value="{_esc(values.get("language", ""))}" placeholder="it"></label>
+<label>{_t("Perspective")}
+  <input name="perspective" value="{_esc(values.get("perspective", ""))}"></label>
+<label>{_t("Content location")}
+  <input name="content_location" value="{_esc(values.get("content_location", ""))}"></label>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<fieldset><legend>{_t("Related records")}</legend>
+{related_options or f'<p class="muted">{_t("None.")}</p>'}
+</fieldset>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true"
+    placeholder="{_t("Optional notes about this narrative")}">{notes_value}</textarea>
+</label>
+{evidence_block}
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add narrative"), body)
+
+
+def _conflict_proposal(
+    root: Path,
+    values: dict[str, str],
+    assertions: list[str],
+    evidence: list[str],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    relation = values.get("relation", "").strip()
+    reason = values.get("reason", "").strip()
+    status = values.get("status", "").strip() or "open"
+    visibility = values.get("visibility", "").strip()
+    notes = values.get("notes", "").strip()
+    assertions = list(dict.fromkeys(item for item in assertions if item))
+    evidence = list(dict.fromkeys(item for item in evidence if item))
+
+    known_assertions = {
+        record_id
+        for record_id, record_type, _ in _targetable_records(root)
+        if record_type == "Assertion"
+    }
+    known_evidence = {record_id for record_id, _, _ in _evidence_records(root)}
+    errors: list[str] = []
+    if len(assertions) < 2:
+        errors.append(_t("At least two assertions are required"))
+    for record_id in assertions:
+        if record_id not in known_assertions:
+            errors.append(_t("Unknown record: {value}", value=record_id))
+    if relation and relation not in ("contradicts", "inconsistent", "competing"):
+        errors.append(_t("Unsupported relation: {value}", value=relation))
+    if status not in ("open", "under_review", "resolved", "accepted_as_plural", "rejected"):
+        errors.append(_t("Unsupported status: {value}", value=status))
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    if not evidence:
+        errors.append(_t("Evidence is required"))
+    for record_id in evidence:
+        if record_id not in known_evidence:
+            errors.append(_t("Unknown evidence: {value}", value=record_id))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    record: dict[str, Any] = {
+        "id": f"conflict:{token}",
+        "type": "Conflict",
+        "assertions": assertions,
+        "status": status,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if relation:
+        record["relation"] = relation
+    if reason:
+        record["reason"] = reason
+    if visibility:
+        record["visibility"] = visibility
+    if notes:
+        record["notes"] = notes
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["Conflict"])
+    if record_errors:
+        return None, record_errors
+
+    proposal = {
+        "id": f"proposal:conflict-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t("New conflict: {count} assertions", count=len(assertions)),
+        "rationale": _t("Created from the Add conflict form."),
+        "operations": [
+            {
+                "op": "create",
+                "record_type": "Conflict",
+                "record": record,
+                "evidence": evidence,
+            }
+        ],
+    }
+    return proposal, []
+
+
+def render_conflict_form(
+    root: Path,
+    values: dict[str, str] | None = None,
+    errors: list[str] | None = None,
+    selected_assertions: list[str] | None = None,
+    selected_evidence: list[str] | None = None,
+) -> str:
+    values = values or {}
+    relation = values.get("relation") or ""
+    status = values.get("status") or "open"
+    visibility = values.get("visibility") or ""
+    reason_value = _esc(values.get("reason", ""))
+    assertions = [item for item in _targetable_records(root) if item[1] == "Assertion"]
+    warning = ""
+    if len(assertions) < 2:
+        warning = (
+            f'<p class="warning">{_t("Add at least two assertions before adding a conflict.")}</p>'
+        )
+    selected = set(selected_assertions or [])
+    assertion_options = "".join(
+        f'<label class="checkbox"><input type="checkbox" name="assertions" '
+        f'value="{_esc(record_id)}"{" checked" if record_id in selected else ""}> '
+        f"{_esc(name or record_id)} · {_esc(record_id)}</label>"
+        for record_id, _, name in assertions
+    )
+    relation_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == relation else ''}>{_esc(item)}</option>"
+        for item in ("contradicts", "inconsistent", "competing")
+    )
+    status_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == status else ''}>{_esc(_t(item))}</option>"
+        for item in ("open", "under_review", "resolved", "accepted_as_plural", "rejected")
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    evidence_block = _evidence_fieldset(root, selected_evidence)
+    intro = _t(
+        "Add an explicit conflict as a pending proposal. It enters canonical data "
+        "only after a human approves the proposal."
+    )
+    body = f"""
+<h1>{_t("Add conflict")}</h1>
+<p class="muted">{intro}</p>
+{warning}
+{_errors_block(errors or [])}
+<form method="post" action="/conflicts/new">
+<fieldset><legend>{_t("Assertions")}</legend>
+{assertion_options or f'<p class="muted">{_t("None.")}</p>'}
+</fieldset>
+<p>
+<label>{_t("Relation")}
+  <select name="relation">
+    <option value="">{_t("Unspecified")}</option>{relation_options}
+  </select>
+</label>
+<label>{_t("Status")}
+  <select name="status">{status_options}</select>
+</label>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Reason")}
+  <input name="reason" value="{reason_value}" style="width:100%"></label>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true">{_esc(values.get("notes", ""))}</textarea>
+</label>
+{evidence_block}
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add conflict"), body)
 
 
 def render_memory_form(
@@ -1878,6 +2379,42 @@ def render_conflicts(root: Path, query: str = "") -> tuple[int, str]:
     return 200, _layout(_t("Conflicts"), body)
 
 
+def render_media(root: Path) -> str:
+    entries = list_media(root)
+    rows = []
+    for entry in entries:
+        checksum = entry.get("checksum") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(entry.get('id', ''))}</td>"
+            f"<td>{_esc(entry.get('filename', ''))}</td>"
+            f"<td>{_esc(entry.get('mime_type') or '—')}</td>"
+            f"<td>{_esc(entry.get('size', 0))}</td>"
+            f"<td>{_esc((checksum.get('value') or '')[:12])}</td>"
+            f"<td>{_esc(entry.get('visibility') or '—')}</td>"
+            f"<td>{_esc(entry.get('uri', ''))}</td>"
+            "</tr>"
+        )
+    table = (
+        "<table><thead><tr>"
+        f"<th>{_t('ID')}</th><th>{_t('File')}</th><th>{_t('MIME')}</th>"
+        f"<th>{_t('Size')}</th><th>{_t('SHA-256')}</th>"
+        f"<th>{_t('Visibility')}</th><th>{_t('URI')}</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        if rows
+        else f'<p class="muted">{_t("No media registered.")}</p>'
+    )
+    body = f"""
+<h1>{_t("Media")}</h1>
+<p class="muted">
+{_t("Checksummed manifests for media files kept outside Git.")}
+</p>
+<p><a class="button" href="/records">{_t("Back to records")}</a></p>
+{table}
+"""
+    return _layout(_t("Media"), body)
+
+
 def render_list(root: Path) -> str:
     body = (
         f"<h1>{_t('Proposals')}</h1>"
@@ -2426,6 +2963,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
             status_code, body = render_conflicts(self.root, parsed.query)
             self._send(status_code, body)
             return
+        if path == "/media":
+            self._send(200, render_media(self.root))
+            return
         if path == "/proposals":
             self._send(200, render_list(self.root))
             return
@@ -2451,6 +2991,15 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 if _query_value(parsed.query, key)
             }
             self._send(200, render_assertion_form(self.root, prefill))
+            return
+        if path == "/annotations/new":
+            self._send(200, render_annotation_form(self.root))
+            return
+        if path == "/conflicts/new":
+            self._send(200, render_conflict_form(self.root))
+            return
+        if path == "/narratives/new":
+            self._send(200, render_narrative_form(self.root))
             return
         if path == "/proposals/new":
             self._send(200, _new_form())
@@ -2662,6 +3211,83 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 proposals_mod.create_pending(self.root, proposal)
             except proposals_mod.ProposalError as exc:
                 self._send(400, render_assertion_form(self.root, values, exc.errors, evidence))
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path == "/annotations/new":
+            values = {
+                "notes": (form.get("notes") or [""])[0],
+                "visibility": (form.get("visibility") or [""])[0],
+            }
+            targets = form.get("targets") or []
+            evidence = form.get("evidence") or []
+            proposal, errors = _annotation_proposal(self.root, values, targets, evidence)
+            if proposal is None:
+                self._send(
+                    400, render_annotation_form(self.root, values, errors, targets, evidence)
+                )
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(
+                    400, render_annotation_form(self.root, values, exc.errors, targets, evidence)
+                )
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path == "/narratives/new":
+            values = {
+                key: (form.get(key) or [""])[0]
+                for key in (
+                    "author",
+                    "language",
+                    "perspective",
+                    "content_location",
+                    "visibility",
+                    "notes",
+                )
+            }
+            related = form.get("related") or []
+            evidence = form.get("evidence") or []
+            proposal, errors = _narrative_proposal(self.root, values, related, evidence)
+            if proposal is None:
+                self._send(400, render_narrative_form(self.root, values, errors, related, evidence))
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(
+                    400, render_narrative_form(self.root, values, exc.errors, related, evidence)
+                )
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path == "/conflicts/new":
+            values = {
+                key: (form.get(key) or [""])[0]
+                for key in ("relation", "reason", "status", "visibility", "notes")
+            }
+            assertions = form.get("assertions") or []
+            evidence = form.get("evidence") or []
+            proposal, errors = _conflict_proposal(self.root, values, assertions, evidence)
+            if proposal is None:
+                self._send(
+                    400, render_conflict_form(self.root, values, errors, assertions, evidence)
+                )
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(
+                    400, render_conflict_form(self.root, values, exc.errors, assertions, evidence)
+                )
                 return
             proposal_id = str(proposal["id"])
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")

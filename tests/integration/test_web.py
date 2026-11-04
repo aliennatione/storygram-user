@@ -1254,6 +1254,7 @@ def test_web_add_source_validates_input(tmp_path: Path) -> None:
         ("Event", "event"),
         ("Organization", "organization"),
         ("Period", "period"),
+        ("Collection", "collection"),
     ],
 )
 def test_web_add_entity_creates_pending_proposal(
@@ -1803,6 +1804,308 @@ def test_web_conflicts_view_empty_archive(tmp_path: Path) -> None:
         assert status == 200
         assert "No conflicts found." in body
         assert "Conflicts" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_annotation_creates_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Family memory."},
+            },
+        )
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+
+        status, body = post(
+            base + "/annotations/new",
+            {
+                "targets": "person:anna",
+                "visibility": "family",
+                "notes": "Annotated in the family archive.",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 200, body
+        assert "Dry-run preview" in body
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        record = proposal["operations"][0]["record"]
+        assert record["type"] == "Annotation"
+        assert record["target_ids"] == ["person:anna"]
+        assert record["episode_ids"] == ["episode:memory"]
+        assert record["notes"] == "Annotated in the family archive."
+        assert record["visibility"] == "family"
+        assert record["id"].startswith("annotation:")
+        assert not list((tmp_path / "data" / "annotations").glob("*.json"))
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal['id'], safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200, body
+        assert "merged" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_annotation_validates_input(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Family memory."},
+            },
+        )
+
+        status, body = post(base + "/annotations/new", {"notes": "x"})
+        assert status == 400
+        assert "At least one target is required" in body
+        assert "Evidence is required" in body
+
+        status, body = post(
+            base + "/annotations/new",
+            {"targets": "person:missing", "evidence": "episode:memory"},
+        )
+        assert status == 400
+        assert "Unknown record: person:missing" in body
+
+        status, body = get(base + "/annotations/new?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Aggiungi annotazione" in body
+        assert "Obiettivi" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_narrative_creates_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Family memory."},
+            },
+        )
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+        write_record(
+            tmp_path,
+            "sources",
+            "source_one.json",
+            {
+                "id": "source:one",
+                "type": "Source",
+                "title": "Registry",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+            },
+        )
+
+        status, body = post(
+            base + "/narratives/new",
+            {
+                "author": "Nonna",
+                "language": "it",
+                "perspective": "first-person",
+                "content_location": "inbox/nonna.md",
+                "related": "person:anna",
+                "visibility": "family",
+                "notes": "Oral history.",
+                "evidence": "source:one",
+            },
+        )
+        assert status == 200, body
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        record = json.loads(pending[0].read_text(encoding="utf-8"))["operations"][0]["record"]
+        assert record["type"] == "Narrative"
+        assert record["author"] == "Nonna"
+        assert record["language"] == "it"
+        assert record["perspective"] == "first-person"
+        assert record["content_location"] == "inbox/nonna.md"
+        assert record["related_ids"] == ["person:anna"]
+        assert record["source_ids"] == ["source:one"]
+        assert record["visibility"] == "family"
+        assert record["notes"] == "Oral history."
+        assert record["id"].startswith("narrative:")
+
+        pid = json.loads(pending[0].read_text(encoding="utf-8"))["id"]
+        status, body = post(base + f"/proposals/{quote(pid, safe='')}/approve", {"commit": "no"})
+        assert status == 200, body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_conflict_creates_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_a1.json",
+            {
+                "id": "assertion:a1",
+                "type": "Assertion",
+                "subject": "person:anna",
+                "predicate": "relation:lived_in",
+                "object": "place:turin",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "produced_by": ["episode:one"],
+            },
+        )
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_a2.json",
+            {
+                "id": "assertion:a2",
+                "type": "Assertion",
+                "subject": "person:anna",
+                "predicate": "relation:lived_in",
+                "object": "place:rome",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "produced_by": ["episode:two"],
+            },
+        )
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_one.json",
+            {
+                "id": "episode:one",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Turin memory."},
+            },
+        )
+
+        status, body = post(
+            base + "/conflicts/new",
+            {
+                "assertions": "assertion:a1",
+                "relation": "contradicts",
+                "reason": "Two cities.",
+                "status": "open",
+                "visibility": "family",
+                "notes": "Needs review.",
+                "evidence": "episode:one",
+            },
+        )
+        # assertions needs two; send both
+        assert status == 400
+        assert "At least two assertions are required" in body
+
+        from urllib.error import HTTPError
+        from urllib.parse import urlencode
+        from urllib.request import Request, urlopen
+
+        data = urlencode(
+            [
+                ("assertions", "assertion:a1"),
+                ("assertions", "assertion:a2"),
+                ("relation", "contradicts"),
+                ("reason", "Two cities."),
+                ("status", "open"),
+                ("visibility", "family"),
+                ("notes", "Needs review."),
+                ("evidence", "episode:one"),
+            ]
+        ).encode()
+        req = Request(base + "/conflicts/new", data=data)
+        try:
+            with urlopen(req) as resp:
+                status, body = resp.status, resp.read().decode()
+        except HTTPError as exc:
+            status, body = exc.code, exc.read().decode()
+        assert status == 200, body
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        record = json.loads(pending[0].read_text(encoding="utf-8"))["operations"][0]["record"]
+        assert record["type"] == "Conflict"
+        assert sorted(record["assertions"]) == ["assertion:a1", "assertion:a2"]
+        assert record["relation"] == "contradicts"
+        assert record["reason"] == "Two cities."
+        assert record["status"] == "open"
+        assert record["visibility"] == "family"
+        assert record["notes"] == "Needs review."
+        assert record["id"].startswith("conflict:")
+        assert not list((tmp_path / "data" / "conflicts").glob("*.json"))
+
+        status, body = get(base + "/conflicts/new?lang=it")
+        assert status == 200
+        assert "Aggiungi conflitto" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_media_page_lists_registered_entries(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        media_file = tmp_path / "note.txt"
+        media_file.write_text("hello", encoding="utf-8")
+        from storygram.media import add_media
+
+        entry = add_media(tmp_path, media_file, visibility="private", now=NOW)
+
+        status, body = get(base + "/media")
+        assert status == 200
+        assert "Media" in body
+        assert entry["id"] in body
+        assert "note.txt" in body
+        assert entry["checksum"]["value"][:12] in body
+
+        status, body = get(base + "/media?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Nessun media registrato." not in body
     finally:
         server.shutdown()
         server.server_close()

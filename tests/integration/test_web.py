@@ -908,3 +908,107 @@ def test_web_records_export_formats_and_visibility(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_web_add_person_creates_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Nonna told me about the garden."},
+            },
+        )
+
+        status, body = get(base + "/people/new")
+        assert status == 200
+        assert "Add person" in body
+        assert 'action="/people/new"' in body
+        assert "episode:memory" in body
+
+        status, body = post(
+            base + "/people/new",
+            {
+                "name": "Nonna Rossi",
+                "notes": "Lives in Torino.",
+                "visibility": "family",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 200
+        assert "Dry-run preview" in body
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        assert proposal["status"] == "proposed"
+        assert proposal["title"] == "New person: Nonna Rossi"
+        operation = proposal["operations"][0]
+        assert operation["op"] == "create"
+        assert operation["record_type"] == "Person"
+        assert operation["evidence"] == ["episode:memory"]
+        record = operation["record"]
+        assert record["type"] == "Person"
+        assert record["name"] == "Nonna Rossi"
+        assert record["status"] == "reported"
+        assert record["notes"] == "Lives in Torino."
+        assert record["visibility"] == "family"
+        assert record["id"].startswith("person:nonna-rossi-")
+        assert not list((tmp_path / "data" / "people").glob("*.json"))
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal['id'], safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200, body
+        assert "merged" in body
+        person_file = tmp_path / "data" / "people" / f"{record['id'].replace(':', '_')}.json"
+        assert person_file.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_person_validates_input(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = post(base + "/people/new", {"name": "   "})
+        assert status == 400
+        assert "Name is required" in body
+        assert "Evidence is required" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/people/new",
+            {"name": "Nonna Rossi", "visibility": "secret"},
+        )
+        assert status == 400
+        assert "Unsupported visibility: secret" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/people/new",
+            {"name": "Nonna Rossi", "evidence": "episode:missing"},
+        )
+        assert status == 400
+        assert "Unknown evidence: episode:missing" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = get(base + "/people/new?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Aggiungi persona" in body
+        assert "Il nome è obbligatorio" not in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

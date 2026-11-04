@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -137,6 +138,7 @@ form input, form select {{
     <a href="/timeline">{_t("Timeline")}</a>
     <a href="/genogram">{_t("Genogram")}</a><a href="/proposals">{_t("Proposals")}</a>
     <a href="/memories/new">{_t("Add memory")}</a>
+    <a href="/people/new">{_t("Add person")}</a>
     <a href="/proposals/new">{_t("New proposal")}</a>
     <a href="/proposals/generate">{_t("Generate")}</a>
   </nav>
@@ -217,6 +219,18 @@ def _record_links(ids: list[str], known_ids: set[str]) -> str:
 
 def _known_ids(records: list[tuple[Path, dict[str, Any]]]) -> set[str]:
     return {str(data["id"]) for _, data in records if isinstance(data.get("id"), str)}
+
+
+def _evidence_records(root: Path) -> list[tuple[str, str, str]]:
+    records, _ = validate_mod.load_records(root)
+    evidence = []
+    for _, data in records:
+        record_id = data.get("id")
+        record_type = data.get("type")
+        if not isinstance(record_id, str) or record_type not in {"Episode", "Source", "Annotation"}:
+            continue
+        evidence.append((record_id, str(record_type), _record_name(data)))
+    return sorted(evidence, key=lambda item: (item[1], item[0]))
 
 
 def _record_link(record_id: Any, known_ids: set[str]) -> str:
@@ -306,6 +320,7 @@ def render_home(root: Path) -> str:
   <a class="button" href="/timeline">{_t("Timeline")}</a>
   <a class="button" href="/genogram">{_t("Genogram")}</a>
   <a class="button primary" href="/memories/new">{_t("Add memory")}</a>
+  <a class="button" href="/people/new">{_t("Add person")}</a>
   <a class="button" href="/proposals/new">{_t("Create proposal")}</a>
   <a class="button" href="/proposals/generate">{_t("Generate with Ollama")}</a>
   <a class="button" href="/proposals">{_t("View proposals")}</a>
@@ -382,6 +397,136 @@ def _memory_proposal(root: Path, values: dict[str, str]) -> tuple[dict[str, Any]
         "operations": [{"op": "create", "record_type": "Episode", "record": record}],
     }
     return proposal, []
+
+
+def _slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
+    return slug[:40] or "person"
+
+
+def _person_proposal(
+    root: Path, values: dict[str, str], evidence: list[str]
+) -> tuple[dict[str, Any] | None, list[str]]:
+    name = values.get("name", "").strip()
+    notes = values.get("notes", "").strip()
+    visibility = values.get("visibility", "").strip()
+    evidence = list(dict.fromkeys(item for item in evidence if item))
+
+    errors: list[str] = []
+    if not name:
+        errors.append(_t("Name is required"))
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    known_evidence = {record_id for record_id, _, _ in _evidence_records(root)}
+    if not evidence:
+        errors.append(_t("Evidence is required"))
+    for record_id in evidence:
+        if record_id not in known_evidence:
+            errors.append(_t("Unknown evidence: {value}", value=record_id))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    record: dict[str, Any] = {
+        "id": f"person:{_slug(name)}-{token}",
+        "type": "Person",
+        "name": name,
+        "status": "reported",
+        "created_at": now,
+        "updated_at": now,
+    }
+    if notes:
+        record["notes"] = notes
+    if visibility:
+        record["visibility"] = visibility
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["Person"])
+    if record_errors:
+        return None, record_errors
+
+    proposal = {
+        "id": f"proposal:person-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t("New person: {name}", name=name),
+        "rationale": _t("Created from the Add person form."),
+        "operations": [
+            {
+                "op": "create",
+                "record_type": "Person",
+                "record": record,
+                "evidence": evidence,
+            }
+        ],
+    }
+    return proposal, []
+
+
+def render_person_form(
+    root: Path,
+    values: dict[str, str] | None = None,
+    errors: list[str] | None = None,
+    selected_evidence: list[str] | None = None,
+) -> str:
+    values = values or {}
+    visibility = values.get("visibility") or ""
+    notes_value = _esc(values.get("notes", ""))
+    selected_evidence_set = set(selected_evidence or [])
+    evidence_records = _evidence_records(root)
+    evidence_options = "".join(
+        f'<label class="checkbox"><input type="checkbox" name="evidence" '
+        f'value="{_esc(record_id)}"{" checked" if record_id in selected_evidence_set else ""}> '
+        f"{_esc(record_type)} · {_esc(record_id)}"
+        f"{' · ' + _esc(name) if name else ''}</label>"
+        for record_id, record_type, name in evidence_records
+    )
+    evidence_block = (
+        f"<fieldset><legend>{_t('Evidence')}</legend>{evidence_options}</fieldset>"
+        if evidence_records
+        else f'<p class="warning">{_t("Add a memory or source before adding a person.")}</p>'
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    intro = _t(
+        "Add a person as a pending proposal. The person enters canonical data only "
+        "after a human approves the proposal."
+    )
+    body = f"""
+<h1>{_t("Add person")}</h1>
+<p class="muted">
+{intro}
+</p>
+{_errors_block(errors or [])}
+<form method="post" action="/people/new">
+<label>{_t("Name")}
+  <input name="name" value="{_esc(values.get("name", ""))}" required style="width:100%">
+</label>
+<p>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true"
+    placeholder="{_t("Optional notes about this person")}">{notes_value}</textarea>
+</label>
+{evidence_block}
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add person"), body)
 
 
 def render_memory_form(
@@ -1342,6 +1487,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/memories/new":
             self._send(200, render_memory_form())
             return
+        if path == "/people/new":
+            self._send(200, render_person_form(self.root))
+            return
         if path == "/proposals/new":
             self._send(200, _new_form())
             return
@@ -1424,6 +1572,29 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 proposals_mod.create_pending(self.root, proposal)
             except proposals_mod.ProposalError as exc:
                 self._send(400, render_memory_form(values, exc.errors))
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path == "/people/new":
+            values = {
+                key: (form.get(key) or [""])[0]
+                for key in (
+                    "name",
+                    "notes",
+                    "visibility",
+                )
+            }
+            evidence = form.get("evidence") or []
+            proposal, errors = _person_proposal(self.root, values, evidence)
+            if proposal is None:
+                self._send(400, render_person_form(self.root, values, errors, evidence))
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(400, render_person_form(self.root, values, exc.errors, evidence))
                 return
             proposal_id = str(proposal["id"])
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")

@@ -17,6 +17,25 @@ ITALIAN: dict[str, str] = {
     "Genogram": "Genogramma",
     "Proposals": "Proposte",
     "Add memory": "Aggiungi memoria",
+    "Add person": "Aggiungi persona",
+    "Name": "Nome",
+    "Notes": "Note",
+    "Optional notes about this person": "Note opzionali su questa persona",
+    "Name is required": "Il nome è obbligatorio",
+    "New person: {name}": "Nuova persona: {name}",
+    "Created from the Add person form.": "Creata dal modulo Aggiungi persona.",
+    "Evidence is required": "L'evidenza è obbligatoria",
+    "Unknown evidence: {value}": "Evidenza sconosciuta: {value}",
+    "Add a memory or source before adding a person.": (
+        "Aggiungi una memoria o una fonte prima di aggiungere una persona."
+    ),
+    (
+        "Add a person as a pending proposal. The person enters canonical data only "
+        "after a human approves the proposal."
+    ): (
+        "Aggiungi una persona come proposta in attesa. La persona entra nei dati "
+        "canonici solo dopo l'approvazione umana della proposta."
+    ),
     "New proposal": "Nuova proposta",
     "Generate": "Genera",
     "Could not continue": "Impossibile continuare",

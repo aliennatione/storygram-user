@@ -109,6 +109,59 @@ def test_genogram_includes_endpoint_aware_relationship_records(tmp_path):
     assert all(item["supported"] for item in result["relations"])
 
 
+def test_genogram_deduplicates_equivalent_relationship_and_assertion(tmp_path):
+    root = make_archive(tmp_path)
+    write(
+        root,
+        "relationships/parent.json",
+        relationship("relationship:parent", "person:anna", "relation:parent", "person:bruno"),
+    )
+    write(
+        root,
+        "assertions/parent.json",
+        assertion("assertion:parent", "person:anna", "relation:parent", "person:bruno"),
+    )
+    write(
+        root,
+        "assertions/parent-copy.json",
+        assertion("assertion:parent-copy", "person:anna", "relation:parent", "person:bruno"),
+    )
+
+    result = build_genogram(root, "person:anna")
+
+    assert len(result["relations"]) == 1
+    relation = result["relations"][0]
+    assert relation["record_type"] == "Relationship"
+    assert relation["record_id"] == "relationship:parent"
+    assert relation["relationship_id"] == "relationship:parent"
+    assert relation["related_ids"] == [
+        "assertion:parent",
+        "assertion:parent-copy",
+        "relationship:parent",
+    ]
+
+
+def test_genogram_keeps_distinct_predicates_for_same_endpoints(tmp_path):
+    root = make_archive(tmp_path)
+    write(
+        root,
+        "assertions/parent.json",
+        assertion("assertion:parent", "person:anna", "relation:parent", "person:bruno"),
+    )
+    write(
+        root,
+        "assertions/spouse.json",
+        assertion("assertion:spouse", "person:anna", "relation:spouse", "person:bruno"),
+    )
+
+    result = build_genogram(root, "person:anna")
+
+    assert [item["assertion_id"] for item in result["relations"]] == [
+        "assertion:parent",
+        "assertion:spouse",
+    ]
+
+
 def test_genogram_warns_on_incomplete_relationship_endpoints(tmp_path):
     root = make_archive(tmp_path)
     write(root, "relationships/family.json", relationship("relationship:family", None, None, None))

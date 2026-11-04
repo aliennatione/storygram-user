@@ -60,6 +60,29 @@ def _relation(
     }
 
 
+def _deduplicate(relations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for entry in relations:
+        key = (entry["subject"], entry["predicate"], entry["object"])
+        groups.setdefault(key, []).append(entry)
+
+    merged = []
+    for entries in groups.values():
+        preferred = sorted(
+            entries,
+            key=lambda entry: (
+                0 if entry["record_type"] == "Relationship" else 1,
+                str(entry["record_id"]),
+            ),
+        )[0]
+        representative = dict(preferred)
+        representative["related_ids"] = sorted(
+            {str(entry["record_id"]) for entry in entries if entry.get("record_id") is not None}
+        )
+        merged.append(representative)
+    return merged
+
+
 def build_genogram(root: Path, person_id: str) -> dict[str, Any]:
     relations = []
     warnings: set[str] = set()
@@ -89,6 +112,6 @@ def build_genogram(root: Path, person_id: str) -> dict[str, Any]:
 
     return {
         "person": person_id,
-        "relations": sorted(relations, key=lambda item: str(item["record_id"])),
+        "relations": sorted(_deduplicate(relations), key=lambda item: str(item["record_id"])),
         "warnings": sorted(warnings),
     }

@@ -85,6 +85,59 @@ def person(record_id: str, name: str, status: str = "confirmed") -> dict:
     }
 
 
+def assertion(
+    record_id: str,
+    subject: str,
+    predicate: str,
+    obj: str,
+    status: str = "reported",
+    start: str = "1987",
+    produced_by: list[str] | None = None,
+    supported_by: list[str] | None = None,
+    transaction_time: dict | None = None,
+) -> dict:
+    return {
+        "id": record_id,
+        "type": "Assertion",
+        "subject": subject,
+        "predicate": predicate,
+        "object": obj,
+        "status": status,
+        "valid_time": {"start": start, "end": None, "precision": "year"},
+        "transaction_time": transaction_time or {"recorded_at": NOW, "recorded_until": None},
+        "produced_by": produced_by or [],
+        "supported_by": supported_by or [],
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+
+
+def relationship(
+    record_id: str,
+    subject: str,
+    predicate: str,
+    obj: str,
+    status: str = "reported",
+    valid_time: dict | None = None,
+    transaction_time: dict | None = None,
+) -> dict:
+    data = {
+        "id": record_id,
+        "type": "Relationship",
+        "subject": subject,
+        "predicate": predicate,
+        "object": obj,
+        "status": status,
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+    if valid_time is not None:
+        data["valid_time"] = valid_time
+    if transaction_time is not None:
+        data["transaction_time"] = transaction_time
+    return data
+
+
 def test_home_and_new_proposal(tmp_path: Path) -> None:
     server, thread, base = start(tmp_path)
     try:
@@ -399,6 +452,247 @@ def test_web_record_detail_links_references_and_backlinks(tmp_path: Path) -> Non
         assert "References" in body
         assert "person:anna" in body
         assert "person:bruno" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_timeline_is_read_only_and_links_records(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+        write_record(
+            tmp_path, "people", "person_bruno.json", person("person:bruno", "Bruno Bianchi")
+        )
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_capture.json",
+            {
+                "id": "episode:capture",
+                "type": "Episode",
+                "episode_type": "other",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+            },
+        )
+        write_record(
+            tmp_path,
+            "sources",
+            "source_album.json",
+            {
+                "id": "source:album",
+                "type": "Source",
+                "status": "confirmed",
+                "created_at": NOW,
+                "updated_at": NOW,
+            },
+        )
+        parent_path = write_record(
+            tmp_path,
+            "assertions",
+            "assertion_parent.json",
+            assertion(
+                "assertion:parent",
+                "person:anna",
+                "relation:parent",
+                "person:bruno",
+                produced_by=["episode:capture"],
+                supported_by=["source:album"],
+            ),
+        )
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_other.json",
+            assertion(
+                "assertion:other",
+                "person:bruno",
+                "relation:lived_in",
+                "place:turin",
+                start="1990",
+            ),
+        )
+        before = parent_path.read_text(encoding="utf-8")
+
+        status, body = get(base + "/timeline")
+        assert status == 200
+        assert "Archive timeline" in body
+        assert "assertion:parent" in body
+        assert "assertion:other" in body
+        assert "episode:capture" in body
+        assert "source:album" in body
+        assert "/records/assertion%3Aparent" in body
+
+        status, body = get(base + "/timeline?" + urlencode({"id": "person:anna"}))
+        assert status == 200
+        assert "assertion:parent" in body
+        assert "assertion:other" not in body
+        assert "/records/person%3Aanna" in body
+
+        status, body = get(base + "/timeline?" + urlencode({"id": "person:missing"}))
+        assert status == 404
+        assert "Unknown record" in body
+
+        status, body = post(base + "/timeline", {})
+        assert status == 404
+        assert parent_path.read_text(encoding="utf-8") == before
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_timeline_collection_scope(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "collections",
+            "collection_family.json",
+            {
+                "id": "collection:family",
+                "type": "Collection",
+                "name": "Family",
+                "status": "confirmed",
+                "created_at": NOW,
+                "updated_at": NOW,
+            },
+        )
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_membership.json",
+            assertion(
+                "assertion:membership",
+                "person:anna",
+                "relation:member_of",
+                "collection:family",
+                start="1980",
+            ),
+        )
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_member.json",
+            assertion("assertion:member", "person:anna", "relation:lived_in", "place:turin"),
+        )
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_non_member.json",
+            assertion(
+                "assertion:non-member",
+                "person:bruno",
+                "relation:lived_in",
+                "place:turin",
+                start="1990",
+            ),
+        )
+
+        status, body = get(base + "/timeline?" + urlencode({"id": "collection:family"}))
+        assert status == 200
+        assert "assertion:membership" in body
+        assert "assertion:member" in body
+        assert "assertion:non-member" not in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_genogram_shows_relations_warnings_and_temporal_data(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+        write_record(
+            tmp_path, "people", "person_bruno.json", person("person:bruno", "Bruno Bianchi")
+        )
+        write_record(
+            tmp_path,
+            "relationships",
+            "relationship_parent.json",
+            relationship(
+                "relationship:parent",
+                "person:anna",
+                "relation:parent",
+                "person:bruno",
+                valid_time={"start": "1987", "end": "1995", "precision": "year"},
+                transaction_time={"recorded_at": NOW, "recorded_until": None},
+            ),
+        )
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_parent.json",
+            assertion(
+                "assertion:parent",
+                "person:anna",
+                "relation:parent",
+                "person:bruno",
+                start="2000",
+                transaction_time={
+                    "recorded_at": "2026-02-01T00:00:00+00:00",
+                    "recorded_until": None,
+                },
+            ),
+        )
+        write_record(
+            tmp_path,
+            "assertions",
+            "assertion_lived_in.json",
+            assertion(
+                "assertion:lived-in",
+                "person:anna",
+                "relation:lived_in",
+                "place:turin",
+            ),
+        )
+
+        status, body = get(base + "/genogram?" + urlencode({"id": "person:anna"}))
+        assert status == 200
+        assert "Experimental" in body
+        assert "relation:parent" in body
+        assert "relation:lived_in" in body
+        assert "Unsupported relation predicate: relation:lived_in" in body
+        assert '<span class="badge">supported</span>' in body
+        assert '<span class="badge">unsupported</span>' in body
+        assert "valid_times" in body
+        assert "transaction_times" in body
+        assert "1987" in body
+        assert "2000" in body
+        assert "2026-02-01T00:00:00+00:00" in body
+        assert "relationship:parent" in body
+        assert "assertion:parent" in body
+        assert "/records/relationship%3Aparent" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_genogram_requires_known_person(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+
+        status, body = get(base + "/genogram")
+        assert status == 400
+        assert "Provide a person ID" in body
+        assert 'action="/genogram"' in body
+
+        status, body = get(base + "/genogram?" + urlencode({"id": "person:missing"}))
+        assert status == 404
+        assert "Unknown record" in body
+
+        status, body = get(base + "/genogram?" + urlencode({"id": "person:anna"}))
+        assert status == 200
+        assert "No relations for person:anna" in body
+
+        status, body = post(base + "/genogram", {})
+        assert status == 404
     finally:
         server.shutdown()
         server.server_close()

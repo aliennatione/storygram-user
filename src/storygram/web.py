@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from . import proposals as proposals_mod
 from . import validate as validate_mod
+from .genogram import build_genogram
 from .llm import (
     LLMAdapter,
     LLMAdapterError,
@@ -22,6 +23,7 @@ from .llm import (
     save_pending,
 )
 from .registry import RECORD_TYPES, iter_reference_strings
+from .timeline import build_timeline
 
 MAX_BODY = 4 * 1024 * 1024
 
@@ -79,13 +81,15 @@ button.primary {{ background:var(--accent); color:white; border-color:var(--acce
   background:Canvas; color:CanvasText;
 }}
 .warning {{ border-left:4px solid #9a6700; padding:8px 12px; background:#9a670020; margin:12px 0; }}
+.intervals {{ margin:4px 0 0; padding-left:18px; font-size:.9rem; }}
 </style>
 </head>
 <body>
 <header>
   <strong>Storygram</strong>
   <nav>
-    <a href="/">Home</a><a href="/records">Records</a><a href="/proposals">Proposals</a>
+    <a href="/">Home</a><a href="/records">Records</a><a href="/timeline">Timeline</a>
+    <a href="/genogram">Genogram</a><a href="/proposals">Proposals</a>
     <a href="/proposals/new">New proposal</a>
     <a href="/proposals/generate">Generate</a>
   </nav>
@@ -138,14 +142,15 @@ def _record_search_text(data: dict[str, Any]) -> str:
     return "\n".join(str(part) for part in parts if part is not None)
 
 
-def _warning_block(items: list[str]) -> str:
+def _notice_block(title: str, items: list[str]) -> str:
     if not items:
         return ""
     rendered = "".join(f"<li>{_esc(item)}</li>" for item in items)
-    return (
-        '<div class="warning"><strong>Some records could not be loaded</strong>'
-        f"<ul>{rendered}</ul></div>"
-    )
+    return f'<div class="warning"><strong>{_esc(title)}</strong><ul>{rendered}</ul></div>'
+
+
+def _warning_block(items: list[str]) -> str:
+    return _notice_block("Some records could not be loaded", items)
 
 
 def _record_links(ids: list[str], known_ids: set[str]) -> str:
@@ -159,6 +164,47 @@ def _record_links(ids: list[str], known_ids: set[str]) -> str:
         else:
             items.append(f'<li><span class="muted">{_esc(record_id)} (missing)</span></li>')
     return f"<ul>{''.join(items)}</ul>"
+
+
+def _known_ids(records: list[tuple[Path, dict[str, Any]]]) -> set[str]:
+    return {str(data["id"]) for _, data in records if isinstance(data.get("id"), str)}
+
+
+def _record_link(record_id: Any, known_ids: set[str]) -> str:
+    if not isinstance(record_id, str) or not record_id:
+        return '<span class="muted">—</span>'
+    if record_id in known_ids:
+        href = _record_href(record_id)
+        return f'<a href="{_esc(href)}">{_esc(record_id)}</a>'
+    return f'<span class="muted">{_esc(record_id)} (missing)</span>'
+
+
+def _interval_label(value: Any) -> str:
+    if not isinstance(value, dict):
+        return "—"
+    start = value.get("start")
+    if start is None:
+        start = value.get("recorded_at")
+    end = value.get("end")
+    if end is None:
+        end = value.get("recorded_until")
+    precision = value.get("precision")
+    parts = []
+    if start is not None:
+        parts.append(str(start))
+    if end is not None:
+        parts.append(f"→ {end}")
+    if precision is not None:
+        parts.append(f"({precision})")
+    return " ".join(parts) if parts else "—"
+
+
+def _interval_cell(representative: Any, aggregated: list[Any]) -> str:
+    primary = _esc(_interval_label(representative))
+    if not aggregated:
+        return primary
+    items = "".join(f"<li>{_esc(_interval_label(value))}</li>" for value in aggregated)
+    return f'{primary}<ul class="intervals">{items}</ul>'
 
 
 def _proposal_rows(root: Path) -> str:
@@ -208,6 +254,8 @@ def render_home(root: Path) -> str:
 <tbody><tr><td>{len(pending)}</td><td>{len(applied)}</td><td>{len(records)}</td></tr></tbody></table>
 <p>
   <a class="button" href="/records">Browse records</a>
+  <a class="button" href="/timeline">Timeline</a>
+  <a class="button" href="/genogram">Genogram</a>
   <a class="button primary" href="/proposals/new">Create proposal</a>
   <a class="button" href="/proposals/generate">Generate with Ollama</a>
   <a class="button" href="/proposals">View proposals</a>
@@ -329,6 +377,147 @@ def render_record_detail(root: Path, record_id: str) -> tuple[int, str]:
 <pre>{_esc(json.dumps(data, indent=2, ensure_ascii=False))}</pre>
 """
     return 200, _layout(record_id, body)
+
+
+def render_timeline(root: Path, query: str = "") -> tuple[int, str]:
+    record_id = _query_value(query, "id")
+    records, load_errors = validate_mod.load_records(root)
+    known_ids = _known_ids(records)
+    if record_id and record_id not in known_ids:
+        return 404, _layout(
+            "Timeline not found",
+            f"<h1>Unknown record</h1><p>{_esc(record_id)}</p>"
+            '<p><a class="button" href="/timeline">Back to archive timeline</a></p>',
+        )
+
+    entries = build_timeline(root, record_id or None)
+    rows = []
+    for entry in entries:
+        evidence = sorted(
+            set(entry.get("produced_by") or []) | set(entry.get("supported_by") or [])
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(_interval_label(entry.get('valid_time')))}</td>"
+            f"<td>{_record_link(entry.get('assertion_id'), known_ids)}</td>"
+            f"<td>{_record_link(entry.get('subject'), known_ids)}</td>"
+            f"<td>{_esc(entry.get('predicate') or '')}</td>"
+            f"<td>{_record_link(entry.get('object'), known_ids)}</td>"
+            f"<td>{_status_badge(entry.get('status'))}</td>"
+            f"<td>{_esc(_interval_label(entry.get('transaction_time')))}</td>"
+            f"<td>{_record_links(evidence, known_ids)}</td>"
+            "</tr>"
+        )
+
+    scope = record_id or "archive"
+    table = f'<p class="muted">No timeline entries for {_esc(scope)}.</p>'
+    if rows:
+        table = (
+            "<table><thead><tr><th>Valid time</th><th>Assertion</th><th>Subject</th>"
+            "<th>Predicate</th><th>Object</th><th>Status</th>"
+            "<th>Transaction time</th><th>Evidence</th></tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table>"
+        )
+
+    body = f"""
+<h1>Timeline</h1>
+<p class="muted">
+Read-only timeline derived from open assertions. Scope: {_esc(scope)}.
+</p>
+{_warning_block(load_errors)}
+<form class="filters" method="get" action="/timeline">
+  <label>Record ID
+    <input name="id" value="{_esc(record_id)}"
+           placeholder="person:... / place:... / collection:..."></label>
+  <button type="submit">Show timeline</button>
+  <a class="button" href="/timeline">Archive timeline</a>
+</form>
+{table}
+"""
+    return 200, _layout("Timeline", body)
+
+
+def render_genogram(root: Path, query: str = "") -> tuple[int, str]:
+    person_id = _query_value(query, "id")
+    records, load_errors = validate_mod.load_records(root)
+    known_ids = _known_ids(records)
+    form = f"""
+<form class="filters" method="get" action="/genogram">
+  <label>Person ID
+    <input name="id" value="{_esc(person_id)}" placeholder="person:..."></label>
+  <button type="submit">Show genogram</button>
+</form>
+"""
+    if not person_id:
+        return 400, _layout(
+            "Genogram",
+            "<h1>Genogram</h1>"
+            '<p class="muted">Experimental relationship view. Provide a person ID.</p>'
+            f"{_errors_block(['Provide a person ID'])}{form}",
+        )
+    if person_id not in known_ids:
+        return 404, _layout(
+            "Genogram not found",
+            f"<h1>Unknown record</h1><p>{_esc(person_id)}</p>"
+            '<p><a class="button" href="/genogram">Back to genogram</a></p>',
+        )
+
+    result = build_genogram(root, person_id)
+    rows = []
+    for relation in result["relations"]:
+        supported = relation.get("supported")
+        supported_badge = (
+            '<span class="badge">supported</span>'
+            if supported
+            else '<span class="badge">unsupported</span>'
+        )
+        related = relation.get("related_ids") or []
+        valid_cell = _interval_cell(relation.get("valid_time"), relation.get("valid_times") or [])
+        transaction_cell = _interval_cell(
+            relation.get("transaction_time"), relation.get("transaction_times") or []
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(relation.get('predicate') or '')}</td>"
+            f"<td>{_esc(relation.get('direction') or '')}</td>"
+            f"<td>{_record_link(relation.get('subject'), known_ids)}</td>"
+            f"<td>{_record_link(relation.get('object'), known_ids)}</td>"
+            f"<td>{supported_badge}</td>"
+            f"<td>{_record_link(relation.get('record_id'), known_ids)}</td>"
+            f"<td>{valid_cell}</td>"
+            f"<td>{transaction_cell}</td>"
+            f"<td>{_record_links(related, known_ids)}</td>"
+            "</tr>"
+        )
+
+    table = f'<p class="muted">No relations for {_esc(person_id)}.</p>'
+    if rows:
+        table = (
+            "<table><thead><tr><th>Predicate</th><th>Direction</th><th>Subject</th>"
+            "<th>Object</th><th>Supported</th><th>Source record</th>"
+            "<th>Valid time / valid_times</th>"
+            "<th>Transaction time / transaction_times</th><th>Related records</th>"
+            "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        )
+
+    body = f"""
+<h1>Genogram: {_esc(person_id)}</h1>
+<div class="warning">
+<strong>Experimental</strong>
+<p>This relationship view is experimental and has no temporal filter yet.
+It derives only from canonical records and never writes data.</p>
+</div>
+<p class="muted">
+Read-only, derived from <code>relation:*</code> assertions and endpoint-aware
+Relationship records.
+</p>
+{_warning_block(load_errors)}
+{_notice_block("Genogram warnings", result["warnings"])}
+{form}
+{table}
+"""
+    return 200, _layout(f"Genogram {person_id}", body)
 
 
 def render_list(root: Path) -> str:
@@ -786,6 +975,14 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path.startswith("/records/"):
             record_id = path.removeprefix("/records/").strip("/")
             status, body = render_record_detail(self.root, record_id)
+            self._send(status, body)
+            return
+        if path == "/timeline":
+            status, body = render_timeline(self.root, parsed.query)
+            self._send(status, body)
+            return
+        if path == "/genogram":
+            status, body = render_genogram(self.root, parsed.query)
             self._send(status, body)
             return
         if path == "/proposals":

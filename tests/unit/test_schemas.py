@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from jsonschema import validate, ValidationError
+from jsonschema import ValidationError, validate
 
 
 def test_episode_schema_valid():
@@ -23,7 +23,7 @@ def test_episode_schema_invalid_missing_required():
     instance = {"id": "episode:01", "type": "Episode"}
     try:
         validate(instance=instance, schema=schema)
-        assert False, "should have failed"
+        raise AssertionError("should have failed")
     except ValidationError:
         pass
 
@@ -45,7 +45,7 @@ def test_assertion_schema_valid():
     validate(instance=instance, schema=schema)
 
 
-def test_assertion_superseded_requires_supersedes():
+def test_assertion_superseded_requires_transaction_close():
     schema = json.loads(Path("schema/assertion.schema.json").read_text())
     instance = {
         "id": "assertion:02",
@@ -54,12 +54,17 @@ def test_assertion_superseded_requires_supersedes():
         "predicate": "relation:lived_in",
         "object": "place:01",
         "status": "superseded",
-        "transaction_time": {"recorded_at": "2026-10-07T10:00:00+02:00", "recorded_until": "2027-03-10T09:15:00+02:00"},
+        "transaction_time": {
+            "recorded_at": "2026-10-07T10:00:00+02:00",
+            "recorded_until": "2027-03-10T09:15:00+02:00",
+        },
         "created_at": "2026-10-07T10:00:00+02:00",
         "updated_at": "2026-10-07T10:00:00+02:00",
     }
+    validate(instance=instance, schema=schema)
+    instance["transaction_time"].pop("recorded_until")
     try:
         validate(instance=instance, schema=schema)
-        assert False, "should have failed"
+        raise AssertionError("should have failed")
     except ValidationError:
         pass

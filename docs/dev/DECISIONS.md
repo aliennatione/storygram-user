@@ -1,0 +1,339 @@
+# Decisions
+
+## Product and UX
+
+- Primary users are all three groups: the story owner, family collaborators and agents/tools.
+- First vertical slice: agent/CLI proposal -> human review -> atomic merge.
+- CLI comes before the web UI. The UI is local and served on `0.0.0.0:8080`.
+- The LLM adapter comes after the UI and must only produce reviewable proposals.
+- The adapter is provider-agnostic: a callable mock for tests and a stdlib Ollama provider for local use.
+- Generation and persistence are separate; only `save_pending` touches disk, and only `proposals/`.
+- The core remains deterministic and usable offline without an LLM.
+
+## Proposal Model
+
+- Proposals use explicit operations, never arbitrary patches.
+- v1 operations: `create`, `update_metadata`, `supersede`, `archive`.
+- Operation vocabulary is generic across record types; policy is enforced per type.
+- IDs are supplied by the proposal and validated by Storygram.
+- Each semantic operation needs evidence. Episode is the explicit exception: it is itself a capture.
+- Evidence references must point to Episode, Source or Annotation records.
+- Metadata updates are limited to an allowlist. Facts go through Assertions.
+- Conflict records are not archived. They have explicit review states instead.
+- Applied proposals are archived under `data/proposals/` with status `merged`.
+- A potential conflict blocks apply unless the proposal creates or references an explicit Conflict containing both assertions.
+
+## Pending Editing and API
+
+- Pending edits replace the JSON while preserving `created_at` and the proposal ID.
+- Only open pending proposals are editable; applied/rejected/archived records are read-only.
+- External agents can create, list, read and update pending proposals.
+- There is intentionally no API approve endpoint; approval stays human UI/CLI.
+- The API is local, unauthenticated and documented as controlled-network only.
+
+## Application and Git
+
+- `approve` applies and commits by default.
+- `--dry-run` shows operations and touched files without writing or checking Git.
+- `--no-commit` writes atomically but skips Git.
+- Default approval requires a clean tracked working tree; untracked/ignored pending proposals do not block it.
+- Commit only application files plus the archived proposal, using one scoped commit.
+- Any write or commit failure rolls back data files, leaving the pending proposal intact.
+- The archived proposal stores `applied_at`; the commit message stores the proposal ID. The resulting hash is returned to the caller rather than written into the same commit.
+- Pending proposals under `proposals/` stay ignored and local. Only the merged archive is committed.
+
+## Schema and Validation
+
+- Canonical schemas live in `schema/`; root duplicates are kept byte-identical.
+- The assertion schema was corrected: a `superseded` assertion requires `transaction_time.recorded_until`, not `supersedes`. The replacement assertion carries `supersedes`.
+- Validation must cover every canonical record type, duplicate IDs and broken references.
+- Empty `data/` is valid.
+- Tested behavior requires `/data` as the working directory because existing tests use relative paths.
+
+## Conflict Heuristic
+
+- v1 only auto-detects Assertion conflicts with the same subject and predicate but different object/value.
+- Validity windows are compared by year; unknown/approximate time overlaps conservatively.
+- Closed assertions (`superseded`, `archived`, `rejected`) are ignored.
+- This is an apply-time guard, not a complete temporal reasoner.
+
+## Process
+
+- Work in small atomic commits using Conventional Commits. Local commits are expected after each coherent unit so work stays traceable.
+- Do not push, amend, force-push or create tags/releases unless the user explicitly asks.
+- Keep this support documentation current and commit it with the work it describes.
+- Prefer subagents for inventory/research and direct edits for tightly coupled implementation.
+- Do not claim a check passed unless it actually ran in this environment.
+
+## Deployment Verification
+
+- Container verification runs from a development container with the host Docker socket bind-mounted at `/var/run/docker.sock`.
+- This is client-to-host-daemon access, not Docker-in-Docker. Never start `dockerd` and never mount the socket into the Storygram application container.
+- Docker images, containers and volumes live on the host; build contexts are sent by the client, so building from `/data` works.
+- Compose bind-mount sources resolve on the host, not in the development container. Default verification uses the named volume; host bind verification uses a host temp directory created through a helper container.
+- Host-published ports are not assumed reachable from the development container. Verify with `docker compose exec` and health status first.
+- Verification uses a unique Compose project name and port, and removes only resources it created.
+
+## Deployment
+
+- The final deliverable must be containerizable.
+- The default container must work fully offline and without Ollama.
+- Compose should offer an optional local Ollama profile/service for the LLM adapter.
+- The web UI remains exposed on port 8080 with `/data` persisted via a volume/bind mount.
+- Containerization comes after Playwright and the LLM adapter so the packaged surface is already tested.
+- The runtime image is non-root, offline-capable and has no Chromium/Node; browser tooling stays in development.
+- The entrypoint may auto-initialize an empty `/data` and Git repository, but never auto-approves records.
+- Ollama is an optional Compose profile; the app still runs and validates without it.
+
+## Container Verification Result
+
+- The container deliverable is verified through the host socket with Docker CLI 29.9.2 and Compose v5.6.1 against Podman Engine 5.8.2's Docker-compatible API.
+- "Docker verified" in project docs means the CLI/Compose workflow passed against a Docker-compatible daemon; future runs must name the actual engine when it is Podman.
+- The image runs as UID/GID 100:101 (`storygram`), not 1000. User docs must state the real UID/GID and show how to discover it.
+- Host bind paths must be created on the host. A helper container that mounts host `/tmp` at `/hosttmp` returns a container path; map it back to `/tmp/...` before passing it to `-v`.
+- The named volume remains the primary persistence check. Restart and `down`/`up` (without `-v`) both preserve canonical records and Git history.
+- The Ollama profile stays optional and unverified until a model pull is explicitly run.
+- Test resources use a unique Compose project name and host port, then are removed individually; the development container is never removed.
+
+## Proposal Close and API Endpoints (2026-11-01)
+
+- Added `withdrawn` as a terminal proposal status distinct from `rejected` and `applied`.
+- `rejected` means the human declined the proposal; `withdrawn` means the submitter or reviewer retracted it. Both preserve the proposal and evidence.
+- Closing is centralized: missing proposals map to 404, already closed proposals to 409, success to the new status.
+- The JSON API now supports generation, reject and withdraw. It still has **no approve endpoint**.
+- Auto-approval was explicitly rejected, including the suggestion to let an LLM classify and apply its own proposals. Generation, classification and advisory review may be automated; applying canonical data may not.
+- API close endpoints accept an optional JSON body so a client can supply a reason without a required schema.
+- `POST /api/proposals/generate` returns 201 when a proposal is saved and 200 when `save: false`; provider failures return 502.
+- API and UI share the same proposal engine. No route bypasses dry-run, validation, archival or Git commit behavior.
+
+## OpenAI-Compatible Provider (2026-11-01)
+
+- The adapter supports both Ollama and any OpenAI-compatible `/v1/chat/completions` endpoint.
+- Provider selection is environment-first: `STORYGRAM_LLM_PROVIDER`, `STORYGRAM_LLM_MODEL`, `STORYGRAM_LLM_URL`, `STORYGRAM_LLM_API_KEY`; legacy `STORYGRAM_OLLAMA_*` variables still work.
+- The API key comes only from the environment or `--api-key`; it is never written to proposals, logs or the repository.
+- The default provider remains `ollama`, preserving the offline-first default.
+- OpenAI-compatible aliases cover the common llama.cpp/llama-swap spellings so users do not need to remember one exact name.
+- The adapter strips thinking blocks before JSON extraction because reasoning models may emit them before the payload.
+- Prompt changes add lowercase ID requirements, `record_type` and a minimal valid proposal shape. The goal is fewer schema-invalid proposals, not automated approval.
+- Compose passes the LLM variables into the container. `.env` stays gitignored and excluded from the build context; secrets are supplied at runtime.
+- Generation validates the proposal envelope, not every operation record. A dry-run remains the authoritative pre-approval check.
+
+## Legacy Command Hardening (2026-11-01)
+
+- `ingest` now uses the PRD grammar `ingest episode FILE` and writes only to `inbox/`. The previous `--data` option violated the human approval boundary and was removed.
+- Ingest refuses to overwrite a same-name capture unless `--overwrite` is explicit. Captures remain unreviewed input, not canonical records.
+- Export uses `RECORD_TYPES` instead of a duplicated directory list, sorts by ID and fails on malformed JSON instead of silently omitting data.
+- A visibility filter is default-deny: records without a `visibility` field are excluded when the filter is active. An unfiltered export still includes them.
+- JSON-LD export emits `@id` and `@type` for every node and a local `@vocab` context. It is explicitly a minimal projection, not a full RDF round-trip.
+- The search index is rebuilt from scratch on each rebuild. An FTS5 table has no primary-key uniqueness, so `REPLACE` accumulated duplicates; dropping and recreating removes the ambiguity and stale records.
+- Search matches exact IDs, then exact types, then FTS content, then a `LIKE` fallback. Results are sorted by ID. A signature of path/mtime/size refreshes a stale index before searching.
+- `rebuild` now advertises only the search index. It exits non-zero and reports malformed records instead of claiming success after silently skipping them.
+- Conflicts combine explicit records and assertion-derived contradictions. Derived entries are marked `derived: true`, deduplicated by unordered assertion pair, and carry both assertion records and evidence.
+- Derived conflicts use a `derived:` display ID rather than pretending to be canonical `conflict:` records.
+- Timeline excludes superseded, archived and rejected assertions, sorts by valid-time start then ID, and includes evidence and transaction fields.
+- Timeline distinguishes an unknown record from a known record with no entries; both are actionable errors or explicit empty results.
+- Genogram remains experimental. Relationship records are ignored because the schema has no endpoints; relations come from `relation:*` assertions and unsupported predicates are warnings.
+- `get` and `list` accept `--archive`, matching the documented examples and the rest of the read surface.
+
+## Local GGUF Helpers and Profiles (2026-11-02)
+
+- The optional Ollama service now uses the `ollama` profile; the `llm` profile is reserved for the local llama.cpp service.
+- `scripts/download-model.sh` downloads a specific Qwen 2.5 1.5B Instruct Q4_K_M GGUF and verifies its SHA256. The model stays in the gitignored `models/` directory and is never committed.
+- `scripts/llm-up.sh` starts the `llm` profile through Compose. It sets the app to the OpenAI-compatible adapter at `http://llm:8080` and keeps the model file name as the model identifier.
+- `STORYGRAM_MODELS_DIR` is the canonical model-directory variable; `download-model.sh` still accepts the older `STORYGRAM_MODEL_DIR` as a fallback.
+- The model directory is a host bind source. Inside the development container, `llm-up.sh` derives the host path from the `/data` mount instead of passing the container path to the host daemon.
+- The model mount is read-only; inference has no reason to write to the model directory.
+- The helper verifies a model only when it is visible locally or at the configured path. A host path that is not visible from the development container cannot be checked; Compose still handles it on the host side.
+- Local inference is optional. The core stays deterministic and LLM-free, and generation cannot approve or apply data.
+
+## Local Model Quality and Prompt Contract (2026-11-02)
+
+- `qwen3-4b` is the single quality reference. The server should keep it loaded; do not switch to 8B or 14B during normal review, because model loading adds latency and makes evaluations incomparable.
+- The local Qwen 1.5B GGUF remains a transport/wiring smoke test. The local 3B GGUF is not the default and is not recommended on the current 1-CPU quota: it loaded but produced no token in more than 25 minutes.
+- The prompt is part of the generation contract, not a cosmetic hint. It must require: an Episode with `content.text`, evidence on operations, no `Relationship` records, `relation:*` predicates, `transaction_time.recorded_at` as record time, source dates in `valid_time`, no `Period` records, only IDs created in the proposal or known, literal facts in `value` without an invented object prefix, and no invented surnames.
+- Field-level examples are more effective than prohibitions alone. The literal-value Assertion example made `qwen3-4b` stop emitting `occupation:nurse` as an object.
+- Generation validates the proposal envelope, not operation schemas or semantics. A passing generation is not a passing dry-run, and a passing dry-run is not truth. Humans must run `proposal approve --dry-run` and review the result.
+- Keep the approval gate unchanged: no approve API endpoint and no auto-apply path.
+- `STORYGRAM_LLM_TIMEOUT`, `STORYGRAM_LLM_MAX_TOKENS` and the Compose `STORYGRAM_LLM_CTX_SIZE` are the supported generation controls.
+
+## Export Round-Trips (2026-11-03)
+
+- JSON export remains the canonical machine-readable list and its shape is unchanged.
+- YAML export is a `safe_dump` sequence parsed by `safe_load`; this preserves strings, including ISO timestamps, and nested objects. The parser also accepts a single mapping or `{records: [...]}` for hand-edited input.
+- JSON-LD remains the existing local `@context`/`@graph` projection. Round-trip parity comes from reversing `@id`/`@type` only; full RDF expansion/compaction is out of scope and documented as such.
+- Markdown is a set of blocks delimited by `<!-- storygram:record -->` / `<!-- /storygram:record -->` with YAML front matter and a rendered body. Episode `content.text` and record `notes` live in the body; `storygram_body` records which field was moved. The front matter is the source of truth, so body-only edits are intentionally not re-imported; the end marker keeps body trailing newlines exact.
+- Round-trip support lives in module parsers and is tested through export output. No CLI canonical import was added: imported data must still enter through proposals so the human approval gate cannot be bypassed.
+- The smallest round-trip case is a single Person; nested Assertion time objects and multiple records are covered to catch serialization regressions.
+
+## Safe Import (2026-11-03)
+
+- Import never writes canonical data. `storygram import` converts an export into a create-only pending proposal under `proposals/`; applying it still requires the normal human `proposal approve` path.
+- Every imported record is validated against its schema, and the whole generated proposal is run through `plan_apply` before the pending file is written. An export that would fail dry-run does not produce a pending proposal.
+- Only proposable record types can be imported. Proposal records are rejected, as are duplicate IDs within the export and IDs already present in canonical data.
+- Imported Episode/Source/Annotation records are ordered before dependent operations and attached as operation-level evidence. Proposal-level evidence is avoided because `plan_apply` validates it for every operation, including before a newly created capture exists.
+- `--evidence` lets the reviewer attach already-canonical capture IDs when the export contains only derived records.
+- Format is inferred from the suffix (`.json`, `.jsonld`, `.yaml`/`.yml`, `.md`/`.markdown`); `--format` overrides it for ambiguous files.
+- The proposal ID defaults to `proposal:import-<file-stem>` and is overridable. Import never auto-approves, never commits and never closes a proposal.
+- `records_from_json` completes the parser set for the native JSON export list and accepts a single record or `{records: [...]}` for hand-edited input.
+
+## Capture Metadata (2026-11-03)
+
+- `ingest episode` remains inbox-only. Capture metadata is a hidden sidecar under `inbox/.storygram/`, not a canonical record and not an Episode.
+- The checksum is computed while streaming the source into a temp capture, so it describes the exact bytes that are moved into `inbox/` without reading the source twice.
+- Sidecars use the versioned format identifier `storygram.capture/1` with filename, byte size, best-effort MIME type, SHA-256, `ingested_at` and `overwritten`. No absolute host paths are stored.
+- Capture and sidecar are written to same-directory temp files and moved with `os.replace`. If metadata cannot be moved into place after the capture, the new capture and any stale sidecar are removed and the command fails.
+- A refused overwrite leaves both the capture and its metadata unchanged. `--overwrite` refreshes both and records `overwritten: true`.
+- `--json` makes the metadata machine-readable; plain output reports size, checksum and sidecar path.
+- The sidecar is deliberately not registered as a canonical schema/type. Capture metadata supports later review; it does not confirm facts or write canonical data.
+- MIME type is best-effort from the filename and may be `null`; it is informational, not a validation gate.
+
+## Relationship Endpoints (2026-11-04)
+
+- A Relationship now models an optional endpoint triple: `subject`, `predicate` (`relation:*`) and `object`. This reuses the Assertion vocabulary so genogram code and reviewers do not need a second relation language.
+- The fields are optional but all-or-nothing. A record with any endpoint field must provide all three. This keeps bare legacy Relationship records valid while preventing half-modelled links.
+- Relationship remains a distinct canonical type rather than being folded into Assertion: it can be referenced as an entity, while Assertions remain propositions about entities, events or relationships.
+- `genogram` now reads complete Relationship records and `relation:*` assertions. It scopes both to the requested person, skips closed relations and warns about unsupported predicates and incomplete Relationship records.
+- Output keeps the existing `assertion_id` key for assertions, adds `relationship_id` for Relationship records, and always includes `record_id` and `record_type`. This preserves existing consumers while making the source explicit.
+- Genogram stays experimental. Endpoint modelling is a prerequisite, not a promotion: temporal validity and real-fixture review remain open.
+- Generation continues to prefer Assertions. The prompt no longer states that Relationship has no endpoints, but still forbids model-generated Relationship records to keep the proposal path conservative.
+- This is a read-only product increment: no canonical write, proposal, approval or commit behavior changed.
+
+## Timeline Scopes (2026-11-04)
+
+- Timeline scope is selected by the existing record ID or by `--all`; the two are mutually exclusive and one is required. This keeps the documented `timeline ID` command while adding an explicit archive-level mode.
+- Entity and place timelines keep the existing subject/object match. A collection timeline additionally includes assertions about records that assert `relation:member_of` the collection.
+- Collection membership is expressed as a normal Assertion, not a new Collection schema field. Facts already belong in Assertions, and this avoids a schema migration while keeping membership reviewable through proposals.
+- Membership expansion is one level deep. Nested collections and Collection `member_ids` are intentionally out of scope for this unit.
+- Archive-level timelines include every open assertion. Closed assertions (`superseded`, `archived`, `rejected`) remain excluded in all scopes.
+- `timeline --all` succeeds on an empty archive and reports that there are no entries; an unknown record ID still fails with `Unknown record`.
+- This is a read-only product increment: no canonical write, proposal, approval or commit behavior changed.
+
+## Genogram Deduplication (2026-11-04)
+
+- Equivalent relations are grouped by the exact `(subject, predicate, object)` triple. The key deliberately excludes record type, status and evidence so an Assertion and a Relationship describing the same link collapse to one output entry.
+- A Relationship representative is preferred over an Assertion because Relationship is the dedicated canonical relation type. This unit used sorted `record_id` as a deterministic tie-break; the temporal review below supersedes it with latest transaction time before `record_id`.
+- The merged entry keeps the representative's existing keys (`assertion_id` or `relationship_id`, plus `record_id` and `record_type`) and adds `related_ids`, the sorted IDs of every contributing record. This is additive and preserves existing consumers.
+- Distinct predicates between the same endpoints remain distinct. Deduplication is not a semantic merge and does not decide which conflicting relation is true.
+- Closed-status filtering and person scoping still happen before deduplication. No schema change, canonical write, proposal, approval or commit behaviour changed.
+
+## Relationship Temporal Fields (2026-11-04)
+
+- Relationship now accepts optional `valid_time` and `transaction_time` with the same inner shapes as Assertion. Reusing the shapes keeps bitemporal semantics consistent across relation records.
+- Both fields are optional rather than required. Existing archives contain bare Relationship records and must remain schema-valid; the Assertion type keeps `transaction_time` required.
+- `transaction_time.recorded_at` is required whenever the object is present, and `valid_time.precision` stays constrained. Optionality applies to the fields, not to their internal structure.
+- `genogram` exposes both fields when the source record provides them. Missing fields become `null`, so consumers can distinguish absent temporal data from a populated interval.
+- Deduplication remains keyed by the exact relation triple. The representative supplies temporal fields and `related_ids` preserves every contributing record; this unit does not attempt semantic merging of different intervals.
+- No canonical write, proposal, approval or commit behaviour changed.
+
+## Genogram Temporal Semantics (2026-11-04)
+
+- A genogram edge is identified by the exact `(subject, predicate, object)` triple. Different valid intervals for the same triple remain one edge; the genogram is a structural view, not a timeline.
+- Temporal intervals do not enter the deduplication key. Splitting by interval would prevent Assertion/Relationship deduplication and produce parallel family edges for the same relationship.
+- All distinct `valid_time` and `transaction_time` objects from contributing records are aggregated into `valid_times` and `transaction_times`, sorted and deduplicated. This avoids losing intervals when one representative is chosen.
+- Singular `valid_time`/`transaction_time` remain representative fields for compatibility. Consumers that need complete temporal history use the aggregated arrays.
+- Representative selection is Relationship before Assertion, then the latest `transaction_time.recorded_at`, then the smallest `record_id`. Type priority keeps the canonical relation record; recency makes the singular temporal fields meaningful.
+- No `--at` filter is added in this unit. Temporal filtering needs explicit overlap semantics for year/month/decade/approximate precision and open intervals, so it is deferred.
+- Closed records are filtered before aggregation. The genogram remains experimental until reviewed on real user data.
+
+## Read-only GUI Browse (2026-11-04)
+
+- The first human-interface slice is a server-rendered read-only browser, not a JavaScript application. The stdlib HTTP server, existing layout and deterministic archive loader already cover the need without adding a frontend build or a second source of truth.
+- Routes are `GET /records` and `GET /records/<id>`; there is no POST route and no canonical write path. Browsing cannot approve, create, edit or delete records.
+- The list reuses `validate.load_records` so malformed files are surfaced as warnings while valid records remain browseable. Hiding load errors would make the GUI look healthier than the archive.
+- Filters are exact `type` and `status` plus a case-insensitive text query over id/type/status/title/name/summary/notes/tags. Sorting is deterministic by id, then relative path.
+- The detail view treats raw JSON as the source of truth and adds only derived reference and backlink links. Missing references are marked instead of silently omitted.
+- Visibility filtering is deferred. The UI is unauthenticated and intended for a controlled local network or container port mapping; adding a visibility selector belongs with search/export, where the filter semantics are shared.
+- Timeline, genogram, search and export views remain later GUI slices. This unit deliberately stops at canonical record browsing.
+
+## Read-only GUI Timeline and Genogram (2026-11-04)
+
+- The timeline and genogram pages reuse `timeline.build_timeline` and `genogram.build_genogram` instead of reimplementing derivation in the HTTP layer. The CLI and browser therefore share the same closed-status filtering, collection membership, deduplication and temporal aggregation.
+- `GET /timeline` uses the absence of `id` as the archive scope and `?id=...` as the entity, place or collection scope. This mirrors `storygram timeline --all` versus `storygram timeline ID` without adding a second scope parameter.
+- `GET /genogram?id=...` requires a person ID. A missing ID is a request error (400 with an input form); an ID that is not in canonical data returns 404, matching `/records` and `/timeline`. A known person with no relations is a valid empty result, not a 404.
+- Timeline rows link assertions, subjects, objects and evidence to `/records/<id>`. The browser derives navigation only; it does not invent or rewrite record content.
+- Genogram rows show both the representative `valid_time`/`transaction_time` and the aggregated `valid_times`/`transaction_times`, because choosing one representative must not hide other intervals.
+- Both routes are GET-only. There is no POST handler and no canonical write path; the human approval gate remains unchanged.
+
+## Bilingual UI and Add Memory (2026-11-04)
+
+- The human input slice is a server-rendered **Add memory** form that creates one pending Episode proposal. It does not add a canonical write route: `proposals_mod.create_pending` remains the only write, and approval is still a separate human action.
+- The form validates the text, episode type, visibility, participants and the full Episode schema before writing. Invalid input re-renders the form with errors and leaves `proposals/` untouched.
+- Episode IDs use `episode:memory-<12 hex>` and proposal IDs use `proposal:memory-<12 hex>`; the shared token makes the pair traceable without exposing a counter or timestamp.
+- The interface is bilingual through a per-request language context, not a second template set. English stays the default so existing tests and documentation remain stable; Italian is selected with `/lang/it` or `?lang=it`.
+- The header switch sets a `storygram_lang` cookie and redirects back to the current page. The `lang` query parameter is stripped from the redirect target so the cookie cannot be overridden by a stale query value.
+- No JavaScript is required. Server-rendered forms, standard CSS and cookies keep the UI usable without a frontend build and make Firefox support a rendering concern rather than a framework concern.
+- Canonical type names, IDs and stored JSON remain untranslated. Only presentation labels (navigation, headings, buttons, status badges, episode types and visibility options) are localized.
+- Firefox verification uses system Firefox through WebDriver/geckodriver. Playwright's bundled Firefox is a glibc build and does not run on Alpine musl; system Firefox is the supported path for the Firefox smoke flow.
+
+## Explicit RFC3339 Format Checks (2026-11-04)
+
+- JSON Schema `format` is only enforced when a matching checker exists. `jsonschema` does not install the `date-time` checker by default, so relying on the library alone silently accepted invalid timestamps.
+- The validator now registers explicit `date` and `date-time` checkers using the standard library. `date-time` requires a full RFC3339 value with a timezone; naive local timestamps are rejected.
+- The Episode `dateTimeOrDate` schema now gives every branch an explicit string type. This keeps the schema honest and makes the format checks apply inside `anyOf`.
+- Invalid dates fail before proposal creation, so the Add memory form cannot persist malformed temporal data.
+
+## Browser Visibility Filters and Export (2026-11-04)
+
+- The Records page reuses the existing canonical record list and applies type, status, visibility and text filters in memory. Visibility is a first-class filter because privacy is a product invariant, not a presentation detail.
+- Export is a GET-only route (`/export`) and reuses the CLI export module. The browser does not reimplement export formats or bypass the registry-driven reader.
+- Export links preserve the active filters, so a human can inspect a subset and download exactly that subset in JSON, JSON-LD, YAML or Markdown.
+- Export responses are attachments with explicit content types. Invalid formats or visibility values return 400 instead of silently exporting the whole archive.
+- The export route never writes canonical data; it is a read projection like the records, timeline and genogram pages.
+
+## Evidence-Backed Person and Relationship Forms (2026-11-04)
+
+- Person and Relationship creation are semantic changes, so the web forms require at least one existing Episode, Source or Annotation as evidence. The operation carries the selected evidence IDs into the proposal; approval still runs the normal planner.
+- The Add person form accepts a name, optional notes and visibility. It generates a readable slug plus a short random token for the ID, so names remain recognizable without relying on a global counter.
+- The Add relationship form exposes only the predicates the experimental genogram understands (`relation:parent`, `child`, `spouse`, `sibling`, `partner`). Free-form predicates remain available through the advanced JSON editor.
+- Subject and object are selected from active Person records. The form rejects identical endpoints, unknown people, unsupported predicates, invalid visibility and missing evidence before writing.
+- Optional `valid_time` is preserved as start/end/precision. Empty temporal fields are omitted rather than stored as empty strings.
+- Both forms create pending proposals only. They do not write canonical data or auto-approve, preserving the human gate.
+
+## Standalone Source Creation (2026-11-04)
+
+- Source records are evidence, not semantic claims. They no longer require prior Episode/Source/Annotation evidence, so a human or importer can register a standalone register, interview or document.
+- The Add source form creates a pending Source proposal with title, optional source type, visibility and notes. Approval still goes through the normal proposal planner.
+- Sources remain `is_evidence=True`, so they can support later Person, Relationship and Assertion proposals.
+- Annotation remains evidence-required because an annotation is about existing target records and needs evidence to be meaningful.
+
+## Generic Entity Form (2026-11-04)
+
+- Place, Event, Organization and Period share the same minimal schema shape (`name`, `notes`, `visibility`, status and timestamps), so one Add entity form with a type selector avoids four near-identical forms.
+- The form creates pending proposals only, requires existing evidence, and keeps Person and Relationship as dedicated forms because their fields and validation differ.
+
+## Assertion Form (2026-11-04)
+
+- An Assertion needs exactly one of an object record or a literal value; the form enforces the choice because the schema requires `value` whenever `object` is absent or null.
+- The predicate is free text constrained to the schema pattern `relation:[A-Za-z0-9][A-Za-z0-9._~-]*`, with a datalist of common relations. The relationship form stays closed to `FAMILY_PREDICATES` because the genogram only renders those; assertions are broader by design.
+- Operation evidence (Episode/Source/Annotation) is also written into the record fields it semantically matches: episodes → `produced_by`, sources → `supported_by`, annotations → `annotations`. The proposal stays planner-valid and the record stays self-describing.
+- `transaction_time.recorded_at` is set to the creation time; corrections remain a new assertion with `supersedes`, never an edit.
+
+## Record and Proposal Cross-Links (2026-11-04)
+
+- A record page lists proposals from both `proposals/` (pending) and `data/proposals/` (applied), matching any operation whose `record.id`, `record_id` or `target_id` equals the record.
+- A proposal page links affected records only when they exist canonically; pending creates show a `(pending)` marker instead of a link that would 404.
+- Links are derived on read from proposal JSON; no index or schema change is needed and the view cannot write.
+
+## Read-only Conflicts View (2026-11-04)
+
+- `/conflicts` reuses `list_conflicts`, so the browser and the CLI always agree on deduplication and status filtering.
+- Evidence for an explicit Conflict falls back to the `produced_by`/`supported_by` of its assertions when the record has none, because a human inspecting a conflict needs the sources immediately.
+- The view is GET-only and answers 404 to POST, matching the existing timeline/genogram convention rather than introducing a new 405 style.
+
+## Media Manifest Commands (2026-11-04)
+
+- The manifest describes media kept outside Git: `media add` records URI, SHA-256, MIME type, size, visibility and acquisition metadata under `media-manifest/`, never copies the file and never writes `data/`.
+- Entries are content-addressed (`<slug>-<sha256[:8]>.json`) so the same file maps to the same entry and a different file with the same name cannot silently collide; refreshing requires `--overwrite`.
+- `media-manifest/` stays gitignored local metadata (per `AGENTS.md`), not a committed store; users who want manifests in Git can force-add specific entries.
+
+## Proposal Show JSON (2026-11-04)
+
+- `proposal show --json` returns the parsed proposal object, and errors as `{"ok": false, "errors": [...]}` with exit code 1, matching the `_fail` convention used by the other agent-facing commands.
+
+## Demo Authoring Skill (2026-11-04)
+
+- Added an optional opencode skill `demo-authoring` under `.opencode/skills/` plus a `/demo` command, templates and `scripts/demo_tools.py`.
+- Scope is derived output only (`generated/demos/`); the skill never writes canonical data and does not touch the core.
+- Manim is installed and verified in this container (v0.22.1) via system packages + pip.
+- VCR is snap/Ubuntu-only and cannot run on Alpine; a Slidev fallback is provided and verified (v53.0.0).
+- Added `skills.paths` to `.opencode/opencode.jsonc` for explicit discovery.

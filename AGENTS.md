@@ -1,97 +1,129 @@
 # AGENTS.md
 
-## Purpose
+## Project
 
-This file contains general engineering instructions for human contributors and AI coding agents. Project-specific requirements belong in `PRD.md`, project documentation, and task-specific prompts.
+Storygram is a local-first, file-based archive for life stories. `PRD.md` is the product source of truth; `PLAN.md` is the milestone/status map. The core must stay deterministic and usable offline without an LLM.
 
-## Before editing
+Current state: functional MVP for proposals, validation, local web review with a bilingual English/Italian interface, read-only record browsing plus timeline and experimental genogram views, an Add memory form that creates pending Episode proposals, and optional Ollama or OpenAI-compatible generation. The proposal path is tested end-to-end and the container deliverable is runtime-verified through the host Docker socket. Legacy commands are hardened and CLI-tested: `ingest episode` is inbox-only, export/search/rebuild/timeline/conflicts are deterministic, and genogram remains experimental although Relationship records model endpoints and optional temporal fields, equivalent triples are deduplicated, and all temporal intervals are preserved. JSON-LD/YAML/Markdown round-trips are implemented, `import` turns an export into a create-only pending proposal without writing canonical data, and `ingest` writes checksummed capture metadata under `inbox/.storygram/`. Timelines now support entity, place, collection and archive scopes; collection timelines include direct `relation:member_of` members. Verify a command before documenting it as working.
 
-1. Inspect the repository, Git status, and existing build system.
-2. Read `README.md`, `PRD.md`, relevant documentation, and nearby code/tests.
-3. Run the existing checks before making changes and record pre-existing failures.
-4. Identify the smallest complete change that satisfies the task.
-5. State a concise plan before significant implementation work.
+Durable context, in order:
+1. `AGENTS.md` - workflow and environment rules.
+2. `docs/dev/STATE.md` - branch, completed work, exact next steps and checks.
+3. `docs/dev/HANDOFF.md` - compact briefing for the next session.
+4. `docs/dev/DECISIONS.md`, `LESSONS.md`, `AUDIT.md` - rationale, quirks and session history.
 
-## Engineering principles
+## Communication
 
-- Prefer simple, explicit, maintainable solutions.
-- Preserve existing behavior unless a change is required.
-- Keep changes focused, reversible, and reviewable.
-- Separate domain logic, persistence, presentation, and integrations.
-- Validate input at system boundaries.
-- Make invalid states visible and actionable.
-- Prefer deterministic behavior over hidden heuristics.
-- Do not invent missing information; represent uncertainty explicitly.
-- Do not silently overwrite, discard, or migrate user data.
-- Avoid unnecessary dependencies and premature abstractions.
+- Address the user in Italian unless they explicitly switch language.
+- Keep code, commit messages and English documentation in English; Italian user/contract docs stay in the bilingual files.
 
-## Repository hygiene
 
-- Never commit secrets, credentials, private keys, tokens, or unapproved personal data.
-- Do not edit generated files manually when they are reproducible.
-- Keep temporary files outside the repository or remove them before completion.
-- Use the repository's encoding, line endings, naming, and formatting conventions.
-- Keep public identifiers stable once released.
-- Update documentation when public behavior, schemas, APIs, configuration, or workflows change.
+## Environment
 
-## Code quality
+- Development repository: `/data`, usually bind-mounted from the host.
+- Current development image: Alpine, Python 3.14.10, Git, Node/npm, system Chromium and system Firefox/geckodriver for the Firefox smoke test. A fresh image may still lack some tools; install only what the task needs and record it.
+- Dependencies are installed with `pip install --break-system-packages -e ".[dev]"`.
+- The development container has `/var/run/docker.sock` bind-mounted from the host.
+- That socket talks to the **host container daemon**, not Docker-in-Docker. It may be Docker Engine or a Docker-compatible engine such as Podman; read `docker version` instead of assuming. Never start `dockerd`.
 
-- Follow the project's formatter, linter, and type-checking conventions.
-- Use descriptive names and small functions with clear responsibilities.
-- Avoid broad exception handling that hides failures.
-- Return errors containing the relevant operation, object, file, or field.
-- Keep external systems behind explicit adapters.
-- Preserve backward compatibility where promised.
-- Document compatibility impact for schema, API, database, or file-format changes.
+Check before Docker work:
 
-## Testing
-
-Every meaningful change should have appropriate tests:
-
-- unit tests for pure logic;
-- integration tests for component boundaries;
-- regression tests for fixed defects;
-- malformed-input and validation tests;
-- end-to-end tests for critical workflows.
-
-Test normal, empty, missing, malformed, ambiguous, boundary, and failure cases as appropriate. Do not remove or weaken tests merely to obtain a passing suite.
-
-Before reporting completion, run the relevant project checks, normally:
-
-```text
-format check
-lint
-static/type check
-unit tests
-integration tests
-build/package check
+```bash
+test -S /var/run/docker.sock
+docker version
+docker compose version
 ```
 
-Report the exact commands and results.
+If `docker` is missing, install only the client if the session permits it (`apk add docker-cli docker-cli-compose`) and still use the mounted socket. If the socket or CLI is unavailable, stop and report the blocker instead of creating a daemon.
 
-## Data safety
+## Commands
 
-- Prefer archive, deprecation, or versioned replacement over deletion.
-- Require a dry-run or explicit confirmation for destructive operations.
-- Preserve provenance when transforming or importing data.
-- Do not make automated changes to external systems without the project's approved workflow.
-- Use synthetic data in tests unless real data is explicitly authorized.
+Run from `/data`; tests use relative paths such as `schema/episode.schema.json`.
 
-## AI-agent conduct
+```bash
+PYTHONPATH=/data/src python -m pytest -q
+PYTHONPATH=/data/src python -m pytest tests/integration/test_api.py -v
+PYTHONPATH=/data/src python -m storygram --help
+ruff check src tests
+ruff format --check src tests
+mypy src
+npm run test:e2e
+npm run test:e2e:firefox
+```
 
-AI agents must:
+- Prefer `PYTHONPATH=/data/src python -m storygram ...` until the package is installed.
+- `npm run test:e2e` uses Node Playwright with `/usr/bin/chromium`; Python Playwright is not musllinux-compatible.
+- `npm run test:e2e:firefox` uses WebDriver/geckodriver with system `/usr/bin/firefox`; install with `apk add firefox geckodriver`. `npm run test:e2e:all` runs both.
+- Current baseline: `176 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/export/timeline/genogram/conflicts/add-memory/source/entity/person/relationship/assertion/Italian flows (integration also covers annotation/narrative/conflict forms) and the Firefox bilingual add-memory/source/person/relationship/assertion smoke flow passing.
+- Never claim a check passed unless it actually ran in this environment.
 
-- distinguish facts, requirements, assumptions, and proposals;
-- ask clarification only when conservative progress is impossible;
-- never claim a check passed without running it;
-- disclose failed commands and known limitations;
-- avoid unrelated refactoring;
-- produce reviewable diffs for data or schema changes;
-- surface security, privacy, compatibility, and migration risks.
+## Docker from the Host Socket
 
-## Completion report
+Read `docs/dev/HANDOFF.md` before the first Docker command. Key rules:
 
-Use this format after each work unit:
+- The Docker CLI and Compose read the project locally, but images, containers and volumes live on the host daemon.
+- The default `compose.yaml` uses the named volume `storygram-data`; it does not require a host bind path.
+- `docker build -t storygram:local /data` is safe because the client sends the build context to the daemon.
+- A `-v /data/...` path inside the development container is **not** necessarily a valid host path. For bind-mount tests, create a host-side temp directory through a helper container and mount that host path.
+- Host-published ports may not be reachable from the development container at `127.0.0.1`. Verify the app from inside the container (`docker compose exec`, health status) and treat host UI access as a separate check.
+- Use a unique Compose project name and port (for example `-p storygram-test`, `STORYGRAM_PORT=18080`).
+- Do not mount the Docker socket into the Storygram application container.
+- The socket is root-equivalent on the host. Never run broad cleanup commands such as `docker system prune`, and only remove resources created for this test.
+
+## Repository Map
+
+- `src/storygram/`: `cli.py`, `web.py`, `i18n.py`, `media.py`, `proposals.py`, `llm.py`, `registry.py`, `validate.py`, `models.py`, `index.py`, `gitcheck.py`, `bitemporal.py`, `conflicts.py`, `export.py`, `importer.py`, `capture.py`, `timeline.py`, `genogram.py`.
+- `schema/`: canonical JSON Schemas. Root-level `*.schema.json` duplicates must stay byte-identical with `schema/`.
+- `data/`: canonical reviewed records only; currently empty.
+- `proposals/`: local pending proposals, gitignored. `data/proposals/` is the committed merged archive.
+- `tests/`: unit and integration tests plus synthetic fixtures. `tests/e2e/web.mjs` drives the real local UI.
+- `generated/`, `inbox/`, `media-manifest/`, `models/`: gitignored derived, unreviewed or large local data; do not commit.
+- `scripts/`: local GGUF download and llama.cpp Compose helpers. The model file itself stays untracked.
+- `archive/`, `chatgpt.md`, `session-ses_*.md`, `{src/`: leftovers, not application source.
+- `docs/en/`, `docs/it/`: bilingual user/contract/API documentation.
+- `docs/dev/`: durable agent working memory.
+
+## CLI and Web Surface
+
+- Implemented and tested: `init`, `get`, `list`, `validate`, `git-check`, `web`, `media add|list`, `proposal new|list|show|approve|reject|withdraw|generate`.
+- Proposal approval is atomic, creates one scoped Git commit by default, supports `--dry-run` and `--no-commit`.
+- The web UI supports a read-only `/records` browser (type/status/visibility/text filters, detail with raw JSON, reference/backlink links and related-proposal links), read-only `/timeline` (archive/entity/place/collection scopes), experimental `/genogram` and read-only `/conflicts` views, `/memories/new`, `/sources/new`, `/entities/new`, `/people/new`, `/relationships/new` and `/assertions/new` forms that create pending proposals only, create/edit pending proposals, Generate, dry-run, approve and reject. Record and proposal pages cross-link in both directions. Timeline, genogram and conflicts are GET-only and cannot write canonical data. The header switches English/Italian via `/lang/en` and `/lang/it`; translations live in `i18n.py`.
+- JSON API supports `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`, `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject` and `POST /api/proposals/<id>/withdraw`; there is intentionally no approve endpoint.
+- `ingest episode` only copies into `inbox/` and writes a SHA-256 capture sidecar; `import` creates a validated create-only pending proposal from an export and never writes canonical data; `export`, `search`, `rebuild`, `timeline` and `conflicts` have focused CLI tests; `timeline` supports entity/place/collection scopes plus `--all`; `media add|list` writes content-addressed checksummed entries under `media-manifest/` for files kept outside Git and never touches canonical `data/`; `genogram` is experimental, reads endpoint-aware Relationship records plus `relation:*` assertions, deduplicates equivalent triples with a `related_ids` list, prefers the most recently recorded Relationship, and exposes representative `valid_time`/`transaction_time` plus aggregated `valid_times`/`transaction_times`.
+- `init` copies all 15 schemas through the registry and supports `$STORYGRAM_SCHEMA_DIR`.
+
+## Domain Invariants
+
+These are non-negotiable (details in `PRD.md`):
+
+- An Episode is a capture, not a fact. Ingestion must never auto-confirm an assertion.
+- Keep `valid_time` (represented time) separate from `transaction_time` (recorded time). Corrections create new IDs and supersede; never overwrite history.
+- Preserve conflicts explicitly with both sides and evidence; never auto-resolve.
+- Archive or supersede records; never silently delete or merge people/entities.
+- Keep the core deterministic and LLM-free. AI may submit reviewable proposals only.
+- Only humans approve; no agent/API path may apply canonical data.
+- Use synthetic data only in tests and fixtures.
+
+## Testing and Docs
+
+- Add regression tests for defects and malformed/empty/boundary cases. Do not weaken tests to pass.
+- CLI changes need focused CLI tests; HTTP/API changes need integration tests; UI flows need E2E when practical.
+- Container runtime is verified (build, non-root, auto-init, healthcheck, proposal flow, named-volume persistence, host bind mount). The optional local `llm` llama.cpp profile and GGUF helpers are runtime-verified; the Ollama profile is not. Re-run the `docs/dev/HANDOFF.md` regression procedure after changing `Dockerfile`, `compose.yaml`, the entrypoint or packaging; a passing Python suite alone does not prove the container works.
+- Keep `README.md` / `README.it.md` and `docs/en/` / `docs/it/` in sync.
+- Update `docs/dev/STATE.md`, `HANDOFF.md`, `DECISIONS.md`, `LESSONS.md` and `AUDIT.md` at the end of every meaningful work unit.
+
+## Git Conventions
+
+- `main` is stable; `develop` is integration; feature work uses `feature/*`.
+- Use Conventional Commits: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `ci:`.
+- Milestone tags follow `v0.1.0-mX`; release tag `v0.1.0`.
+- Commit frequently in small, atomic local commits so work stays traceable. Commit each coherent unit, not one giant commit at the end.
+- Stage only intended files. Never commit secrets, real personal data, `generated/` output, unreviewed `inbox/` files, `archive/`, `chatgpt.md` or session notes.
+- Do not push, amend, force-push or create tags/releases unless the user explicitly asks. Local commits are allowed and expected.
+
+## Completion Report
+
+End significant work units with:
 
 ```text
 ## Summary
@@ -113,13 +145,4 @@ Use this format after each work unit:
 - ...
 ```
 
-## Priority
-
-When instructions conflict, use this order:
-
-1. system and user instructions;
-2. security, privacy, and data integrity;
-3. explicit project requirements in `PRD.md`;
-4. existing compatibility commitments;
-5. maintainability and simplicity;
-6. optimization and convenience.
+When instructions conflict, prioritize safety, privacy, data integrity and the human approval gate over convenience. `PRD.md` is the product authority; `AGENTS.md` is the workflow authority.

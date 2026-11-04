@@ -192,6 +192,8 @@ valid_time:
   precision: year
 ```
 
+Relationship records may carry the same optional `valid_time` and `transaction_time` fields when the relation itself has a represented or recorded interval. Assertions remain the general proposition type.
+
 ### 9.2 Transaction time
 
 `recorded_at` and `recorded_until` represent when the proposition was present in the Storygram record.
@@ -430,7 +432,7 @@ The system MUST generate an entity-, place-, collection- or archive-level timeli
 
 ### FR-011 Genogram view
 
-The system MUST generate a structured and human-readable relationship view. Unsupported relation types MUST remain visible as metadata or warnings.
+The system MUST generate a structured and human-readable relationship view. An exact `(subject, predicate, object)` triple is one relationship edge even when multiple records describe it; all distinct valid and transaction intervals from those records MUST remain available in the view. Unsupported relation types MUST remain visible as metadata or warnings.
 
 ### FR-012 Narrative view
 
@@ -510,6 +512,7 @@ storygram get ID
 storygram list --type Person
 storygram search QUERY
 storygram timeline ID
+storygram timeline --all
 storygram genogram ID
 storygram conflicts [--status open]
 storygram export --format json

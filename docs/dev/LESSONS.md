@@ -1,0 +1,177 @@
+# Lessons and Quirks
+
+- Existing tests assume `/data` is the working directory.
+- `schema/*.schema.json` and root-level `*.schema.json` are duplicates. Update both.
+- `cli.py` registers several commands twice; Click uses the last definition. Edit the later one and deduplicate when touching the file.
+- `validate` historically checked only Episodes and Assertions and never called referential integrity. The new validation module covers every type.
+- `init` still copies only two schemas; fix it before relying on fresh archives.
+- `proposals/` is ignored, so pending proposals are local-only. `data/proposals/` is the canonical merged archive and must be committed.
+- Assertion supersession previously required `supersedes` on the superseded record. The correct invariant is a closed `transaction_time.recorded_until`; the replacement carries `supersedes`.
+- `episode_type` has a fixed enum; use `other` when a fixture is not a real capture type.
+- Full-repo ruff and mypy failures pre-date this work. Fix files being touched; do not hide the remaining debt.
+- `apply_proposal` rejects a dirty tracked tree before writing. Commit application code in the main repository before manually approving proposals there.
+- Atomic writes use same-directory temp files and `os.replace`; rollback restores prior bytes or removes newly created files.
+- The archive commit is path-scoped, so unrelated untracked files are not included.
+- The CLI previously defined `rebuild`, `search`, `timeline`, `genogram`, `conflicts` and `export` twice. The rewrite keeps one definition per command.
+- `click.testing.CliRunner` works with `monkeypatch.chdir(tmp_path)` for CLI tests; commit tests still need a real temporary Git repo.
+- `init` now copies schemas by iterating the registry, so new record types are picked up automatically.
+- Running `ruff format src tests` plus `ruff check --fix` cleared the inherited formatting/import debt; `mypy` is now clean too.
+- HTTP tests use `create_server(..., port=0)` and `urllib` with `HTTPError` handling so 4xx responses can be asserted.
+- The final packaging step is containerization with an optional local Ollama service in Compose; do not make Ollama a default runtime dependency.
+- Python Playwright wheels are manylinux-only and the bundled glibc Node driver does not run on Alpine musl, even with `gcompat`.
+- Node Playwright works on Alpine with system Chromium:
+  `apk add chromium nodejs npm`; `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install`; launch with `executablePath: "/usr/bin/chromium"`.
+- `npm run test:e2e` starts the real Python web server on port 0 and drives it with Chromium; no mocks.
+- The web UI accepts an injectable `provider_factory`; HTTP tests use a callable mock, while production builds an `OllamaProvider` from the form/env.
+- UI provider failures return 502 and keep source text in the form; empty source returns 400. Neither writes a proposal.
+- The LLM adapter separates generation from persistence: `LLMAdapter.generate` returns memory only; `save_pending` writes only `proposals/`.
+- Generated proposals are normalized to `proposed` and get fresh timestamps, so a model cannot self-approve or backdate.
+- Unknown model fields are dropped before schema validation, keeping provider noise out of the proposal contract.
+- Ollama is called with `format: "json"` and `stream: false`; parsing still tolerates fenced JSON for other providers.
+- Installed wheels must not depend on `Path(__file__).parents[2]` alone for schemas; `$STORYGRAM_SCHEMA_DIR` makes packaged/container initialization reliable.
+- The container entrypoint initializes `/data` and Git only when needed, preserving existing archives and avoiding Docker-in-Docker requirements.
+- The entrypoint can be smoke-tested outside Docker with a temporary `$STORYGRAM_DATA_DIR` and an installed wheel; this verifies init, Git and idempotence without Docker.
+- Before 2026-10-31 the Docker artifacts had only been syntax-checked; runtime/volume behavior was unverified. The host-socket run now covers build, auto-init, health, proposal apply, persistence and bind mount.
+- Pending proposal edits must preserve the route/body ID and `created_at`; otherwise agents could retarget or backdate review.
+- `PUT` is used for full pending replacement, not PATCH; this keeps the schema validation simple.
+- API routes branch before form parsing in `do_POST`; HTML form parsing would corrupt JSON bodies.
+- The API intentionally lacks approve: reject and withdraw close pending proposals without applying them, so external agents still cannot self-apply changes.
+- Docker availability is environment-specific: a fresh development image may lack the CLI even when the socket is mounted. Check `docker version` and install only the client if needed.
+- Never start `dockerd` when `/var/run/docker.sock` is mounted: the CLI must talk to the host daemon.
+- Docker build context is streamed by the CLI, so `docker build /data` can work even when the host daemon has no `/data` path.
+- Bind-mount sources are host paths. A development-container `/data` path is not automatically valid for a host bind mount; create a host temp dir through a helper container.
+- Images run as a non-root Storygram user. A host bind directory must be chowned to that image UID/GID before the container can initialize it.
+- Host-published ports may be inaccessible at `127.0.0.1` from the development container. Test HTTP inside the app container and health status; test host UI separately.
+- The Docker socket is root-equivalent on the host. Use unique test project names and avoid global prune/cleanup.
+- The host socket may expose Podman, not Docker Engine. `docker version` must be read, not assumed: this session used Podman Engine 5.8.2 through the Docker-compatible API with Docker CLI 29.9.2.
+- `docker compose` v5.6.1 worked with `-p storygram-test` and `STORYGRAM_PORT`; `name:` in `compose.yaml` did not prevent the project-name override.
+- The built image runs as UID 100 / GID 101. Documentation claiming UID/GID 1000 was wrong; discover the real values with `docker run --rm --entrypoint id storygram:local`.
+- The first healthcheck can fail because the web server is still starting; `start-period=5s` plus a 30s interval means a short wait is normal. Do not call it a defect until `healthy` is reached.
+- The helper-container recipe in the previous handoff returned `/hosttmp/storygram-bind.XXXXXX`, but the host path was `/tmp/storygram-bind.XXXXXX`. Passing the helper path to `-v` would be wrong; use a fixed host `/tmp/...` path or strip the mount prefix.
+- A synthetic proposal applied inside the container produced a real scoped Git commit, proving the approval path works without host Python or Git.
+- `docker compose down` without `-v` preserved the named volume and Git history across container recreation.
+- The development container itself may match a `name=storygram` filter (for example `OC-storygram`). Inspect before cleanup; never remove it.
+- Minus Docker, this Alpine image initially lacked Git, Python, Node and Chromium. The AGENTS environment summary is an expectation, not a guarantee; install only what the task needs and record it.
+- The regenerated development container again lacked Python, Git, Node, Chromium and the Docker client. Reinstall only after checking `command -v`; the AGENTS environment summary is an expectation, not a guarantee.
+- BusyBox `time VAR=value command` fails; export the variable first or use `env VAR=value command`.
+- Proposal schemas are duplicated at the repository root and under `schema/`. Adding a status means editing both copies byte-identically and updating the `Proposal.status` literal.
+- A shared close helper keeps reject/withdraw behavior consistent and gives the API reliable 404/409 mapping.
+- HTTP close routes need optional-body handling. Requiring JSON would make a no-reason withdraw awkward.
+- The OpenAI adapter must mask the key in `repr` and sanitize provider error bodies before raising; tests assert the key does not appear in the message.
+- Reasoning models such as qwen3 may emit `<thinking>` blocks. Strip them before extracting the JSON object.
+- Requesting JSON through the prompt is not enough; list required fields and show a minimal valid shape. The qwen3-4b model still chose an invalid `Source` record, so prompt guidance reduces but does not eliminate schema errors.
+- The LLM adapter validates the proposal envelope only. `proposal approve --dry-run` caught an operation-record schema failure that generation had accepted; document this distinction and never equate generation with applicability.
+- Live verification of a remote LLM is easier through a temporary env file loaded with `docker compose --env-file`; keep it outside the repository and delete it afterward.
+- The app container could reach the host-routed LLM endpoint at `100.64.0.8:8080`; verify with `/v1/models` from inside the container rather than assuming outbound networking.
+- `docker compose config` prints environment values. Redact secrets before showing or logging its output.
+- Container verification after a compose change should include the new env pass-through, not just `healthy`: call `/v1/models` and generate a proposal inside the container.
+- Restart and `down`/`up` persistence still passed after adding the API/provider changes. Proposal generation itself must remain pending; persistence tests should not be used to justify auto-approval.
+- The old `ingest --data` path bypassed validation and the approval gate. A safe capture command must write only to `inbox/`; canonical changes belong to proposals.
+- PRD command grammar matters: `ingest episode FILE` needs a Click group, while the old `ingest FILE` form must be rejected rather than silently retained.
+- Export had a privacy bug: `if vis and vis not in filter` treated a missing `visibility` as public. Filtering must be default-deny when a filter is supplied.
+- Hardcoded export directories drift from the registry; always iterate `RECORD_TYPES` and skip `Proposal`.
+- SQLite FTS5 virtual tables have no primary-key uniqueness. `REPLACE INTO records_fts` inserted another copy on every rebuild; dropping/recreating the tables is the reliable idempotent path.
+- A search index needs an explicit freshness check. A signature over relative path, mtime and size detects additions, edits and deletions without scanning all content twice.
+- FTS5 treats `:` as query syntax. Exact ID/type lookup must happen before `MATCH`, and a quoted/escaped query plus `LIKE` fallback keeps predicate searches usable.
+- The conflict list suppressed all assertion-derived contradictions as soon as one explicit Conflict existed. Merge both sources and deduplicate unordered pairs.
+- A synthetic conflict must not use a canonical `conflict:` ID. Mark it `derived` and keep the ID clearly non-canonical.
+- Timeline must filter `superseded`, `archived` and `rejected` assertions; filtering only by transaction time is not enough.
+- Genogram could not be person-scoped with the current Relationship schema because it stores no endpoints. Return only matching `relation:*` assertions and warn rather than returning every relationship.
+- Documentation showed `storygram list --archive` while the command ignored the option. CLI changes and docs must be checked together against real `--help` output.
+- The full suite grew to `86 passed` after adding end-to-end CLI tests for ingest, export, search, conflicts, timeline, genogram and read commands; it later reached `90 passed`.
+- Compose profile names are user-facing. Reusing `llm` for both Ollama and llama.cpp made the docs and helper ambiguous; Ollama is now `ollama`, llama.cpp is `llm`.
+- `llama-server` returns 503 from `/health` and `/v1/models` until the GGUF finishes loading. On CPU the 1.5B Q4 model took about 2m36s; check logs and memory before calling it a failure.
+- The model ID returned by `/v1/models` can be the full in-container path, but llama-server accepted the bare GGUF stem in the request. The helper therefore sets the model name to the file stem.
+- The image entrypoint passes `--host 0.0.0.0`, so `LLAMA_ARG_HOST` is overwritten with a harmless warning. Prefer the entrypoint defaults or override the whole command if the warning matters.
+- A Compose bind source must exist on the host daemon. Passing the development-container path `/data/models` produced `mkdir /data: permission denied`; derive the host path from `docker inspect "$(hostname)"` or pass the real host path.
+- Test the helper wiring without starting containers by putting a stub `docker` first in `PATH`; assert the derived model directory and exported `STORYGRAM_LLM_*` variables.
+- The 1.5B Qwen model produced an envelope-valid proposal with a minimal Episode lacking evidence/source. The Episode passes schema/dry-run; always dry-run because generation is not applicability/quality.
+- When a local `llm` container and the app both start, allow for CPU contention: the app healthcheck can flip to `unhealthy` while the model is loading, then recover.
+- Cleanup must include the Compose project volume if it was created by the test run. Check `docker volume inspect` creation time before removing it; do not remove pre-existing user data.
+- The full suite later grew to `90 passed` after adding prompt and crash-regression tests.
+- A prompt that only says "do not invent prefixes" was ignored by qwen3-4b: it still emitted `occupation:nurse`. Adding a literal-value Assertion example with `value: "nurse"` and no `object` fixed the dry-run.
+- Negative prompt rules are weaker than a concrete valid shape. Show the exact JSON for each operation kind that small models get wrong.
+- Dry-run validity is not semantic correctness. qwen3-4b still produced `place:neapes` and previously invented a surname; human review is mandatory even when the schema passes.
+- The 3B GGUF is not viable on a 1-CPU cgroup: it loaded, used 1.86 GiB, and produced no token for more than 25 minutes. Do not promote a model solely because it fits in RAM.
+- Keep one model loaded on llama-swap. Switching models for A/B tests adds load latency; choose a reference and avoid switching during normal review.
+- Validate generated proposals on more than one fixture: Italian, English and a short capture. The English literal-value case exposed a prompt gap that the Italian case missed.
+- PyYAML `safe_dump` quotes ISO timestamp strings, so `safe_load` returns them as strings. Test nested `valid_time`/`transaction_time` values rather than assuming YAML round-trips.
+- A JSON-LD parser must pop `@id`/`@type` before merging the remaining node fields back, otherwise a malformed node could overwrite the canonical identity.
+- Markdown round-trip needs an explicit record marker and a `storygram_body` field. Without them, a body cannot be distinguished from ignored prose or reassigned to the right record field.
+- JSON-LD export being reversible does not make it full RDF expansion; document the projection boundary instead of implying semantic equivalence.
+- An import path must produce proposals, not canonical writes. Running the generated proposal through `plan_apply` before saving it prevents an import from creating a pending proposal that can never pass approval.
+- Evidence is checked against records already processed in the current proposal, not just canonical data. Ordering imported Episode/Source/Annotation records first makes them usable as evidence for later creates.
+- Proposal-level evidence is applied to every operation, including the capture operation itself, so it cannot be used to wire a capture that is created in the same proposal. Use operation-level evidence instead.
+- Importing an ID that already exists canonical data is a validation failure, not an upsert. Corrections still need supersession through an explicit proposal.
+- JSON export needs its own parser: the JSON list is not the same as a single record or `{records: [...]}`, but accepting all three keeps hand-edited files usable without weakening the native contract.
+- A file suffix is enough for format detection in normal use; an explicit `--format` escape hatch is still needed for exports stored with generic suffixes.
+- Compute capture checksums during the copy stream. Hashing the source separately can describe bytes that were not the ones copied, and hashing the destination afterwards adds an unnecessary second read.
+- Keep capture metadata inside `inbox/` (for example `inbox/.storygram/`) so it is ignored by Git with the rest of the unreviewed captures and cannot be mistaken for canonical data.
+- Capture metadata is not a canonical Episode. Adding a checksum sidecar must not bypass the proposal/validation/approval path.
+- Write capture and sidecar through temp files and `os.replace`; if the sidecar replace fails after the capture replace, remove the new capture and stale sidecar so the archive does not keep mismatched metadata.
+- A refused overwrite must preserve the original metadata as well as the original bytes; a successful overwrite must refresh both and record `overwritten: true`.
+- Best-effort MIME detection from a filename is useful metadata but not a contract; store `null` when unknown instead of guessing or rejecting the capture.
+- A Relationship endpoint triple should be all-or-nothing. Optional fields keep legacy records valid, but a JSON Schema `if`/`then` must reject records that provide only one or two of `subject`, `predicate` and `object`.
+- Reusing `subject`/`predicate`/`object` for Relationship keeps the relation vocabulary consistent with Assertions, but output must still identify the source record type because both can describe the same link.
+- Genogram must scope Relationship records to the requested person just like assertions; otherwise adding endpoints silently returns every relationship in the archive.
+- Closed relations need filtering in genogram too. Adding relationship support without `superseded`/`archived`/`rejected` filtering would regress the same invariant already fixed for timelines.
+- Preserve existing genogram keys such as `assertion_id` when adding Relationship support; add `record_id`/`record_type` and a type-specific key instead of breaking consumers.
+- When a schema gains a capability, remove stale prompt text that says the capability is missing, even if the conservative generation guard remains.
+- Collection timelines need a membership convention because the Collection schema has no members. Using a `relation:member_of` Assertion keeps membership reviewable and avoids a schema migration.
+- Keep membership expansion one level deep unless nested collections are explicitly modelled; recursive expansion needs a cycle guard and a clear semantic decision.
+- `timeline --all` and a record ID must be mutually exclusive. A Click argument with `required=False` plus an explicit validation check prevents an accidental archive timeline.
+- An archive-level empty result is not an unknown record. Handle `--all` before the `_record_exists` lookup so an empty archive exits successfully.
+- Reuse the same closed-status filter for every timeline scope; adding a new scope must not bypass superseded/archived/rejected exclusion.
+- Deduplicate genogram relations by the exact `(subject, predicate, object)` triple, not by ID or record type. The same link can legitimately arrive as both an Assertion and a Relationship.
+- Prefer Relationship over Assertion when both describe the same triple, and resolve ties by sorted `record_id`; otherwise output depends on filesystem order.
+- Keep deduplication additive: preserve existing keys and expose every contributing ID in `related_ids` instead of dropping provenance.
+- Do not merge different predicates between the same endpoints. That would hide real conflicts rather than deduplicate representations.
+- Deduplicate after closed-status filtering and person scoping, so a closed duplicate cannot promote an otherwise hidden relation.
+- Adding temporal fields to Relationship should reuse the Assertion `validTime`/`transactionTime` shapes. A second time vocabulary would drift.
+- Keep new Relationship temporal fields optional for backward compatibility, but require `transaction_time.recorded_at` when the object is present; optionality is not permission for a half-shaped interval.
+- When deduplication keeps one representative, temporal fields on the representative can hide different intervals from duplicate records. Preserve `related_ids` and document that this is not a semantic merge.
+- Expose missing temporal fields as `null` in genogram output; omitting the keys would make old and new output shapes harder to distinguish.
+- Do not split genogram edges by temporal interval. It would break Assertion/Relationship deduplication and create parallel family edges for the same relationship.
+- When a structural view chooses one representative, aggregate temporal intervals from every contributing record; a single representative interval silently loses history.
+- Prefer the most recent `transaction_time.recorded_at` as the representative tie-break, not lexical `record_id`; the newest record is more likely to reflect the current representation.
+- Keep type priority before recency when deduplicating Relationship and Assertion: the dedicated canonical type remains the representative even if an assertion was recorded later.
+- Realistic fixtures reveal semantics that unit-level duplicate tests miss. Two spouse intervals for the same pair exposed the difference between structural deduplication and temporal identity.
+- A read-only archive browser must surface malformed-record load errors while still rendering valid records; otherwise the UI hides archive damage.
+- Raw JSON plus reference and backlink links is a cheap, honest record detail view. It avoids duplicating schema rendering before the field-level UI is designed.
+- Keep browser routes strictly read-only in the first GUI slice. A missing POST route is a stronger safety property than a disabled button.
+- Server-rendered HTML with the stdlib is enough for deterministic local browsing; do not add a frontend build until interactivity or large-result paging requires it.
+- Reuse the deterministic timeline/genogram builders in the web layer. Reimplementing derivation in HTML would drift from the CLI and could reintroduce closed assertions or lose deduplication.
+- Use the absence of an `id` query parameter for the archive timeline and `?id=...` for scoped timelines; this keeps one obvious URL shape instead of a parallel `scope` vocabulary.
+- Distinguish a missing genogram input (400 with a form) from an unknown person (404). A known person with no relations is a successful empty view.
+- Link derived view rows back to `/records/<id>` rather than duplicating record details. Navigation is enough for the first read-only slice and keeps raw JSON canonical.
+- Show both representative and aggregated temporal fields in the genogram UI. A single representative interval can otherwise look like the complete history.
+- Keep derived views strictly GET-only. The absence of a POST route is a stronger safety property than a disabled form.
+- Use a `ContextVar` for the active web language when the server is threaded. A module global would leak the language between concurrent requests.
+- Keep English as the default UI language so existing tests, docs and screenshots remain valid; add explicit Italian assertions instead of translating the default.
+- When a language switch sets a cookie, strip the old `lang` query parameter from the redirect target. Otherwise the query value keeps winning over the cookie.
+- Translate presentation labels, not canonical IDs, type names or stored JSON. Localizing data values would make the same archive render differently depending on the UI language.
+- An Add memory form must call the same proposal validation and `create_pending` path as the JSON editor. A friendly form is not a reason to bypass the approval gate.
+- Keep the Add memory form create-only. Editing or deleting canonical records belongs to the existing proposal workflow, not to a convenience form.
+- Server-rendered HTML with standard forms works across Chromium and Firefox without a frontend framework; verify browser compatibility at the HTTP/rendering layer.
+- On Alpine musl, Playwright's bundled Firefox cannot run because it is a glibc build. Use system Firefox with geckodriver/WebDriver for the Firefox smoke flow instead of forcing the bundled binary.
+- Do not assume `jsonschema` enforces every `format`. Check `FormatChecker().checkers` and register the formats you rely on, especially `date-time`.
+- A format-only subschema without `"type": "string"` can silently skip checks; make the type explicit when the value must be a string.
+- Test both the schema and the user-facing form for temporal validation. A green schema test does not prove the form path is protected.
+- Reuse the CLI export module in the web route. A second export implementation would drift on ordering, visibility and format details.
+- Preserve active filters in export links; otherwise the downloaded file no longer matches what the user is looking at.
+- Reject invalid export parameters explicitly. Falling back to an unfiltered export can leak records the user did not intend to share.
+- Semantic forms need evidence at creation time. Requiring it in the form is clearer than letting the approval dry-run fail later.
+- Filter selectable entities to active records and validate them server-side; a disabled option or missing select value is not validation.
+- Reject identical relationship endpoints and unsupported predicates before creating a proposal. Early validation keeps the review queue clean.
+- Omit empty optional temporal fields instead of storing empty strings; schema-valid emptiness and meaningful absence are different.
+- Distinguish evidence records from semantic claims when setting `evidence_required`. A Source is evidence and should be creatable on its own; a Person or Relationship is a claim and needs evidence.
+- Cover standalone evidence import as well as form creation; otherwise the registry flag can regress only on one path.
+- Prefer a typed generic form when schemas are genuinely identical; keep dedicated forms where fields or validation diverge.
+- Build `<option>` lists per target `<select>`; a shared option string marks the same value `selected` in every select that reuses it.
+- When a test expects both an explicit and a derived conflict, give them different assertion pairs: `list_conflicts` deliberately drops a derived pair already covered by an explicit record.
+- Match the existing method-not-allowed convention per route family (404 for GET-only views here) instead of assuming a global 405 policy.
+- Doc patches with silent `str.replace` can no-op when the source wording drifted; grep the file for the new terms after editing bilingual docs.
+- Content-address manifest entries by checksum prefix: it prevents same-name collisions and makes re-registration an explicit overwrite.
+- VCR blocks (`terminal`, `playwright`, `speech`) must be wrapped in HTML comments for Slidev fallback builds, otherwise Shiki fails on unknown languages.
+- Manim on Alpine needs build-base for pycairo; texlive formats partially fail but rendering works.
+- Container volatility: document installed system deps in STATE.md; re-run `demo_tools.py status` before use.

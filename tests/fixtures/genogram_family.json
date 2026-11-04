@@ -1,0 +1,170 @@
+{
+  "records": [
+    {
+      "id": "person:anna",
+      "type": "Person",
+      "name": "Anna",
+      "status": "confirmed",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "person:bruno",
+      "type": "Person",
+      "name": "Bruno",
+      "status": "confirmed",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "person:carla",
+      "type": "Person",
+      "name": "Carla",
+      "status": "confirmed",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "person:davide",
+      "type": "Person",
+      "name": "Davide",
+      "status": "confirmed",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "place:turin",
+      "type": "Place",
+      "name": "Turin",
+      "status": "confirmed",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "relationship:anna-bruno-1980",
+      "type": "Relationship",
+      "subject": "person:anna",
+      "predicate": "relation:spouse",
+      "object": "person:bruno",
+      "valid_time": {
+        "start": "1980",
+        "end": "1990",
+        "precision": "year"
+      },
+      "transaction_time": {
+        "recorded_at": "2026-01-01T00:00:00+00:00",
+        "recorded_until": null
+      },
+      "status": "confirmed",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "relationship:anna-bruno-2000",
+      "type": "Relationship",
+      "subject": "person:anna",
+      "predicate": "relation:spouse",
+      "object": "person:bruno",
+      "valid_time": {
+        "start": "2000",
+        "end": "2010",
+        "precision": "year"
+      },
+      "transaction_time": {
+        "recorded_at": "2026-02-01T00:00:00+00:00",
+        "recorded_until": null
+      },
+      "status": "confirmed",
+      "created_at": "2026-02-01T00:00:00+00:00",
+      "updated_at": "2026-02-01T00:00:00+00:00"
+    },
+    {
+      "id": "relationship:anna-carla",
+      "type": "Relationship",
+      "subject": "person:anna",
+      "predicate": "relation:parent",
+      "object": "person:carla",
+      "valid_time": {
+        "start": "1987",
+        "precision": "year"
+      },
+      "transaction_time": {
+        "recorded_at": "2026-01-01T00:00:00+00:00",
+        "recorded_until": null
+      },
+      "status": "confirmed",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "relationship:davide-anna",
+      "type": "Relationship",
+      "subject": "person:davide",
+      "predicate": "relation:parent",
+      "object": "person:anna",
+      "transaction_time": {
+        "recorded_at": "2026-01-01T00:00:00+00:00",
+        "recorded_until": null
+      },
+      "status": "confirmed",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "relationship:anna-davide-archived",
+      "type": "Relationship",
+      "subject": "person:anna",
+      "predicate": "relation:spouse",
+      "object": "person:davide",
+      "valid_time": {
+        "start": "1995",
+        "end": "1998",
+        "precision": "year"
+      },
+      "transaction_time": {
+        "recorded_at": "2026-01-01T00:00:00+00:00",
+        "recorded_until": null
+      },
+      "status": "archived",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "id": "assertion:anna-carla",
+      "type": "Assertion",
+      "subject": "person:anna",
+      "predicate": "relation:parent",
+      "object": "person:carla",
+      "valid_time": {
+        "start": "1987",
+        "precision": "year"
+      },
+      "transaction_time": {
+        "recorded_at": "2026-03-01T00:00:00+00:00",
+        "recorded_until": null
+      },
+      "status": "reported",
+      "created_at": "2026-03-01T00:00:00+00:00",
+      "updated_at": "2026-03-01T00:00:00+00:00"
+    },
+    {
+      "id": "assertion:anna-lived-in",
+      "type": "Assertion",
+      "subject": "person:anna",
+      "predicate": "relation:lived_in",
+      "object": "place:turin",
+      "valid_time": {
+        "start": "1987",
+        "end": "1995",
+        "precision": "year"
+      },
+      "transaction_time": {
+        "recorded_at": "2026-01-01T00:00:00+00:00",
+        "recorded_until": null
+      },
+      "status": "reported",
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00"
+    }
+  ]
+}

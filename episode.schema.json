@@ -32,7 +32,7 @@
   },
   "$defs": {
     "dateTime": {"type": "string", "format": "date-time"},
-    "dateTimeOrDate": {"type": "string", "anyOf": [{"format": "date-time"}, {"format": "date"}, {"pattern": "^[0-9]{4}$"}]},
+    "dateTimeOrDate": {"type": "string", "anyOf": [{"type": "string", "format": "date-time"}, {"type": "string", "format": "date"}, {"type": "string", "pattern": "^[0-9]{4}$"}]},
     "entityRef": {"type": "string", "pattern": "^(person|organization|place|period|event|relationship|source|media|episode|assertion|annotation|narrative|collection|proposal):[A-Za-z0-9][A-Za-z0-9._~-]*$"},
     "sourceRef": {"type": "string", "pattern": "^source:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
     "mediaRef": {"type": "string", "pattern": "^media:[A-Za-z0-9][A-Za-z0-9._~-]*$"},

@@ -1,0 +1,81 @@
+Storygram: guida completa in forma discorsiva.
+
+Storygram è un archivio locale basato su file. I record canonici sono file JSON nella cartella data. Le modifiche proposte vengono revisionate prima di diventare canoniche. Il nucleo è deterministico e funziona senza intelligenza artificiale.
+
+Capitolo uno. Requisiti e installazione.
+
+Servono Python tre punto dodici o superiore e Git per il flusso predefinito con commit all'approvazione. Sono opzionali Docker, Ollama locale e Node Playwright per i test del browser.
+
+Per installare: crea un ambiente virtuale, attivalo e lancia pip install con l'opzione dev. È supportato anche il pacchetto wheel. Se il pacchetto installato non trova la cartella schema, imposta la variabile d'ambiente STORYGRAM_SCHEMA_DIR.
+
+Capitolo due. Creare e validare un archivio.
+
+I comandi base sono: storygram init percorso, storygram validate percorso, storygram list con l'opzione archive. Il comando init crea tutte le directory canoniche e copia i quindici schemi. Non inizializza Git; se vuoi il commit all'approvazione, esegui git init sulla cartella dell'archivio.
+
+Capitolo tre. Il flusso delle proposte.
+
+Le proposte pendenti vivono in proposals e sono ignorate da Git. Le proposte applicate vengono archiviate in data proposals e committate. I record canonici stanno in data seguita dalla directory del tipo e dal file del record.
+
+Per revisionare una proposta: crea la proposta da file con proposal new, mostrala con proposal show, fai un dry-run con approve dry-run, poi approva con approve. L'approvazione scrive in modo atomico e crea un commit Git limitato ai file applicati. Usa no-commit per saltare Git. L'archivio deve essere un repository Git con working tree tracciato pulito.
+
+Le operazioni ammesse sono quattro: create, update_metadata, supersede e archive. Le modifiche semantiche richiedono evidenza da Episode, Source o Annotation. I metadati usano un allowlist per tipo; i fatti vanno nelle Assertion. Un'Assertion superseded chiude transaction_time recorded_until; il sostituto porta supersedes. I potenziali conflitti tra asserzioni bloccano l'apply finché un Conflict esplicito contiene entrambi gli ID. Le proposte applicate hanno stato merged; quelle pendenti restano locali e ignorate.
+
+Capitolo quattro. Evidenza e conflitti.
+
+L'evidenza a livello di proposta vale per tutte le operazioni semantiche; quella a livello di operazione si aggiunge. L'evidenza deve esistere nei dati canonici o essere creata prima nella stessa proposta. Sono accettati solo riferimenti episode, source e annotation. Le Assertion create o superseded senza evidenza vengono rifiutate. Episode è una cattura, quindi le operazioni su Episode non richiedono evidenza separata.
+
+Per i conflitti: le Assertion nuove o superseded vengono confrontate con tutte le Assertion aperte. Stesso subject e predicate con object o value diverso e validità sovrapposta è un potenziale conflitto. Un record Conflict esplicito che contiene entrambi gli ID delle asserzioni sblocca l'operazione. Senza quel Conflict, l'approvazione fallisce con un errore che nomina entrambe le asserzioni. I Conflict usano gli stati open, under_review, resolved, accepted_as_plural, rejected.
+
+Capitolo cinque. La web UI.
+
+La UI web usa lo stesso motore. Include una pagina Records in sola lettura con filtri per tipo, stato, visibilità e testo, e download di export in JSON, JSON-LD, YAML e Markdown per il filtro corrente. Il dettaglio mostra JSON grezzo e link a riferimenti e backlink. Ci sono moduli per Aggiungi memoria, che crea proposte Episode in attesa; Aggiungi fonte, che registra evidenza documentale o orale; Aggiungi entità, ora inclusa Collection, per luoghi, eventi, organizzazioni, periodi e collezioni; Aggiungi persona e Aggiungi relazione, con intervalli di valid-time opzionali; Aggiungi asserzione, con soggetto, predicato di relazione, record oggetto o valore letterale, stato e valid-time opzionale; Aggiungi annotazione, che annota record esistenti; Aggiungi narrazione, con autore, lingua, prospettiva e record correlati; Aggiungi conflitto, per conflitti espliciti. C'è una vista Conflitti in sola lettura che unisce i Conflict espliciti con le contraddizioni derivate dalle asserzioni, filtrabile per stato. C'è una pagina Media in sola lettura per le voci del manifest checksummato. I record e le proposte si collegano in entrambe le direzioni. C'è una pagina Generate per modelli locali, Ollama o compatibili OpenAI, e un link di modifica per le proposte pendenti. L'header cambia l'interfaccia tra inglese e italiano.
+
+La UI non ha autenticazione ed è pensata per una rete locale controllata o un mapping di porta del container. È renderizzata lato server, funziona senza JavaScript ed è testata su Chromium e Firefox.
+
+La pagina Timeline costruisce timeline a livello archivio o per entità, luogo e collezione dalle asserzioni aperte e collega ogni voce alla sua asserzione, ai record e alle evidenze. La pagina Genogram è una vista relazionale sperimentale in sola lettura con badge per i predicati supportati, warning e intervalli temporali rappresentativi più quelli aggregati. Nessuna delle due espone route di scrittura.
+
+Capitolo sei. API JSON per agenti.
+
+Il server web locale espone una piccola API JSON per inviare, generare, rifiutare e ritirare proposte pendenti. Non esiste un endpoint di approvazione: solo la UI umana o la CLI possono applicare una proposta. Gli agenti esterni possono creare, elencare, leggere, modificare, generare, rifiutare e ritirare proposte pendenti via HTTP.
+
+Le regole principali: invia Content-Type application json. Gli ID delle proposte devono iniziare con proposal e vanno URL-encoded nei percorsi. L'API può creare, modificare, generare, rifiutare e ritirare proposte pendenti. La modifica conserva created_at, aggiorna updated_at e non può cambiare l'ID. Le proposte applicate, merged, rejected, withdrawn o archived sono in sola lettura. Nulla in data cambia finché una persona non approva. Non esiste un endpoint di approvazione. L'API non ha autenticazione ed è pensata per una rete locale controllata.
+
+Gli endpoint sono: GET api proposals per elencare; GET api proposals con include_applied per includere l'archivio merged; POST api proposals per creare, che restituisce duecentouno con la proposta salvata e l'header Location, mentre gli ID duplicati restituiscono quattrocentonove; GET api proposals seguito dall'ID per leggere, che include la proposta, se è applicata, gli errori di validazione del dry-run, le operazioni di preview e i file toccati; PUT api proposals seguito dall'ID per modificare, inviando la proposta completa; POST api proposals generate per generare da testo sorgente, che restituisce duecentouno se salvata e duecento se non salvata, mentre gli errori del provider restituiscono cinquecentodue; POST api proposals seguito dall'ID e reject per rifiutare; POST api proposals seguito dall'ID e withdraw per ritirare. Il body di reject e withdraw è opzionale e il motivo viene salvato in notes. Rifiutare o ritirare una proposta già chiusa restituisce quattrocentonove. Gli errori HTTP vanno da quattrocento a quattrocentotredici. Non esiste intenzionalmente un endpoint approve.
+
+Capitolo sette. Generazione LLM opzionale.
+
+Per usare Ollama: avvia ollama serve, fai pull di llama3.2, poi storygram proposal generate con text e model. Per un server compatibile OpenAI, imposta le variabili d'ambiente STORYGRAM_LLM_PROVIDER a openai, STORYGRAM_LLM_URL, STORYGRAM_LLM_MODEL e STORYGRAM_LLM_API_KEY, poi lancia generate. L'adapter forza status proposed, scarta i campi sconosciuti e salva solo in proposals. Non può approvare, applicare o modificare record canonici. Usa no-save per controllare senza scrivere. La pagina Generate della UI usa lo stesso adapter; gli errori del provider vengono mostrati senza scrivere nulla. Regola la generazione con STORYGRAM_LLM_TIMEOUT e STORYGRAM_LLM_MAX_TOKENS.
+
+Per il percorso GGUF locale incluso: esegui download-model.sh, poi llm-up.sh con STORYGRAM_MODELS_DIR. Gli helper tengono il modello fuori da Git e lo montano in sola lettura nel profilo Compose opzionale llm. Il file uno punto cinque B predefinito serve a verificare il cablaggio; su un container con una CPU il file tre B non è praticabile. Usa un solo endpoint compatibile OpenAI qwen3-4b come riferimento di qualità e fai sempre il dry-run delle proposte generate.
+
+Capitolo otto. Comandi legacy e derivati.
+
+Questi comandi sono deterministici e offline, ma alcuni restano più limitati del PRD.
+
+Ingest: storygram ingest episode copia una cattura solo in inbox e scrive un sidecar con checksum in inbox/.storygram, con formato storygram.capture/1, dimensione, MIME type, SHA-256, ingested_at e overwritten. Non scrive mai in data e rifiuta le sovrascritture silenziose. L'opzione json stampa i metadati della cattura.
+
+Export: storygram export legge i record canonici dal registry, ordina per ID e fallisce su JSON malformato. Con un filtro di visibilità, i record senza visibility sono esclusi. jsonld resta una proiezione locale at-id/at-type, non un'espansione RDF completa. JSON, JSON-LD e YAML fanno round-trip senza perdita, con JSON che resta la lista nativa. Markdown usa front matter YAML più un corpo renderizzato, quindi il front matter è la fonte di verità e le modifiche solo al corpo non vengono re-importate. Non esiste un import canonico diretto: import produce una proposta pendente, quindi revisione e approvazione passano ancora dalle proposte.
+
+Import: storygram import legge un export e crea una proposta pendente di soli create. Valida lo schema di ogni record ed esegue lo stesso planner del dry-run di approvazione prima di scrivere. I record Episode, Source e Annotation importati diventano evidenza per le operazioni successive. L'opzione evidence può puntare a catture già canoniche. L'import non scrive mai in data.
+
+Media: storygram media add registra un file media esterno in media-manifest con URI, checksum SHA-256, tipo MIME, dimensioni, visibilità e metadati di acquisizione. Il file media non viene mai copiato né committato, le voci sono indirizzate per contenuto e le sovrascritture silenziose sono rifiutate. media list elenca le voci registrate.
+
+Rebuild: storygram rebuild ricostruisce solo l'indice di ricerca SQLite FTS5. È idempotente, rimuove i record obsoleti e segnala gli input malformati.
+
+Search: storygram search cerca prima ID e tipi esatti, poi nel contenuto indicizzato. L'indice si aggiorna quando cambiano i file canonici.
+
+Conflicts: storygram conflicts unisce i Conflict espliciti con le contraddizioni derivate dalle asserzioni, deduplica le coppie e mostra entrambe le asserzioni con l'evidenza.
+
+Timeline: storygram timeline esclude le asserzioni superseded, archived e rejected, ordina per inizio del valid-time e include i campi di evidenza. Un ID copre timeline di entità, luoghi e collezioni; una collezione include anche le asserzioni sui record che dichiarano relation member_of verso di essa. L'opzione all costruisce una timeline a livello archivio.
+
+Genogram: storygram genogram è sperimentale. Legge le asserzioni relation e i record Relationship con estremi espliciti, segnala i predicati non supportati, avvisa sui record Relationship privi di estremi completi e deduplica le triple equivalenti, preferendo la Relationship registrata più di recente, elencando ogni ID contribuente in related_ids, ed espone i dati temporali come valid_time e transaction_time del rappresentante più valid_times e transaction_times aggregati.
+
+Validate, get, list e git-check restano la superficie stabile di lettura e validazione.
+
+Capitolo nove. Test e container.
+
+I test si lanciano con PYTHONPATH impostato. Seguono ruff check, ruff format check e mypy. I test browser usano npm run test:e2e per Chromium e npm run test:e2e:firefox per Firefox. Python Playwright non è utilizzabile su Alpine musl; lì il percorso supportato è Node Playwright.
+
+Il container è verificato end-to-end tramite un daemon host compatibile Docker: avvio non-root, auto-init, healthcheck, applicazione di una proposta nel container, persistenza dopo restart e ricreazione, bind mount host. L'immagine inizializza automaticamente data e Git quando serve, gira come utente non-root storygram con UID e GID cento centouno e persiste i dati in un volume nominato. Per un bind mount, assegna alla directory host quell'UID e GID. Il profilo Ollama è opzionale; il nucleo deterministico e la UI funzionano senza. Usa un nome progetto e una porta unici per i test e rimuovi solo le risorse create.
+EOF
+echo written

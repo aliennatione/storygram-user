@@ -1,7 +1,7 @@
 """Git integration checks."""
+
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -47,4 +47,9 @@ def git_check(root: Path, base: str | None = None) -> dict[str, Any]:
     if not res["ok"]:
         errors.extend(res["errors"])
     warnings.extend(res.get("warnings", []))
-    return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings, "changed_files": [str(c) for c in changed]}
+    return {
+        "ok": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+        "changed_files": [str(c) for c in changed],
+    }

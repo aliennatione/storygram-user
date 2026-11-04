@@ -298,6 +298,16 @@ try {
   assert.match(genogramText, /relationship:e2e-parent/);
   assert.match(genogramText, /assertion:e2e-parent/);
 
+  await page
+    .getByRole("banner")
+    .getByRole("link", { name: "Conflicts", exact: true })
+    .click();
+  await page.waitForSelector('select[name="status"]');
+  assert.match(await page.locator("h1").innerText(), /Conflicts/);
+  await page.selectOption('select[name="status"]', "open");
+  await page.getByRole("button", { name: "Filter" }).click();
+  await page.waitForURL(/status=open/);
+
   await page.goto(`${server.base}?lang=it`);
   const italianHome = await page.locator("body").innerText();
   assert.match(italianHome, /Aggiungi memoria/);
@@ -351,7 +361,7 @@ try {
   assert.equal(rejected.notes, "duplicate");
 
   console.log(
-    "Playwright e2e: edit, approve, reject, browse, visibility export, source/entity/person/relationship/assertion forms, timeline, genogram, add memory and Italian UI flows passed",
+    "Playwright e2e: edit, approve, reject, browse, visibility export, source/entity/person/relationship/assertion forms, timeline, genogram, conflicts, add memory and Italian UI flows passed",
   );
 } finally {
   if (browser) await browser.close();

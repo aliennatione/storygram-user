@@ -17,6 +17,7 @@ from uuid import uuid4
 from . import export as export_mod
 from . import proposals as proposals_mod
 from . import validate as validate_mod
+from .conflicts import list_conflicts
 from .genogram import FAMILY_PREDICATES, build_genogram
 from .i18n import (
     current_language,
@@ -89,6 +90,7 @@ ASSERTION_PREDICATES = (
     "relation:friend",
 )
 ASSERTION_STATUSES = ("draft", "proposed", "reported", "confirmed", "disputed", "rejected")
+CONFLICT_STATUSES = ("open", "under_review", "resolved", "accepted_as_plural", "rejected")
 SOURCE_TYPES = (
     "oral",
     "written",
@@ -185,7 +187,9 @@ form input, form select {{
   <nav>
     <a href="/">{_t("Home")}</a><a href="/records">{_t("Records")}</a>
     <a href="/timeline">{_t("Timeline")}</a>
-    <a href="/genogram">{_t("Genogram")}</a><a href="/proposals">{_t("Proposals")}</a>
+    <a href="/genogram">{_t("Genogram")}</a>
+    <a href="/conflicts">{_t("Conflicts")}</a>
+    <a href="/proposals">{_t("Proposals")}</a>
     <a href="/memories/new">{_t("Add memory")}</a>
     <a href="/sources/new">{_t("Add source")}</a>
     <a href="/people/new">{_t("Add person")}</a>
@@ -414,6 +418,7 @@ def render_home(root: Path) -> str:
   <a class="button" href="/records">{_t("Browse records")}</a>
   <a class="button" href="/timeline">{_t("Timeline")}</a>
   <a class="button" href="/genogram">{_t("Genogram")}</a>
+  <a class="button" href="/conflicts">{_t("Conflicts")}</a>
   <a class="button primary" href="/memories/new">{_t("Add memory")}</a>
   <a class="button" href="/sources/new">{_t("Add source")}</a>
   <a class="button" href="/people/new">{_t("Add person")}</a>
@@ -1761,6 +1766,118 @@ def render_genogram(root: Path, query: str = "") -> tuple[int, str]:
     return 200, _layout(_t("Genogram {person}", person=person_id), body)
 
 
+def _conflict_assertion_rows(
+    conflict: dict[str, Any],
+    known_ids: set[str],
+    canonical: dict[str, dict[str, Any]],
+) -> str:
+    assertions = [str(item) for item in conflict.get("assertions") or []]
+    summaries: dict[str, dict[str, Any]] = dict(canonical)
+    for record in conflict.get("assertion_records") or []:
+        if isinstance(record, dict) and isinstance(record.get("id"), str):
+            summaries[record["id"]] = record
+    rows = []
+    for assertion_id in assertions:
+        record = summaries.get(assertion_id)
+        summary = ""
+        if record is not None:
+            target = record.get("object") or record.get("value") or ""
+            summary = (
+                f" · {_esc(record.get('subject', ''))} {_esc(record.get('predicate', ''))}"
+                f" {_esc(target)}"
+            )
+        rows.append(
+            f'<li>{_record_link(assertion_id, known_ids)}<span class="muted">{summary}</span></li>'
+        )
+    return f"<ul>{''.join(rows)}</ul>" if rows else f'<p class="muted">{_t("None.")}</p>'
+
+
+def render_conflicts(root: Path, query: str = "") -> tuple[int, str]:
+    status = _query_value(query, "status") or ""
+    conflicts = list_conflicts(root, status or None)
+    records, load_errors = validate_mod.load_records(root)
+    known_ids = _known_ids(records)
+    canonical = {
+        str(data.get("id")): data for _, data in records if isinstance(data.get("id"), str)
+    }
+
+    status_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == status else ''}>{_esc(_t(item))}</option>"
+        for item in CONFLICT_STATUSES
+    )
+    filter_form = f"""
+<form method="get" action="/conflicts" class="filters">
+<label>{_t("Status")}
+  <select name="status">
+    <option value="">{_t("All")}</option>{status_options}
+  </select>
+</label>
+<button type="submit">{_t("Filter")}</button>
+<a class="button" href="/conflicts">{_t("Reset")}</a>
+</form>
+"""
+    sections = []
+    for conflict in conflicts:
+        conflict_id = str(conflict.get("id") or "")
+        derived = bool(conflict.get("derived"))
+        badges = _status_badge(conflict.get("status"))
+        if derived:
+            badges += f' <span class="badge">{_t("derived")}</span>'
+        relation = conflict.get("relation")
+        reason = conflict.get("reason") or conflict.get("notes")
+        meta = []
+        if relation:
+            meta.append(f"{_t('Relation')}: {_esc(relation)}")
+        if conflict.get("identified_at"):
+            meta.append(f"{_t('Identified')}: {_esc(conflict.get('identified_at'))}")
+        meta_html = f'<p class="muted">{" · ".join(meta)}</p>' if meta else ""
+        evidence_set = {str(item) for item in conflict.get("evidence") or []}
+        if not evidence_set:
+            for assertion_id in conflict.get("assertions") or []:
+                record = canonical.get(str(assertion_id))
+                if record is None:
+                    continue
+                for field in ("produced_by", "supported_by"):
+                    evidence_set.update(str(item) for item in record.get(field) or [])
+        evidence = sorted(evidence_set)
+        evidence_html = (
+            _record_links(evidence, known_ids)
+            if evidence
+            else f'<p class="muted">{_t("None.")}</p>'
+        )
+        reason_html = f"<p>{_t('Reason')}: {_esc(reason)}</p>" if reason else ""
+        sections.append(
+            f"""
+<article>
+<h2>{_esc(conflict_id)} {badges}</h2>
+{meta_html}
+<p>{_t("Assertions")}</p>
+{_conflict_assertion_rows(conflict, known_ids, canonical)}
+<p>{_t("Evidence")}</p>
+{evidence_html}
+{reason_html}
+</article>
+"""
+        )
+    if not sections:
+        sections.append(f'<p class="muted">{_t("No conflicts found.")}</p>')
+
+    body = f"""
+<h1>{_t("Conflicts")}</h1>
+<p class="muted">{
+        _t(
+            "Explicit conflict records and contradictions derived from assertion links. "
+            "This view is read-only."
+        )
+    }</p>
+{_warning_block(load_errors)}
+{filter_form}
+{"".join(sections)}
+"""
+    return 200, _layout(_t("Conflicts"), body)
+
+
 def render_list(root: Path) -> str:
     body = (
         f"<h1>{_t('Proposals')}</h1>"
@@ -2304,6 +2421,10 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/genogram":
             status, body = render_genogram(self.root, parsed.query)
             self._send(status, body)
+            return
+        if path == "/conflicts":
+            status_code, body = render_conflicts(self.root, parsed.query)
+            self._send(status_code, body)
             return
         if path == "/proposals":
             self._send(200, render_list(self.root))

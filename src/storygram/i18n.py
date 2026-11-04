@@ -14,6 +14,24 @@ ITALIAN: dict[str, str] = {
     "Home": "Home",
     "Records": "Record",
     "Timeline": "Cronologia",
+    "Conflicts": "Conflitti",
+    "All": "Tutti",
+    "open": "aperto",
+    "resolved": "risolto",
+    "accepted_as_plural": "accettato come pluralità",
+    "derived": "derivato",
+    "Relation": "Relazione",
+    "Reason": "Motivo",
+    "Identified": "Identificato",
+    "Assertions": "Asserzioni",
+    "No conflicts found.": "Nessun conflitto trovato.",
+    (
+        "Explicit conflict records and contradictions derived from assertion links. "
+        "This view is read-only."
+    ): (
+        "Record di conflitto espliciti e contraddizioni derivate dai collegamenti "
+        "delle asserzioni. Questa vista è in sola lettura."
+    ),
     "Genogram": "Genogramma",
     "Proposals": "Proposte",
     "Add memory": "Aggiungi memoria",

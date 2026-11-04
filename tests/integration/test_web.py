@@ -1638,3 +1638,172 @@ def test_web_record_and_proposal_cross_links(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def _web_seed_conflicts(tmp_path: Path) -> None:
+    write_record(
+        tmp_path,
+        "episodes",
+        "episode_one.json",
+        {
+            "id": "episode:one",
+            "type": "Episode",
+            "episode_type": "memory",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "content": {"text": "Turin memory."},
+        },
+    )
+    write_record(
+        tmp_path,
+        "sources",
+        "source_one.json",
+        {
+            "id": "source:one",
+            "type": "Source",
+            "title": "Registry entry",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+    write_record(
+        tmp_path,
+        "assertions",
+        "assertion_a1.json",
+        {
+            "id": "assertion:a1",
+            "type": "Assertion",
+            "subject": "person:anna",
+            "predicate": "relation:lived_in",
+            "object": "place:turin",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "produced_by": ["episode:one"],
+            "supported_by": ["source:one"],
+            "contradicts": ["assertion:a2"],
+        },
+    )
+    write_record(
+        tmp_path,
+        "assertions",
+        "assertion_a2.json",
+        {
+            "id": "assertion:a2",
+            "type": "Assertion",
+            "subject": "person:anna",
+            "predicate": "relation:lived_in",
+            "object": "place:rome",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "produced_by": ["episode:two"],
+            "supported_by": ["source:two"],
+            "contradicts": ["assertion:a1"],
+        },
+    )
+    write_record(
+        tmp_path,
+        "assertions",
+        "assertion_a3.json",
+        {
+            "id": "assertion:a3",
+            "type": "Assertion",
+            "subject": "person:bruno",
+            "predicate": "relation:worked_as",
+            "object": "role:nurse",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "produced_by": ["episode:three"],
+            "contradicts": ["assertion:a4"],
+        },
+    )
+    write_record(
+        tmp_path,
+        "assertions",
+        "assertion_a4.json",
+        {
+            "id": "assertion:a4",
+            "type": "Assertion",
+            "subject": "person:bruno",
+            "predicate": "relation:worked_as",
+            "value": "teacher",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "produced_by": ["episode:four"],
+            "contradicts": ["assertion:a3"],
+        },
+    )
+    write_record(
+        tmp_path,
+        "conflicts",
+        "conflict_explicit.json",
+        {
+            "id": "conflict:explicit",
+            "type": "Conflict",
+            "assertions": ["assertion:a1", "assertion:a2"],
+            "status": "under_review",
+            "reason": "Two different cities.",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+
+
+def test_web_conflicts_view_is_read_only(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        _web_seed_conflicts(tmp_path)
+
+        status, body = get(base + "/conflicts")
+        assert status == 200
+        assert "Conflicts" in body
+        assert "conflict:explicit" in body
+        assert "derived:assertion:a3+assertion:a4" in body
+        assert "under_review" in body
+        assert "Two different cities." in body
+        assert "/records/assertion%3Aa1" in body
+        assert "/records/episode%3Aone" in body
+        assert "person:bruno relation:worked_as" in body
+        assert "Filter" in body
+        assert "read-only" in body
+
+        status, body = get(base + "/conflicts?status=under_review")
+        assert status == 200
+        assert "conflict:explicit" in body
+        assert "derived:assertion:a3+assertion:a4" not in body
+
+        status, body = get(base + "/conflicts?status=open")
+        assert status == 200
+        assert "conflict:explicit" not in body
+        assert "derived:assertion:a3+assertion:a4" in body
+
+        status, body = get(base + "/conflicts?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Conflitti" in body
+
+        status, body = post(base + "/conflicts", {"status": "open"})
+        assert status == 404
+        assert "Not found" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_conflicts_view_empty_archive(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = get(base + "/conflicts")
+        assert status == 200
+        assert "No conflicts found." in body
+        assert "Conflicts" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

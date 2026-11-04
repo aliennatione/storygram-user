@@ -53,6 +53,17 @@ MEMORY_EPISODE_TYPES = (
     "other",
 )
 VISIBILITIES = ("private", "restricted", "family", "public")
+SOURCE_TYPES = (
+    "oral",
+    "written",
+    "archival",
+    "registry",
+    "photograph",
+    "audio",
+    "video",
+    "website",
+    "other",
+)
 EXPORT_FORMATS = {
     "json": ("application/json; charset=utf-8", "storygram-export.json"),
     "jsonld": ("application/ld+json; charset=utf-8", "storygram-export.jsonld"),
@@ -140,6 +151,7 @@ form input, form select {{
     <a href="/timeline">{_t("Timeline")}</a>
     <a href="/genogram">{_t("Genogram")}</a><a href="/proposals">{_t("Proposals")}</a>
     <a href="/memories/new">{_t("Add memory")}</a>
+    <a href="/sources/new">{_t("Add source")}</a>
     <a href="/people/new">{_t("Add person")}</a>
     <a href="/relationships/new">{_t("Add relationship")}</a>
     <a href="/proposals/new">{_t("New proposal")}</a>
@@ -353,6 +365,7 @@ def render_home(root: Path) -> str:
   <a class="button" href="/timeline">{_t("Timeline")}</a>
   <a class="button" href="/genogram">{_t("Genogram")}</a>
   <a class="button primary" href="/memories/new">{_t("Add memory")}</a>
+  <a class="button" href="/sources/new">{_t("Add source")}</a>
   <a class="button" href="/people/new">{_t("Add person")}</a>
   <a class="button" href="/relationships/new">{_t("Add relationship")}</a>
   <a class="button" href="/proposals/new">{_t("Create proposal")}</a>
@@ -431,6 +444,113 @@ def _memory_proposal(root: Path, values: dict[str, str]) -> tuple[dict[str, Any]
         "operations": [{"op": "create", "record_type": "Episode", "record": record}],
     }
     return proposal, []
+
+
+def _source_proposal(root: Path, values: dict[str, str]) -> tuple[dict[str, Any] | None, list[str]]:
+    title = values.get("title", "").strip()
+    source_type = values.get("source_type", "").strip()
+    visibility = values.get("visibility", "").strip()
+    notes = values.get("notes", "").strip()
+
+    errors: list[str] = []
+    if not title:
+        errors.append(_t("Title is required"))
+    if source_type and source_type not in SOURCE_TYPES:
+        errors.append(_t("Unsupported source type: {value}", value=source_type))
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    record: dict[str, Any] = {
+        "id": f"source:{_slug(title)}-{token}",
+        "type": "Source",
+        "title": title,
+        "status": "reported",
+        "created_at": now,
+        "updated_at": now,
+    }
+    if source_type:
+        record["source_type"] = source_type
+    if visibility:
+        record["visibility"] = visibility
+    if notes:
+        record["notes"] = notes
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["Source"])
+    if record_errors:
+        return None, record_errors
+
+    proposal = {
+        "id": f"proposal:source-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t("New source: {title}", title=title),
+        "rationale": _t("Created from the Add source form."),
+        "operations": [{"op": "create", "record_type": "Source", "record": record}],
+    }
+    return proposal, []
+
+
+def render_source_form(
+    values: dict[str, str] | None = None, errors: list[str] | None = None
+) -> str:
+    values = values or {}
+    source_type = values.get("source_type") or ""
+    visibility = values.get("visibility") or ""
+    notes_value = _esc(values.get("notes", ""))
+    source_type_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == source_type else ''}>{_esc(_t(item))}</option>"
+        for item in SOURCE_TYPES
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    intro = _t(
+        "Add a source as a pending proposal. A source can support later people, "
+        "relationships and assertions; it enters canonical data only after approval."
+    )
+    body = f"""
+<h1>{_t("Add source")}</h1>
+<p class="muted">
+{intro}
+</p>
+{_errors_block(errors or [])}
+<form method="post" action="/sources/new">
+<label>{_t("Title")}
+  <input name="title" value="{_esc(values.get("title", ""))}" required style="width:100%">
+</label>
+<p>
+<label>{_t("Source type")}
+  <select name="source_type">
+    <option value="">{_t("Unspecified")}</option>{source_type_options}
+  </select>
+</label>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true"
+    placeholder="{_t("Optional notes about this source")}">{notes_value}</textarea>
+</label>
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add source"), body)
 
 
 def _slug(value: str) -> str:
@@ -1707,6 +1827,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/memories/new":
             self._send(200, render_memory_form())
             return
+        if path == "/sources/new":
+            self._send(200, render_source_form())
+            return
         if path == "/people/new":
             self._send(200, render_person_form(self.root))
             return
@@ -1795,6 +1918,29 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 proposals_mod.create_pending(self.root, proposal)
             except proposals_mod.ProposalError as exc:
                 self._send(400, render_memory_form(values, exc.errors))
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path == "/sources/new":
+            values = {
+                key: (form.get(key) or [""])[0]
+                for key in (
+                    "title",
+                    "source_type",
+                    "visibility",
+                    "notes",
+                )
+            }
+            proposal, errors = _source_proposal(self.root, values)
+            if proposal is None:
+                self._send(400, render_source_form(values, errors))
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(400, render_source_form(values, exc.errors))
                 return
             proposal_id = str(proposal["id"])
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")

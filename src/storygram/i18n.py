@@ -17,6 +17,26 @@ ITALIAN: dict[str, str] = {
     "Genogram": "Genogramma",
     "Proposals": "Proposte",
     "Add memory": "Aggiungi memoria",
+    "Add source": "Aggiungi fonte",
+    "Source type": "Tipo di fonte",
+    "Title is required": "Il titolo è obbligatorio",
+    "Unsupported source type: {value}": "Tipo di fonte non supportato: {value}",
+    "New source: {title}": "Nuova fonte: {title}",
+    "Created from the Add source form.": "Creata dal modulo Aggiungi fonte.",
+    "Optional notes about this source": "Note opzionali su questa fonte",
+    (
+        "Add a source as a pending proposal. A source can support later people, "
+        "relationships and assertions; it enters canonical data only after approval."
+    ): (
+        "Aggiungi una fonte come proposta in attesa. Una fonte può supportare "
+        "persone, relazioni e asserzioni successive; entra nei dati canonici solo "
+        "dopo l'approvazione."
+    ),
+    "oral": "orale",
+    "written": "scritta",
+    "archival": "archivistica",
+    "registry": "anagrafica",
+    "website": "sito web",
     "Add person": "Aggiungi persona",
     "Name": "Nome",
     "Notes": "Note",

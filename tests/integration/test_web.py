@@ -1165,3 +1165,82 @@ def test_web_add_relationship_validates_input(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_web_add_source_creates_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = get(base + "/sources/new")
+        assert status == 200
+        assert "Add source" in body
+        assert 'action="/sources/new"' in body
+
+        status, body = post(
+            base + "/sources/new",
+            {
+                "title": "Family register",
+                "source_type": "registry",
+                "visibility": "family",
+                "notes": "Kept by the comune.",
+            },
+        )
+        assert status == 200
+        assert "Dry-run preview" in body
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        assert proposal["status"] == "proposed"
+        assert proposal["title"] == "New source: Family register"
+        operation = proposal["operations"][0]
+        assert operation["op"] == "create"
+        assert operation["record_type"] == "Source"
+        record = operation["record"]
+        assert record["type"] == "Source"
+        assert record["title"] == "Family register"
+        assert record["source_type"] == "registry"
+        assert record["status"] == "reported"
+        assert record["visibility"] == "family"
+        assert record["notes"] == "Kept by the comune."
+        assert record["id"].startswith("source:family-register-")
+        assert not list((tmp_path / "data" / "sources").glob("*.json"))
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal['id'], safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200, body
+        assert "merged" in body
+        source_file = tmp_path / "data" / "sources" / f"{record['id'].replace(':', '_')}.json"
+        assert source_file.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_source_validates_input(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = post(base + "/sources/new", {"title": "   "})
+        assert status == 400
+        assert "Title is required" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/sources/new",
+            {"title": "Family register", "source_type": "invalid"},
+        )
+        assert status == 400
+        assert "Unsupported source type: invalid" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = get(base + "/sources/new?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Aggiungi fonte" in body
+        assert "Tipo di fonte" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

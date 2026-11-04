@@ -207,8 +207,30 @@ async function main() {
     await waitForText("merged");
     assert.equal(readdirSync(join(root, "data", "relationships")).length, 1);
 
+    await navigate(`${server.base}sources/new`);
+    await waitForText("Add source");
+    await sendKeys(await css('input[name="title"]'), "Firefox register");
+    await click(await xpath("//select[@name='source_type']/option[@value='registry']"));
+    await click(await xpath("//button[normalize-space()='Save pending proposal']"));
+    await waitForText("Dry-run preview");
+    await click(await xpath("//button[normalize-space()='Approve without commit']"));
+    await waitForText("merged");
+    assert.equal(readdirSync(join(root, "data", "sources")).length, 1);
+
+    await navigate(`${server.base}assertions/new`);
+    await waitForText("Add assertion");
+    await click(await xpath(`//select[@name='subject']/option[@value='${formPeople[0]}']`));
+    await sendKeys(await css('input[name="predicate"]'), "relation:lived_in");
+    await sendKeys(await css('input[name="value"]'), "Firefox family home");
+    await click(await css(`input[name="evidence"][value="${record.id}"]`));
+    await click(await xpath("//button[normalize-space()='Save pending proposal']"));
+    await waitForText("Dry-run preview");
+    await click(await xpath("//button[normalize-space()='Approve without commit']"));
+    await waitForText("merged");
+    assert.equal(readdirSync(join(root, "data", "assertions")).length, 1);
+
     console.log(
-      "Firefox WebDriver e2e: bilingual home, add memory, person/relationship forms and approval passed",
+      "Firefox WebDriver e2e: bilingual home, add memory, source/person/relationship/assertion forms and approval passed",
     );
   } finally {
     if (sessionId) {

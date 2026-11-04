@@ -538,3 +538,30 @@ Extend the PRD M5 human interface with read-only timeline and experimental genog
 3. Link back to canonical records instead of duplicating record rendering.
 4. Show aggregated temporal intervals alongside the representative interval.
 5. Keep genogram experimental until it is reviewed on real user data.
+
+## 2026-11-04 - bilingual human input and Firefox
+
+### Current objective
+
+Make the local web UI comfortably usable by a human for adding a memory, with English/Italian parity, and verify it in Firefox as well as Chromium. Keep canonical writes behind the existing proposal/approval gate.
+
+### Point of situation
+
+- Added `GET /memories/new` and `POST /memories/new`. The form creates a pending Episode proposal with title, episode type, captured date, text, participants, tags and visibility.
+- The form validates required text, episode type, visibility, known participant IDs and the full Episode schema before calling `create_pending`. It never writes `data/` and never approves.
+- Added `src/storygram/i18n.py` with an English source dictionary and Italian translations, plus per-request language context helpers.
+- Added a header EN/IT switch backed by `/lang/en` and `/lang/it`, a `storygram_lang` cookie and a redirect to the current page. `?lang=it` also works for direct links and tests.
+- Translated navigation, headings, table headers, buttons, placeholders, status badges, episode types, visibility options and web-originated errors. Canonical IDs, type names and stored JSON stay unchanged.
+- Added integration coverage for pending-only creation, approval after form input, known participants, validation errors, English default, Italian rendering and cookie-based switching.
+- Extended the Playwright Chromium flow with the Add memory form, Italian home rendering and approval of the generated Episode.
+- Added `tests/e2e/firefox.mjs` using system Firefox plus WebDriver/geckodriver; it covers the bilingual home, Add memory form, pending proposal, approval and records search.
+- Added `npm run test:e2e:firefox` and `npm run test:e2e:all`; documented the Alpine prerequisites `firefox` and `geckodriver`.
+- Checks: `146 passed`; ruff, format and mypy clean; Chromium Playwright flow passed; Firefox WebDriver flow passed.
+
+### Calibration
+
+1. Keep the Add memory form create-only and behind `create_pending`.
+2. Keep English as the default and Italian as an explicit switch; test both.
+3. Translate labels, not canonical data.
+4. Use system Firefox/geckodriver on Alpine musl; do not rely on Playwright's glibc Firefox build.
+5. Re-run both browser flows after changing the layout, forms or language switch.

@@ -19,6 +19,8 @@ Open `http://localhost:8080`, browse canonical records read-only, then paste or 
 
 The **Records** page filters by type, status or text and opens a read-only detail with raw JSON plus reference and backlink links. It exposes no write route; canonical changes still require a proposal and human approval.
 
+The **Add memory** form turns free text into a pending Episode proposal with an optional title, date, participants, tags and visibility. It never writes canonical data; approval is still required. The interface is available in English and Italian through the EN/IT switch in the header.
+
 The **Timeline** page renders archive-level or entity/place/collection timelines from open assertions, with links to assertions, records and evidence. The **Genogram** page is an experimental, read-only relationship view with supported-predicate badges, warnings, and both representative and aggregated temporal intervals. Neither page exposes a write route.
 
 ## Proposal Workflow
@@ -121,9 +123,10 @@ mypy src
 
 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install
 npm run test:e2e
+npm run test:e2e:firefox
 ```
 
-Browser tests use Node Playwright with system Chromium. On Alpine: `apk add chromium nodejs npm`.
+Browser tests use Node Playwright with system Chromium for the full flow. The Firefox smoke flow uses WebDriver/geckodriver with system Firefox. On Alpine: `apk add chromium firefox geckodriver nodejs npm`. `npm run test:e2e:all` runs both.
 
 ## Documentation
 

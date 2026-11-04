@@ -37,13 +37,13 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-La UI web usa lo stesso motore, inclusa una pagina **Records** in sola lettura con filtri per tipo/stato/testo, dettaglio con JSON grezzo e link a riferimenti e backlink, una pagina **Generate** per modelli locali/Ollama o compatibili OpenAI e un link di modifica per le proposte pendenti:
+La UI web usa lo stesso motore, inclusa una pagina **Records** in sola lettura con filtri per tipo/stato/testo, dettaglio con JSON grezzo e link a riferimenti e backlink, un modulo **Aggiungi memoria** che crea proposte Episode in attesa, una pagina **Generate** per modelli locali/Ollama o compatibili OpenAI e un link di modifica per le proposte pendenti. L'header cambia l'interfaccia tra inglese e italiano:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
 ```
 
-La UI non ha autenticazione ed è pensata per una rete locale controllata o un mapping di porta del container.
+La UI non ha autenticazione ed è pensata per una rete locale controllata o un mapping di porta del container. È renderizzata lato server, funziona senza JavaScript ed è testata su Chromium e Firefox.
 
 La pagina **Timeline** costruisce timeline a livello archivio o per entità, luogo e collezione dalle asserzioni aperte e collega ogni voce alla sua asserzione, ai record e alle evidenze. La pagina **Genogram** è una vista relazionale sperimentale in sola lettura con badge per i predicati supportati, warning e intervalli temporali rappresentativi più quelli aggregati. Nessuna delle due espone route di scrittura.
 
@@ -121,9 +121,10 @@ ruff check src tests
 ruff format --check src tests
 mypy src
 npm run test:e2e
+npm run test:e2e:firefox
 ```
 
-`npm run test:e2e` avvia il server locale reale e lo guida con Playwright e Chromium di sistema. Python Playwright non è utilizzabile su Alpine musl; lì il percorso supportato è Node Playwright.
+`npm run test:e2e` avvia il server locale reale e lo guida con Playwright e Chromium di sistema. `npm run test:e2e:firefox` guida lo stesso server tramite WebDriver/geckodriver con Firefox di sistema. Python Playwright non è utilizzabile su Alpine musl; lì il percorso supportato è Node Playwright. `npm run test:e2e:all` esegue entrambi.
 
 ## Container
 

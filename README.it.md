@@ -19,6 +19,8 @@ Apri `http://localhost:8080`, consulta i record canonici in sola lettura, poi in
 
 La pagina **Records** filtra per tipo, stato o testo e apre un dettaglio in sola lettura con JSON grezzo e link a riferimenti e backlink. Non espone route di scrittura; le modifiche canoniche richiedono ancora una proposta e l'approvazione umana.
 
+Il modulo **Aggiungi memoria** trasforma testo libero in una proposta Episode in attesa, con titolo, data, partecipanti, tag e visibilità opzionali. Non scrive mai dati canonici; l'approvazione resta obbligatoria. L'interfaccia è disponibile in inglese e italiano tramite il selettore EN/IT nell'header.
+
 La pagina **Timeline** mostra timeline a livello archivio o per entità, luogo e collezione dalle asserzioni aperte, con link ad asserzioni, record ed evidenze. La pagina **Genogram** è una vista relazionale sperimentale in sola lettura con badge per i predicati supportati, warning e intervalli temporali sia rappresentativi sia aggregati. Nessuna delle due espone route di scrittura.
 
 ## Flusso delle proposte
@@ -121,9 +123,10 @@ mypy src
 
 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install
 npm run test:e2e
+npm run test:e2e:firefox
 ```
 
-I test browser usano Node Playwright con Chromium di sistema. Su Alpine: `apk add chromium nodejs npm`.
+I test browser usano Node Playwright con Chromium di sistema per il flusso completo. Il flusso Firefox usa WebDriver/geckodriver con Firefox di sistema. Su Alpine: `apk add chromium firefox geckodriver nodejs npm`. `npm run test:e2e:all` esegue entrambi.
 
 ## Documentazione
 

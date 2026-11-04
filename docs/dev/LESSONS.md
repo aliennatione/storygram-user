@@ -146,3 +146,11 @@
 - Link derived view rows back to `/records/<id>` rather than duplicating record details. Navigation is enough for the first read-only slice and keeps raw JSON canonical.
 - Show both representative and aggregated temporal fields in the genogram UI. A single representative interval can otherwise look like the complete history.
 - Keep derived views strictly GET-only. The absence of a POST route is a stronger safety property than a disabled form.
+- Use a `ContextVar` for the active web language when the server is threaded. A module global would leak the language between concurrent requests.
+- Keep English as the default UI language so existing tests, docs and screenshots remain valid; add explicit Italian assertions instead of translating the default.
+- When a language switch sets a cookie, strip the old `lang` query parameter from the redirect target. Otherwise the query value keeps winning over the cookie.
+- Translate presentation labels, not canonical IDs, type names or stored JSON. Localizing data values would make the same archive render differently depending on the UI language.
+- An Add memory form must call the same proposal validation and `create_pending` path as the JSON editor. A friendly form is not a reason to bypass the approval gate.
+- Keep the Add memory form create-only. Editing or deleting canonical records belongs to the existing proposal workflow, not to a convenience form.
+- Server-rendered HTML with standard forms works across Chromium and Firefox without a frontend framework; verify browser compatibility at the HTTP/rendering layer.
+- On Alpine musl, Playwright's bundled Firefox cannot run because it is a glibc build. Use system Firefox with geckodriver/WebDriver for the Firefox smoke flow instead of forcing the bundled binary.

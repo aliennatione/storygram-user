@@ -5,7 +5,7 @@ Last updated: 2026-11-04
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support, followed by collection/archive timeline scopes, deterministic genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation, read-only GUI record browsing (`ad4d102`, `f151be0`) and read-only GUI timeline/genogram views on 2026-11-04; see `git log --oneline -20`.
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), endpoint-aware Relationship records and genogram support, collection/archive timeline scopes, deterministic genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation, read-only GUI record browsing (`ad4d102`, `f151be0`), read-only GUI timeline/genogram views (`187b5cc`, `9e8fe63`, `c0b4f26`), then the bilingual Add memory form (`b374d5e`) and Chromium/Firefox E2E coverage (`166543d`) on 2026-11-04; see `git log --oneline -20`.
 - Web generation, read-only record browsing, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, read-only records browser, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
@@ -17,7 +17,9 @@ Last updated: 2026-11-04
 
 - Development container was regenerated on 2026-11-01. Alpine 3.24.2, running as root, repository at `/data` bind-mounted from the host.
 - Reinstalled after regeneration: `apk add --no-cache python3 py3-pip git nodejs npm chromium docker-cli docker-cli-compose jq`, then `pip install --break-system-packages -e '.[dev]'`.
-- Python 3.14.10, Git 2.54.0, pip 26.1.2, Node 24.22.1/npm 11.12.1 and system Chromium.
+- Python 3.14.10, Git 2.54.0, pip 26.1.2, Node 24.22.1/npm 11.12.1, system Chromium, system Firefox 151.0.3 and geckodriver 0.36.0.
+- The Firefox smoke flow uses system Firefox through WebDriver/geckodriver. Playwright's bundled Firefox is a glibc build and cannot run on Alpine musl; do not rely on it. Install with `apk add firefox geckodriver`.
+- `gcompat`/`libc6-compat` were installed while investigating the Playwright Firefox build; the working Firefox path does not depend on them. A fresh container only needs system Firefox and geckodriver for the Firefox smoke test.
 - Tests use paths relative to `/data` and must be run from the repository root.
 - `/var/run/docker.sock` is the host socket. In this session it exposed Podman Engine 5.8.2 through its Docker-compatible API; Docker CLI was 29.9.2 and Compose v5.6.1. This is not Docker-in-Docker; never start `dockerd`.
 - Live LLM endpoint for verification: `http://100.64.0.8:8080/v1/chat/completions`, model `qwen3-4b` (llama-swap). The bearer key was supplied by the user, used only through an ephemeral env file, and is not stored in the repository. Keep one model loaded: switching models adds load latency and was explicitly avoided after the 4B reference was chosen.
@@ -96,11 +98,37 @@ Last updated: 2026-11-04
 - Relationship records now model optional `subject`/`predicate`/`object` endpoint triples and optional `valid_time`/`transaction_time`; `genogram` reads complete records as well as `relation:*` assertions, deduplicating equivalent triples and preserving all temporal intervals.
 - Timelines now support entity, place, collection and archive scopes. Collection timelines include direct `relation:member_of` members.
 
+## Bilingual Human Input and Firefox (2026-11-04)
+
+- Added `GET /memories/new` and `POST /memories/new`: a human-friendly Add memory form that creates a pending Episode proposal with title, episode type, captured date, text, participants, tags and visibility.
+- The form validates text, episode type, visibility, known participant IDs and the full Episode schema before calling `proposals.create_pending`. It writes only `proposals/`; canonical `data/` still requires human approval.
+- Added `src/storygram/i18n.py` with an English source dictionary, Italian translations and per-request language context helpers.
+- The header switches EN/IT through `/lang/en` and `/lang/it`; the switch stores a `storygram_lang` cookie and redirects to the current page. `?lang=it` also works for direct links and tests.
+- Translated navigation, headings, table headers, buttons, placeholders, status badges, episode types, visibility options and web-originated errors. Canonical IDs, type names and stored JSON stay unchanged.
+- Integration tests cover pending-only creation, approval after form input, known participants, validation errors, English default, Italian rendering and cookie-based switching.
+- Playwright Chromium covers Add memory, Italian rendering and approval. A separate Firefox WebDriver flow covers bilingual home, Add memory, approval and records search.
+- Checks: `146 passed`; ruff, format and mypy clean; `npm run test:e2e` passed; `npm run test:e2e:firefox` passed; `npm run test:e2e:all` passed.
+- Commits: `b374d5e` (bilingual Add memory form), `166543d` (Add memory/Italian/Firefox E2E).
+
+## Current Usable Flows
+
+- Human web flow: open the UI, choose EN/IT, use **Add memory** or **Generate**, inspect the dry-run, approve/reject/withdraw, then browse **Records**, **Timeline** and **Genogram**. No browser route applies canonical data without the normal approval action.
+- Agent CLI flow: `init`, `proposal new|list|show|generate|approve|reject|withdraw`, `import`, `export`, `search`, `rebuild`, `timeline`, `genogram`, `ingest episode`. Agents can create pending proposals only; approval remains human-only.
+
+## Resume Checklist After a Fresh Container
+
+1. `pip install --break-system-packages -e ".[dev]"`.
+2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `146 passed`).
+3. `ruff check src tests && ruff format --check src tests && mypy src`.
+4. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` if `node_modules` is missing.
+5. `apk add chromium firefox geckodriver` for both browser flows; `npm run test:e2e:all`.
+6. Do not commit `archive/`, `chatgpt.md` or `session-ses_*.md`.
+
 ## Next Steps
 
-1. Continue the read-only GUI: search/export and visibility filters, then links between records and related proposals. Keep all browser write paths behind proposals.
+1. Continue the human GUI: search/export and visibility filters, then links between records and related proposals. Keep all browser write paths behind proposals.
 2. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, Relationship temporal fields are modelled and all intervals are aggregated. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
-3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
+3. Re-run Python/lint/format/mypy and both browser flows after any change; keep bilingual docs in sync.
 4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
 5. Run the optional Ollama container profile only when network/time permit; it remains unverified.
 

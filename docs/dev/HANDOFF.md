@@ -7,16 +7,20 @@ Recent commits: API/provider/withdraw series, legacy command hardening, local GG
 ## Compacted Context
 
 - Storygram is a local-first archive with a tested proposal workflow: agent/CLI/UI creates pending JSON, a human reviews a dry-run, approval applies atomically and commits Git, rejection leaves canonical data untouched.
-- Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, read-only record browsing plus timeline and experimental genogram views, JSON API, and Ollama plus OpenAI-compatible providers.
+- Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, a bilingual Add memory form that creates pending Episode proposals, read-only record browsing plus timeline and experimental genogram views, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `142 passed`; ruff/format/mypy clean; Playwright edit/approve/reject/browse/timeline/genogram flow passing.
+- Python baseline: `146 passed`; ruff/format/mypy clean; Playwright edit/approve/reject/browse/timeline/genogram/add-memory/Italian flow passing; Firefox WebDriver bilingual add-memory smoke flow passing.
 - Relationship records now carry an optional all-or-nothing `subject`/`predicate`/`object` triple plus optional `valid_time`/`transaction_time`; `genogram` reads complete records alongside `relation:*` assertions, deduplicates equivalent triples and aggregates all temporal intervals. It remains experimental.
 - Export round-trips are implemented: JSON-LD/YAML/Markdown export plus reversible module parsers and tests. JSON/JSON-LD/YAML are lossless at record level; Markdown uses YAML front matter as source of truth.
 - Safe import is implemented: `storygram import FILE` wraps JSON/JSON-LD/YAML/Markdown exports in a schema-validated, create-only pending proposal. It runs the approval dry-run planner before writing and touches only `proposals/`; canonical data still requires human approval.
 - Local GGUF helpers are tracked: `scripts/download-model.sh` downloads a checksummed Qwen 1.5B Q4_K_M file by default, and `scripts/llm-up.sh` starts the `llm` llama.cpp Compose profile with a read-only model mount. The model itself is untracked. The 1.5B file is a smoke test; the 3B file is not practical on 1 CPU.
 - The container deliverable was rebuilt and re-verified with the live OpenAI-compatible endpoint, then removed. Details and exact results are in `docs/dev/STATE.md` and `docs/dev/AUDIT.md`.
 - The 2026-11-01 API/provider/withdraw work and the legacy command hardening are committed in small atomic units.
+- Bilingual UI: English is the default; the header EN/IT switch sets a `storygram_lang` cookie and redirects to the current page. Translations live in `src/storygram/i18n.py`; canonical IDs, type names and stored JSON are not translated.
+- Add memory: `/memories/new` creates a pending Episode proposal only. It validates the text, type, visibility, participants and Episode schema before `create_pending`; it never writes canonical data or approves.
+- Browser verification: Chromium uses Playwright; Firefox uses system Firefox with geckodriver/WebDriver because Playwright's bundled Firefox is a glibc build and does not run on Alpine musl. Fresh container prerequisites: `apk add chromium firefox geckodriver`, then `npm run test:e2e:all`.
+- Recent commits for this unit: `b374d5e` (bilingual Add memory form), `166543d` (Add memory/Italian/Firefox E2E).
 - Known product debt: media manifest and several legacy views/search commands remain partial; `PRD.md`/`PLAN.md` are not a full description of the shipped proposal workflow.
 
 ## Verified Container Run (2026-10-31)

@@ -253,3 +253,14 @@
 - Timeline rows link assertions, subjects, objects and evidence to `/records/<id>`. The browser derives navigation only; it does not invent or rewrite record content.
 - Genogram rows show both the representative `valid_time`/`transaction_time` and the aggregated `valid_times`/`transaction_times`, because choosing one representative must not hide other intervals.
 - Both routes are GET-only. There is no POST handler and no canonical write path; the human approval gate remains unchanged.
+
+## Bilingual UI and Add Memory (2026-11-04)
+
+- The human input slice is a server-rendered **Add memory** form that creates one pending Episode proposal. It does not add a canonical write route: `proposals_mod.create_pending` remains the only write, and approval is still a separate human action.
+- The form validates the text, episode type, visibility, participants and the full Episode schema before writing. Invalid input re-renders the form with errors and leaves `proposals/` untouched.
+- Episode IDs use `episode:memory-<12 hex>` and proposal IDs use `proposal:memory-<12 hex>`; the shared token makes the pair traceable without exposing a counter or timestamp.
+- The interface is bilingual through a per-request language context, not a second template set. English stays the default so existing tests and documentation remain stable; Italian is selected with `/lang/it` or `?lang=it`.
+- The header switch sets a `storygram_lang` cookie and redirects back to the current page. The `lang` query parameter is stripped from the redirect target so the cookie cannot be overridden by a stale query value.
+- No JavaScript is required. Server-rendered forms, standard CSS and cookies keep the UI usable without a frontend build and make Firefox support a rendering concern rather than a framework concern.
+- Canonical type names, IDs and stored JSON remain untranslated. Only presentation labels (navigation, headings, buttons, status badges, episode types and visibility options) are localized.
+- Firefox verification uses system Firefox through WebDriver/geckodriver. Playwright's bundled Firefox is a glibc build and does not run on Alpine musl; system Firefox is the supported path for the Firefox smoke flow.

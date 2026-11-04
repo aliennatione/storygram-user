@@ -37,13 +37,13 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-The web UI exposes the same engine, including a read-only **Records** browser with type/status/text filters, record detail with raw JSON plus reference and backlink links, a **Generate** page for local/Ollama or OpenAI-compatible models and an edit link for pending proposals:
+The web UI exposes the same engine, including a read-only **Records** browser with type/status/text filters, record detail with raw JSON plus reference and backlink links, an **Add memory** form that creates pending Episode proposals, a **Generate** page for local/Ollama or OpenAI-compatible models and an edit link for pending proposals. The header switches the interface between English and Italian:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080
 ```
 
-The UI is unauthenticated and intended for a controlled local network or container port mapping.
+The UI is unauthenticated and intended for a controlled local network or container port mapping. It is server-rendered, works without JavaScript and is tested in Chromium and Firefox.
 
 The **Timeline** page builds archive-level or entity/place/collection timelines from open assertions and links each entry to its assertion, records and evidence. The **Genogram** page is an experimental read-only relationship view with supported-predicate badges, warnings, and representative plus aggregated temporal intervals. Neither page has a write route.
 
@@ -121,9 +121,10 @@ ruff check src tests
 ruff format --check src tests
 mypy src
 npm run test:e2e
+npm run test:e2e:firefox
 ```
 
-`npm run test:e2e` drives the real local server with Playwright and system Chromium. Python Playwright is not usable on Alpine musl; Node Playwright is the supported path there.
+`npm run test:e2e` drives the real local server with Playwright and system Chromium. `npm run test:e2e:firefox` drives the same server through WebDriver/geckodriver with system Firefox. Python Playwright is not usable on Alpine musl; Node Playwright is the supported path there. `npm run test:e2e:all` runs both.
 
 ## Container
 

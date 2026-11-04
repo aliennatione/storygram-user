@@ -4,7 +4,7 @@
 
 Storygram is a local-first, file-based archive for life stories. `PRD.md` is the product source of truth; `PLAN.md` is the milestone/status map. The core must stay deterministic and usable offline without an LLM.
 
-Current state: functional MVP for proposals, validation, local web review, read-only record browsing plus timeline and experimental genogram views, and optional Ollama or OpenAI-compatible generation. The proposal path is tested end-to-end and the container deliverable is runtime-verified through the host Docker socket. Legacy commands are hardened and CLI-tested: `ingest episode` is inbox-only, export/search/rebuild/timeline/conflicts are deterministic, and genogram remains experimental although Relationship records model endpoints and optional temporal fields, equivalent triples are deduplicated, and all temporal intervals are preserved. JSON-LD/YAML/Markdown round-trips are implemented, `import` turns an export into a create-only pending proposal without writing canonical data, and `ingest` writes checksummed capture metadata under `inbox/.storygram/`. Timelines now support entity, place, collection and archive scopes; collection timelines include direct `relation:member_of` members. Verify a command before documenting it as working.
+Current state: functional MVP for proposals, validation, local web review with a bilingual English/Italian interface, read-only record browsing plus timeline and experimental genogram views, an Add memory form that creates pending Episode proposals, and optional Ollama or OpenAI-compatible generation. The proposal path is tested end-to-end and the container deliverable is runtime-verified through the host Docker socket. Legacy commands are hardened and CLI-tested: `ingest episode` is inbox-only, export/search/rebuild/timeline/conflicts are deterministic, and genogram remains experimental although Relationship records model endpoints and optional temporal fields, equivalent triples are deduplicated, and all temporal intervals are preserved. JSON-LD/YAML/Markdown round-trips are implemented, `import` turns an export into a create-only pending proposal without writing canonical data, and `ingest` writes checksummed capture metadata under `inbox/.storygram/`. Timelines now support entity, place, collection and archive scopes; collection timelines include direct `relation:member_of` members. Verify a command before documenting it as working.
 
 Durable context, in order:
 1. `AGENTS.md` - workflow and environment rules.
@@ -21,7 +21,7 @@ Durable context, in order:
 ## Environment
 
 - Development repository: `/data`, usually bind-mounted from the host.
-- Current development image: Alpine, Python 3.14.10, Git, Node/npm and system Chromium. A fresh image may still lack some tools; install only what the task needs and record it.
+- Current development image: Alpine, Python 3.14.10, Git, Node/npm, system Chromium and system Firefox/geckodriver for the Firefox smoke test. A fresh image may still lack some tools; install only what the task needs and record it.
 - Dependencies are installed with `pip install --break-system-packages -e ".[dev]"`.
 - The development container has `/var/run/docker.sock` bind-mounted from the host.
 - That socket talks to the **host container daemon**, not Docker-in-Docker. It may be Docker Engine or a Docker-compatible engine such as Podman; read `docker version` instead of assuming. Never start `dockerd`.
@@ -48,11 +48,13 @@ ruff check src tests
 ruff format --check src tests
 mypy src
 npm run test:e2e
+npm run test:e2e:firefox
 ```
 
 - Prefer `PYTHONPATH=/data/src python -m storygram ...` until the package is installed.
 - `npm run test:e2e` uses Node Playwright with `/usr/bin/chromium`; Python Playwright is not musllinux-compatible.
-- Current baseline: `142 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/timeline/genogram flows passing.
+- `npm run test:e2e:firefox` uses WebDriver/geckodriver with system `/usr/bin/firefox`; install with `apk add firefox geckodriver`. `npm run test:e2e:all` runs both.
+- Current baseline: `146 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/timeline/genogram/add-memory/Italian flows and the Firefox add-memory smoke flow passing.
 - Never claim a check passed unless it actually ran in this environment.
 
 ## Docker from the Host Socket
@@ -70,7 +72,7 @@ Read `docs/dev/HANDOFF.md` before the first Docker command. Key rules:
 
 ## Repository Map
 
-- `src/storygram/`: `cli.py`, `web.py`, `proposals.py`, `llm.py`, `registry.py`, `validate.py`, `models.py`, `index.py`, `gitcheck.py`, `bitemporal.py`, `conflicts.py`, `export.py`, `importer.py`, `capture.py`, `timeline.py`, `genogram.py`.
+- `src/storygram/`: `cli.py`, `web.py`, `i18n.py`, `proposals.py`, `llm.py`, `registry.py`, `validate.py`, `models.py`, `index.py`, `gitcheck.py`, `bitemporal.py`, `conflicts.py`, `export.py`, `importer.py`, `capture.py`, `timeline.py`, `genogram.py`.
 - `schema/`: canonical JSON Schemas. Root-level `*.schema.json` duplicates must stay byte-identical with `schema/`.
 - `data/`: canonical reviewed records only; currently empty.
 - `proposals/`: local pending proposals, gitignored. `data/proposals/` is the committed merged archive.
@@ -85,7 +87,7 @@ Read `docs/dev/HANDOFF.md` before the first Docker command. Key rules:
 
 - Implemented and tested: `init`, `get`, `list`, `validate`, `git-check`, `web`, `proposal new|list|show|approve|reject|withdraw|generate`.
 - Proposal approval is atomic, creates one scoped Git commit by default, supports `--dry-run` and `--no-commit`.
-- The web UI supports a read-only `/records` browser (type/status/text filters, detail with raw JSON and reference/backlink links), read-only `/timeline` (archive/entity/place/collection scopes) and experimental `/genogram` views, create, edit pending proposals, Generate, dry-run, approve and reject. Timeline and genogram are GET-only and cannot write canonical data.
+- The web UI supports a read-only `/records` browser (type/status/text filters, detail with raw JSON and reference/backlink links), read-only `/timeline` (archive/entity/place/collection scopes) and experimental `/genogram` views, an `/memories/new` form that creates pending Episode proposals, create/edit pending proposals, Generate, dry-run, approve and reject. Timeline and genogram are GET-only and cannot write canonical data. The header switches English/Italian via `/lang/en` and `/lang/it`; translations live in `i18n.py`.
 - JSON API supports `GET/POST /api/proposals`, `GET/PUT /api/proposals/<id>`, `POST /api/proposals/generate`, `POST /api/proposals/<id>/reject` and `POST /api/proposals/<id>/withdraw`; there is intentionally no approve endpoint.
 - `ingest episode` only copies into `inbox/` and writes a SHA-256 capture sidecar; `import` creates a validated create-only pending proposal from an export and never writes canonical data; `export`, `search`, `rebuild`, `timeline` and `conflicts` have focused CLI tests; `timeline` supports entity/place/collection scopes plus `--all`; `genogram` is experimental, reads endpoint-aware Relationship records plus `relation:*` assertions, deduplicates equivalent triples with a `related_ids` list, prefers the most recently recorded Relationship, and exposes representative `valid_time`/`transaction_time` plus aggregated `valid_times`/`transaction_times`.
 - `init` copies all 15 schemas through the registry and supports `$STORYGRAM_SCHEMA_DIR`.

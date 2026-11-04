@@ -19,6 +19,8 @@ Apri `http://localhost:8080`, consulta i record canonici in sola lettura, poi in
 
 La pagina **Records** filtra per tipo, stato o testo e apre un dettaglio in sola lettura con JSON grezzo e link a riferimenti e backlink. Non espone route di scrittura; le modifiche canoniche richiedono ancora una proposta e l'approvazione umana.
 
+La pagina **Timeline** mostra timeline a livello archivio o per entità, luogo e collezione dalle asserzioni aperte, con link ad asserzioni, record ed evidenze. La pagina **Genogram** è una vista relazionale sperimentale in sola lettura con badge per i predicati supportati, warning e intervalli temporali sia rappresentativi sia aggregati. Nessuna delle due espone route di scrittura.
+
 ## Flusso delle proposte
 
 Le proposte pendenti restano in `proposals/` e sono ignorate da Git. Le proposte approvate vengono archiviate in `data/proposals/` e committate.

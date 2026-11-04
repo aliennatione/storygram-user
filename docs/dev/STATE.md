@@ -5,7 +5,7 @@ Last updated: 2026-11-04
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support, followed by collection/archive timeline scopes, deterministic genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation and read-only GUI record browsing on 2026-11-04; see `git log --oneline -20`.
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support, followed by collection/archive timeline scopes, deterministic genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation, read-only GUI record browsing (`ad4d102`, `f151be0`) and read-only GUI timeline/genogram views on 2026-11-04; see `git log --oneline -20`.
 - Web generation, read-only record browsing, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, read-only records browser, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
@@ -98,7 +98,7 @@ Last updated: 2026-11-04
 
 ## Next Steps
 
-1. Continue the read-only GUI: timeline/genogram views, search/export and visibility filters, then links between records and related proposals. Keep all browser write paths behind proposals.
+1. Continue the read-only GUI: search/export and visibility filters, then links between records and related proposals. Keep all browser write paths behind proposals.
 2. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, Relationship temporal fields are modelled and all intervals are aggregated. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
 3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
 4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
@@ -212,12 +212,22 @@ Last updated: 2026-11-04
 - Detail shows type/status/visibility, the relative canonical file, raw JSON, references and backlinks. Missing references are marked; unknown IDs return 404.
 - Malformed record files are surfaced as warnings without hiding valid records; the browser never writes canonical data.
 - Home and navigation link to Records. Integration tests cover list, filters, detail, missing IDs, no POST route, load errors and reference/backlink links; Playwright covers the browse flow.
-- Checks: `138 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse passing.
+- Checks at that unit: `138 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse passing.
+
+## Read-only GUI Phase 2 (2026-11-04)
+
+- Added `GET /timeline` with archive scope by default and `?id=...` for entity, place and collection scopes, reusing `timeline.build_timeline`. Unknown IDs return 404; known records with no entries render an empty message; malformed records remain visible as load warnings.
+- Timeline rows show valid time, the assertion link, subject/predicate/object links, status, transaction time and deduplicated `produced_by`/`supported_by` evidence links. Closed assertions remain excluded by the deterministic builder.
+- Added `GET /genogram?id=...`, reusing `genogram.build_genogram`. A missing ID returns 400 with an input form; an unknown ID returns 404; a known person with no relations renders an empty message.
+- Genogram rows show predicate, direction, subject/object links, a supported/unsupported badge, the source record and `related_ids`, plus representative `valid_time`/`transaction_time` and aggregated `valid_times`/`transaction_times`. Experimental status and warnings are explicit.
+- Navigation and the home page link to Timeline and Genogram. Both routes are GET-only; there is no POST handler and no canonical write path.
+- Integration tests cover archive/entity/collection timeline scopes, evidence and record links, unknown IDs, missing genogram input, unknown people, warnings, supported badges and temporal aggregation. Playwright creates and approves a synthetic relation proposal, then navigates timeline and genogram through the real UI.
+- Checks: `142 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/timeline/genogram passing.
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest`: `138 passed`.
-- `npm run test:e2e`: Playwright edit, approve, reject and browse flows passed.
+- `PYTHONPATH=/data/src python -m pytest`: `142 passed`.
+- `npm run test:e2e`: Playwright edit, approve, reject, browse, timeline and genogram flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
 - `mypy src`: passed.
@@ -273,5 +283,5 @@ Last updated: 2026-11-04
 - Relationship endpoints are optional as a group; bare legacy records remain valid but produce a genogram warning because they cannot be scoped.
 - Timeline collection membership is expressed through `relation:member_of` assertions, one level deep; nested collections and Collection `member_ids` are not modelled.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
-- The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping. The read-only GUI currently covers records only; timeline/genogram, search/export and visibility filters remain open.
+- The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping. The read-only GUI now covers records, timeline and experimental genogram; search/export and visibility filters remain open.
 - The API cannot approve; approval remains UI/CLI only.

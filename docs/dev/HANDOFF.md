@@ -2,15 +2,15 @@
 
 Last updated: 2026-11-04
 Branch: `feature/agent-proposal-flow`
-Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, endpoint-aware Relationship records, collection/archive timeline scopes, genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation, then read-only GUI record browsing on 2026-11-04. Use `git log --oneline -20`.
+Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, endpoint-aware Relationship records, collection/archive timeline scopes, genogram deduplication, optional Relationship temporal fields, genogram temporal interval aggregation, then read-only GUI record browsing plus timeline/genogram views on 2026-11-04. Use `git log --oneline -20`.
 
 ## Compacted Context
 
 - Storygram is a local-first archive with a tested proposal workflow: agent/CLI/UI creates pending JSON, a human reviews a dry-run, approval applies atomically and commits Git, rejection leaves canonical data untouched.
-- Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, read-only record browsing, JSON API, and Ollama plus OpenAI-compatible providers.
+- Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, read-only record browsing plus timeline and experimental genogram views, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `138 passed`; ruff/format/mypy clean; Playwright edit/approve/reject/browse flow passing.
+- Python baseline: `142 passed`; ruff/format/mypy clean; Playwright edit/approve/reject/browse/timeline/genogram flow passing.
 - Relationship records now carry an optional all-or-nothing `subject`/`predicate`/`object` triple plus optional `valid_time`/`transaction_time`; `genogram` reads complete records alongside `relation:*` assertions, deduplicates equivalent triples and aggregates all temporal intervals. It remains experimental.
 - Export round-trips are implemented: JSON-LD/YAML/Markdown export plus reversible module parsers and tests. JSON/JSON-LD/YAML are lossless at record level; Markdown uses YAML front matter as source of truth.
 - Safe import is implemented: `storygram import FILE` wraps JSON/JSON-LD/YAML/Markdown exports in a schema-validated, create-only pending proposal. It runs the approval dry-run planner before writing and touches only `proposals/`; canonical data still requires human approval.
@@ -150,11 +150,21 @@ Results:
 - Integration tests cover list, filters, detail, missing IDs, no POST route, load errors and references/backlinks; Playwright covers the browse flow.
 - Checks in this unit: `138 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse passed.
 
+## Read-only GUI Phase 2 Unit (2026-11-04)
+
+- Added `GET /timeline` with archive scope by default and `?id=...` for entity, place and collection scopes. It reuses `timeline.build_timeline`, so closed assertions stay excluded and collection membership still follows `relation:member_of`.
+- Timeline rows link the assertion, subject, object and deduplicated evidence IDs to `/records/<id>`; unknown IDs return 404 and malformed records remain load warnings.
+- Added `GET /genogram?id=...` reusing `genogram.build_genogram`. Missing input returns 400 with a form, unknown IDs return 404, and known people without relations render an empty message.
+- Genogram rows expose predicate, direction, subject/object links, supported/unsupported badges, source record, `related_ids`, representative temporal fields and aggregated `valid_times`/`transaction_times`; the experimental status and warnings are explicit.
+- Navigation and home link to Timeline and Genogram. Both routes are GET-only and have no canonical write path.
+- Integration tests cover archive/entity/collection scopes, evidence/record links, unknown IDs, missing genogram input, warnings, supported badges and temporal aggregation. Playwright approves a synthetic relation proposal and exercises both views through the real UI.
+- Checks in this unit: `142 passed`, ruff/format/mypy clean, Playwright edit/approve/reject/browse/timeline/genogram passed.
+
 ## Next Objective
 
 The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
 
-1. Continue the read-only GUI: timeline/genogram views, search/export and visibility filters, then links between records and related proposals. Keep all browser write paths behind proposals.
+1. Continue the read-only GUI: search/export and visibility filters, then links between records and related proposals. Keep all browser write paths behind proposals.
 2. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, temporal intervals are aggregated and timeline scopes are complete for the current model.
 3. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
 4. Keep the local GGUF helpers honest: they wire inference only. The 1.5B model is a smoke test, the 3B model is impractical on 1 CPU, and qwen3-4b is the single quality reference. Always dry-run generated proposals.
@@ -291,7 +301,7 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 - LLM output can be envelope-valid but record-invalid; always dry-run. Never treat generation as approval.
 - The API key must stay in the environment; `.env` is gitignored and excluded from the build context.
 - `genogram` is experimental. It reads complete endpoint-aware Relationship records and `relation:*` assertions, deduplicates equivalent triples, aggregates temporal intervals, and warns on bare Relationship records with incomplete endpoints. There is no `--at` filter yet.
-- The web UI is unauthenticated. Read-only browsing currently covers canonical records only; timeline/genogram, search/export and visibility filters remain open.
+- The web UI is unauthenticated. Read-only browsing now covers canonical records, archive/entity/place/collection timelines and the experimental genogram; search/export and visibility filters remain open.
 - JSON-LD export is a minimal `@id`/`@type` projection, not a full RDF round-trip; `records_from_jsonld` reverses that projection only.
 - Markdown export treats YAML front matter as the source of truth; body-only edits are not re-imported.
 - `import` only creates pending proposals; it never writes canonical data. Records that require evidence fail the import unless an imported capture or `--evidence` is supplied.

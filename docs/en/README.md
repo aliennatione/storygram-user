@@ -45,6 +45,8 @@ storygram web --archive ./archive --host 0.0.0.0 --port 8080
 
 The UI is unauthenticated and intended for a controlled local network or container port mapping.
 
+The **Timeline** page builds archive-level or entity/place/collection timelines from open assertions and links each entry to its assertion, records and evidence. The **Genogram** page is an experimental read-only relationship view with supported-predicate badges, warnings, and representative plus aggregated temporal intervals. Neither page has a write route.
+
 ## Proposal rules
 
 - Operations are `create`, `update_metadata`, `supersede` and `archive`.

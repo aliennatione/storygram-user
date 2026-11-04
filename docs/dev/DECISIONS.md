@@ -244,3 +244,12 @@
 - The detail view treats raw JSON as the source of truth and adds only derived reference and backlink links. Missing references are marked instead of silently omitted.
 - Visibility filtering is deferred. The UI is unauthenticated and intended for a controlled local network or container port mapping; adding a visibility selector belongs with search/export, where the filter semantics are shared.
 - Timeline, genogram, search and export views remain later GUI slices. This unit deliberately stops at canonical record browsing.
+
+## Read-only GUI Timeline and Genogram (2026-11-04)
+
+- The timeline and genogram pages reuse `timeline.build_timeline` and `genogram.build_genogram` instead of reimplementing derivation in the HTTP layer. The CLI and browser therefore share the same closed-status filtering, collection membership, deduplication and temporal aggregation.
+- `GET /timeline` uses the absence of `id` as the archive scope and `?id=...` as the entity, place or collection scope. This mirrors `storygram timeline --all` versus `storygram timeline ID` without adding a second scope parameter.
+- `GET /genogram?id=...` requires a person ID. A missing ID is a request error (400 with an input form); an ID that is not in canonical data returns 404, matching `/records` and `/timeline`. A known person with no relations is a valid empty result, not a 404.
+- Timeline rows link assertions, subjects, objects and evidence to `/records/<id>`. The browser derives navigation only; it does not invent or rewrite record content.
+- Genogram rows show both the representative `valid_time`/`transaction_time` and the aggregated `valid_times`/`transaction_times`, because choosing one representative must not hide other intervals.
+- Both routes are GET-only. There is no POST handler and no canonical write path; the human approval gate remains unchanged.

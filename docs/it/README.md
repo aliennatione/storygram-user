@@ -45,6 +45,8 @@ storygram web --archive ./archive --host 0.0.0.0 --port 8080
 
 La UI non ha autenticazione ed è pensata per una rete locale controllata o un mapping di porta del container.
 
+La pagina **Timeline** costruisce timeline a livello archivio o per entità, luogo e collezione dalle asserzioni aperte e collega ogni voce alla sua asserzione, ai record e alle evidenze. La pagina **Genogram** è una vista relazionale sperimentale in sola lettura con badge per i predicati supportati, warning e intervalli temporali rappresentativi più quelli aggregati. Nessuna delle due espone route di scrittura.
+
 ## Regole delle proposte
 
 - Le operazioni sono `create`, `update_metadata`, `supersede` e `archive`.

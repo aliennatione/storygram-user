@@ -513,3 +513,28 @@ Start the PRD M5 human interface with the smallest useful, safety-preserving sli
 2. Reuse the deterministic archive loader and surface load errors; do not hide malformed records.
 3. Treat raw JSON as the source of truth and derive only navigation links.
 4. Add visibility filtering with search/export, not as an isolated UI toggle.
+
+## 2026-11-04 - read-only GUI phase 2
+
+### Current objective
+
+Extend the PRD M5 human interface with read-only timeline and experimental genogram pages, without adding any write path or changing the approval gate.
+
+### Point of situation
+
+- Added `GET /timeline` with archive scope by default and `?id=...` for entity, place and collection scopes, reusing `timeline.build_timeline`.
+- Timeline rows show valid time, assertion, subject, predicate, object, status, transaction time and deduplicated evidence links to `/records/<id>`. Unknown IDs return 404; malformed records remain load warnings.
+- Added `GET /genogram?id=...` reusing `genogram.build_genogram`. Missing input returns 400 with a form; unknown people return 404; known people without relations render an empty view.
+- Genogram rows show predicate, direction, subject/object links, supported/unsupported badges, source record, `related_ids`, representative temporal fields and aggregated `valid_times`/`transaction_times`. Experimental status and warnings are explicit.
+- Navigation and home link to Timeline and Genogram. Both routes are GET-only with no canonical write path.
+- Integration tests cover archive/entity/collection scopes, evidence and record links, unknown IDs, missing genogram input, warnings, supported badges and temporal aggregation. Playwright approves a synthetic relation proposal and exercises both views through the real UI.
+- Checks: `142 passed`; ruff, format, mypy and Playwright edit/approve/reject/browse/timeline/genogram pass.
+- No canonical write path, proposal flow, approval gate or commit behavior changed.
+
+### Calibration
+
+1. Reuse the deterministic derived-view builders in the HTTP layer.
+2. Keep derived views GET-only; do not add POST handlers or hidden write paths.
+3. Link back to canonical records instead of duplicating record rendering.
+4. Show aggregated temporal intervals alongside the representative interval.
+5. Keep genogram experimental until it is reviewed on real user data.

@@ -140,3 +140,9 @@
 - Raw JSON plus reference and backlink links is a cheap, honest record detail view. It avoids duplicating schema rendering before the field-level UI is designed.
 - Keep browser routes strictly read-only in the first GUI slice. A missing POST route is a stronger safety property than a disabled button.
 - Server-rendered HTML with the stdlib is enough for deterministic local browsing; do not add a frontend build until interactivity or large-result paging requires it.
+- Reuse the deterministic timeline/genogram builders in the web layer. Reimplementing derivation in HTML would drift from the CLI and could reintroduce closed assertions or lose deduplication.
+- Use the absence of an `id` query parameter for the archive timeline and `?id=...` for scoped timelines; this keeps one obvious URL shape instead of a parallel `scope` vocabulary.
+- Distinguish a missing genogram input (400 with a form) from an unknown person (404). A known person with no relations is a successful empty view.
+- Link derived view rows back to `/records/<id>` rather than duplicating record details. Navigation is enough for the first read-only slice and keeps raw JSON canonical.
+- Show both representative and aggregated temporal fields in the genogram UI. A single representative interval can otherwise look like the complete history.
+- Keep derived views strictly GET-only. The absence of a POST route is a stronger safety property than a disabled form.

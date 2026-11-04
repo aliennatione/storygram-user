@@ -19,6 +19,8 @@ Open `http://localhost:8080`, browse canonical records read-only, then paste or 
 
 The **Records** page filters by type, status or text and opens a read-only detail with raw JSON plus reference and backlink links. It exposes no write route; canonical changes still require a proposal and human approval.
 
+The **Timeline** page renders archive-level or entity/place/collection timelines from open assertions, with links to assertions, records and evidence. The **Genogram** page is an experimental, read-only relationship view with supported-predicate badges, warnings, and both representative and aggregated temporal intervals. Neither page exposes a write route.
+
 ## Proposal Workflow
 
 Pending proposals live in `proposals/` and are ignored by Git. Approved proposals are archived under `data/proposals/` and committed.

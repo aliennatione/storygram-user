@@ -67,6 +67,36 @@ ITALIAN: dict[str, str] = {
     "Add a memory or source before adding this record.": (
         "Aggiungi una memoria o una fonte prima di aggiungere questo record."
     ),
+    "Add assertion": "Aggiungi asserzione",
+    "Add an assertion as a pending proposal. Choose a subject, a relation "
+    "predicate and either an object record or a literal value. It enters "
+    "canonical data only after a human approves the proposal.": (
+        "Aggiungi un'asserzione come proposta in attesa. Scegli un soggetto, un "
+        "predicato di relazione e un record oggetto o un valore letterale. Entra "
+        "nei dati canonici solo dopo l'approvazione umana della proposta."
+    ),
+    "Choose a record": "Scegli un record",
+    "Literal value": "Valore letterale",
+    "Literal value when no object record is chosen": (
+        "Valore letterale quando non si sceglie un record oggetto"
+    ),
+    "Value": "Valore",
+    "Invalid predicate: {value}": "Predicato non valido: {value}",
+    "Object or value is required": "È richiesto un oggetto o un valore",
+    "Provide either an object record or a literal value, not both": (
+        "Fornisci un record oggetto o un valore letterale, non entrambi"
+    ),
+    "Unknown record: {value}": "Record sconosciuto: {value}",
+    "Unsupported status: {value}": "Stato non supportato: {value}",
+    "Add at least one record before adding an assertion.": (
+        "Aggiungi almeno un record prima di aggiungere un'asserzione."
+    ),
+    "New assertion: {subject} {predicate} {object}": (
+        "Nuova asserzione: {subject} {predicate} {object}"
+    ),
+    "Created from the Add assertion form.": "Creata dal modulo Aggiungi asserzione.",
+    "Optional notes about this assertion": "Note opzionali su questa asserzione",
+    "disputed": "contestato",
     "Add relationship": "Aggiungi relazione",
     (
         "Add a relationship as a pending proposal. It enters canonical data only "

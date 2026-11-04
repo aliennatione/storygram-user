@@ -59,6 +59,36 @@ ENTITY_TYPES = {
     "Organization": "organization",
     "Period": "period",
 }
+ASSERTION_ENTITY_TYPES = (
+    "Person",
+    "Organization",
+    "Place",
+    "Period",
+    "Event",
+    "Relationship",
+    "Source",
+    "Episode",
+    "Collection",
+    "Narrative",
+    "Annotation",
+    "MediaAsset",
+)
+ASSERTION_PREDICATES = (
+    "relation:parent",
+    "relation:child",
+    "relation:spouse",
+    "relation:sibling",
+    "relation:partner",
+    "relation:lived_in",
+    "relation:born_in",
+    "relation:died_in",
+    "relation:worked_as",
+    "relation:moved_to",
+    "relation:member_of",
+    "relation:documented_in",
+    "relation:friend",
+)
+ASSERTION_STATUSES = ("draft", "proposed", "reported", "confirmed", "disputed", "rejected")
 SOURCE_TYPES = (
     "oral",
     "written",
@@ -161,6 +191,7 @@ form input, form select {{
     <a href="/people/new">{_t("Add person")}</a>
     <a href="/entities/new">{_t("Add entity")}</a>
     <a href="/relationships/new">{_t("Add relationship")}</a>
+    <a href="/assertions/new">{_t("Add assertion")}</a>
     <a href="/proposals/new">{_t("New proposal")}</a>
     <a href="/proposals/generate">{_t("Generate")}</a>
   </nav>
@@ -376,6 +407,7 @@ def render_home(root: Path) -> str:
   <a class="button" href="/people/new">{_t("Add person")}</a>
   <a class="button" href="/entities/new">{_t("Add entity")}</a>
   <a class="button" href="/relationships/new">{_t("Add relationship")}</a>
+  <a class="button" href="/assertions/new">{_t("Add assertion")}</a>
   <a class="button" href="/proposals/new">{_t("Create proposal")}</a>
   <a class="button" href="/proposals/generate">{_t("Generate with Ollama")}</a>
   <a class="button" href="/proposals">{_t("View proposals")}</a>
@@ -1001,6 +1033,253 @@ def render_relationship_form(
     return _layout(_t("Add relationship"), body)
 
 
+def _assertable_records(root: Path) -> list[tuple[str, str, str]]:
+    records, _ = validate_mod.load_records(root)
+    items: list[tuple[str, str, str]] = []
+    for _, data in records:
+        record_id = data.get("id")
+        record_type = data.get("type")
+        if (
+            not isinstance(record_id, str)
+            or record_type not in ASSERTION_ENTITY_TYPES
+            or data.get("status") in {"archived", "rejected", "superseded"}
+        ):
+            continue
+        items.append((record_id, str(record_type), _record_name(data)))
+    return sorted(items, key=lambda item: (item[1], item[2].casefold(), item[0]))
+
+
+def _assertion_proposal(
+    root: Path, values: dict[str, str], evidence: list[str]
+) -> tuple[dict[str, Any] | None, list[str]]:
+    subject = values.get("subject", "").strip()
+    predicate = values.get("predicate", "").strip()
+    object_id = values.get("object", "").strip()
+    literal = values.get("value", "").strip()
+    status = values.get("status", "").strip() or "reported"
+    start = values.get("start", "").strip()
+    end = values.get("end", "").strip()
+    precision = values.get("precision", "").strip()
+    visibility = values.get("visibility", "").strip()
+    notes = values.get("notes", "").strip()
+    evidence = list(dict.fromkeys(item for item in evidence if item))
+
+    known = {record_id for record_id, _, _ in _assertable_records(root)}
+    errors: list[str] = []
+    if not subject:
+        errors.append(_t("Subject is required"))
+    elif subject not in known:
+        errors.append(_t("Unknown record: {value}", value=subject))
+    if not re.fullmatch(r"relation:[A-Za-z0-9][A-Za-z0-9._~-]*", predicate):
+        errors.append(_t("Invalid predicate: {value}", value=predicate or "(empty)"))
+    if object_id and literal:
+        errors.append(_t("Provide either an object record or a literal value, not both"))
+    elif not object_id and not literal:
+        errors.append(_t("Object or value is required"))
+    if object_id and object_id not in known:
+        errors.append(_t("Unknown record: {value}", value=object_id))
+    if object_id and subject and object_id == subject:
+        errors.append(_t("Subject and object must be different"))
+    if status not in ASSERTION_STATUSES:
+        errors.append(_t("Unsupported status: {value}", value=status))
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    known_evidence = {record_id for record_id, _, _ in _evidence_records(root)}
+    if not evidence:
+        errors.append(_t("Evidence is required"))
+    for record_id in evidence:
+        if record_id not in known_evidence:
+            errors.append(_t("Unknown evidence: {value}", value=record_id))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    slug = _slug(predicate.removeprefix("relation:")) or "assertion"
+    record: dict[str, Any] = {
+        "id": f"assertion:{slug}-{token}",
+        "type": "Assertion",
+        "subject": subject,
+        "predicate": predicate,
+        "status": status,
+        "created_at": now,
+        "updated_at": now,
+        "transaction_time": {"recorded_at": now},
+    }
+    if object_id:
+        record["object"] = object_id
+    else:
+        record["value"] = literal
+    valid_time: dict[str, str] = {}
+    if start:
+        valid_time["start"] = start
+    if end:
+        valid_time["end"] = end
+    if precision:
+        valid_time["precision"] = precision
+    if valid_time:
+        record["valid_time"] = valid_time
+    produced_by = sorted(item for item in evidence if item.startswith("episode:"))
+    supported_by = sorted(item for item in evidence if item.startswith("source:"))
+    annotation_refs = sorted(item for item in evidence if item.startswith("annotation:"))
+    if produced_by:
+        record["produced_by"] = produced_by
+    if supported_by:
+        record["supported_by"] = supported_by
+    if annotation_refs:
+        record["annotations"] = annotation_refs
+    if visibility:
+        record["visibility"] = visibility
+    if notes:
+        record["notes"] = notes
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["Assertion"])
+    if record_errors:
+        return None, record_errors
+
+    names = {record_id: name for record_id, _, name in _assertable_records(root)}
+    proposal = {
+        "id": f"proposal:assertion-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t(
+            "New assertion: {subject} {predicate} {object}",
+            subject=names.get(subject, subject),
+            predicate=predicate,
+            object=names.get(object_id, object_id or literal),
+        ),
+        "rationale": _t("Created from the Add assertion form."),
+        "operations": [
+            {
+                "op": "create",
+                "record_type": "Assertion",
+                "record": record,
+                "evidence": evidence,
+            }
+        ],
+    }
+    return proposal, []
+
+
+def render_assertion_form(
+    root: Path,
+    values: dict[str, str] | None = None,
+    errors: list[str] | None = None,
+    selected_evidence: list[str] | None = None,
+) -> str:
+    values = values or {}
+    subject = values.get("subject") or ""
+    predicate = values.get("predicate") or ""
+    object_id = values.get("object") or ""
+    status = values.get("status") or "reported"
+    precision = values.get("precision") or ""
+    visibility = values.get("visibility") or ""
+    notes_value = _esc(values.get("notes", ""))
+    records = _assertable_records(root)
+    warning = ""
+    if not records:
+        warning = (
+            f'<p class="warning">{_t("Add at least one record before adding an assertion.")}</p>'
+        )
+    subject_options = f'<option value="">{_t("Choose a record")}</option>' + "".join(
+        f'<option value="{_esc(record_id)}"'
+        f"{' selected' if record_id == subject else ''}>"
+        f"{_esc(record_type)} · {_esc(name or record_id)} · {_esc(record_id)}</option>"
+        for record_id, record_type, name in records
+    )
+    object_options = f'<option value="">{_t("Literal value")}</option>' + "".join(
+        f'<option value="{_esc(record_id)}"'
+        f"{' selected' if record_id == object_id else ''}>"
+        f"{_esc(record_type)} · {_esc(name or record_id)} · {_esc(record_id)}</option>"
+        for record_id, record_type, name in records
+    )
+    predicate_list = "".join(
+        f'<option value="{_esc(item)}"></option>' for item in ASSERTION_PREDICATES
+    )
+    status_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == status else ''}>{_esc(_t(item))}</option>"
+        for item in ASSERTION_STATUSES
+    )
+    precision_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == precision else ''}>{_esc(_t(item))}</option>"
+        for item in ("day", "month", "year", "decade", "approximate", "unknown")
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    evidence_block = _evidence_fieldset(root, selected_evidence)
+    intro = _t(
+        "Add an assertion as a pending proposal. Choose a subject, a relation "
+        "predicate and either an object record or a literal value. It enters "
+        "canonical data only after a human approves the proposal."
+    )
+    body = f"""
+<h1>{_t("Add assertion")}</h1>
+<p class="muted">
+{intro}
+</p>
+{warning}
+{_errors_block(errors or [])}
+<form method="post" action="/assertions/new">
+<p>
+<label>{_t("Subject")}
+  <select name="subject">{subject_options}</select>
+</label>
+<label>{_t("Predicate")}
+  <input name="predicate" list="assertion-predicates"
+    value="{_esc(predicate)}" placeholder="relation:lived_in">
+  <datalist id="assertion-predicates">{predicate_list}</datalist>
+</label>
+<label>{_t("Object")}
+  <select name="object">{object_options}</select>
+</label>
+<label>{_t("Value")}
+  <input name="value" value="{_esc(values.get("value", ""))}"
+    placeholder="{_t("Literal value when no object record is chosen")}">
+</label>
+</p>
+<p>
+<label>{_t("Status")}
+  <select name="status">{status_options}</select>
+</label>
+<label>{_t("Start")}
+  <input name="start" value="{_esc(values.get("start", ""))}" placeholder="1987"></label>
+<label>{_t("End")}
+  <input name="end" value="{_esc(values.get("end", ""))}" placeholder="1995"></label>
+<label>{_t("Precision")}
+  <select name="precision">
+    <option value="">{_t("Unspecified")}</option>{precision_options}
+  </select>
+</label>
+</p>
+<p>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true"
+    placeholder="{_t("Optional notes about this assertion")}">{notes_value}</textarea>
+</label>
+{evidence_block}
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add assertion"), body)
+
+
 def render_memory_form(
     values: dict[str, str] | None = None, errors: list[str] | None = None
 ) -> str:
@@ -1268,8 +1547,10 @@ def render_record_detail(root: Path, record_id: str) -> tuple[int, str]:
     name = _record_name(data) or record_id
     visibility = data.get("visibility")
     visibility_badge = f'<span class="badge">{_esc(visibility)}</span>' if visibility else ""
+    assertion_href = f"/assertions/new?subject={quote(record_id, safe='')}"
     body = f"""
-<p><a class="button" href="/records">{_t("Back to records")}</a></p>
+<p><a class="button" href="/records">{_t("Back to records")}</a>
+<a class="button" href="{assertion_href}">{_t("Add assertion")}</a></p>
 <h1>{_esc(name)}</h1>
 <p><span class="badge">{_esc(data.get("type") or _t("unknown"))}</span>
 {_status_badge(data.get("status"))} {visibility_badge}</p>
@@ -1971,6 +2252,14 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/relationships/new":
             self._send(200, render_relationship_form(self.root))
             return
+        if path == "/assertions/new":
+            prefill = {
+                key: _query_value(parsed.query, key)
+                for key in ("subject", "object")
+                if _query_value(parsed.query, key)
+            }
+            self._send(200, render_assertion_form(self.root, prefill))
+            return
         if path == "/proposals/new":
             self._send(200, _new_form())
             return
@@ -2151,6 +2440,36 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 proposals_mod.create_pending(self.root, proposal)
             except proposals_mod.ProposalError as exc:
                 self._send(400, render_relationship_form(self.root, values, exc.errors, evidence))
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path == "/assertions/new":
+            values = {
+                key: (form.get(key) or [""])[0]
+                for key in (
+                    "subject",
+                    "predicate",
+                    "object",
+                    "value",
+                    "status",
+                    "start",
+                    "end",
+                    "precision",
+                    "visibility",
+                    "notes",
+                )
+            }
+            evidence = form.get("evidence") or []
+            proposal, errors = _assertion_proposal(self.root, values, evidence)
+            if proposal is None:
+                self._send(400, render_assertion_form(self.root, values, errors, evidence))
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(400, render_assertion_form(self.root, values, exc.errors, evidence))
                 return
             proposal_id = str(proposal["id"])
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")

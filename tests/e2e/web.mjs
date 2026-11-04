@@ -181,6 +181,17 @@ try {
   await page.waitForFunction(() => document.body.innerText.includes("merged"));
   assert.equal(readdirSync(join(root, "data", "relationships")).length, 1);
 
+  await page.goto(`${server.base}assertions/new`);
+  await page.selectOption('select[name="subject"]', formPeople[0]);
+  await page.fill('input[name="predicate"]', "relation:lived_in");
+  await page.fill('input[name="value"]', "E2E family home");
+  await page.locator('input[name="evidence"][value="episode:e2e-note"]').check();
+  await page.getByRole("button", { name: "Save pending proposal" }).click();
+  await page.waitForSelector("text=Dry-run preview");
+  await page.getByRole("button", { name: "Approve without commit" }).click();
+  await page.waitForFunction(() => document.body.innerText.includes("merged"));
+  assert.equal(readdirSync(join(root, "data", "assertions")).length, 1);
+
   const relations = {
     id: "proposal:e2e-relations",
     type: "Proposal",
@@ -340,7 +351,7 @@ try {
   assert.equal(rejected.notes, "duplicate");
 
   console.log(
-    "Playwright e2e: edit, approve, reject, browse, visibility export, source/entity/person/relationship forms, timeline, genogram, add memory and Italian UI flows passed",
+    "Playwright e2e: edit, approve, reject, browse, visibility export, source/entity/person/relationship/assertion forms, timeline, genogram, add memory and Italian UI flows passed",
   );
 } finally {
   if (browser) await browser.close();

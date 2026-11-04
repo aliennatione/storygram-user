@@ -1375,3 +1375,199 @@ def test_web_add_entity_validates_input(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def _web_seed_assertion_archive(tmp_path: Path) -> None:
+    write_record(
+        tmp_path,
+        "episodes",
+        "episode_memory.json",
+        {
+            "id": "episode:memory",
+            "type": "Episode",
+            "episode_type": "memory",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+            "content": {"text": "Anna lived in the family home."},
+        },
+    )
+    write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+    write_record(
+        tmp_path,
+        "places",
+        "place_home.json",
+        {
+            "id": "place:home",
+            "type": "Place",
+            "name": "Family home",
+            "status": "reported",
+            "created_at": NOW,
+            "updated_at": NOW,
+        },
+    )
+
+
+def test_web_add_assertion_creates_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        _web_seed_assertion_archive(tmp_path)
+
+        status, body = get(base + "/assertions/new")
+        assert status == 200
+        assert "Add assertion" in body
+        assert 'action="/assertions/new"' in body
+
+        status, body = get(base + "/assertions/new?subject=person:anna")
+        assert status == 200
+        assert 'value="person:anna" selected' in body
+
+        status, body = post(
+            base + "/assertions/new",
+            {
+                "subject": "person:anna",
+                "predicate": "relation:lived_in",
+                "object": "place:home",
+                "status": "reported",
+                "start": "1987",
+                "end": "1995",
+                "precision": "year",
+                "visibility": "family",
+                "notes": "From the family memory.",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 200, body
+        assert "Dry-run preview" in body
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        assert proposal["status"] == "proposed"
+        assert proposal["title"] == ("New assertion: Anna Rossi relation:lived_in Family home")
+        operation = proposal["operations"][0]
+        assert operation["op"] == "create"
+        assert operation["record_type"] == "Assertion"
+        assert operation["evidence"] == ["episode:memory"]
+        record = operation["record"]
+        assert record["type"] == "Assertion"
+        assert record["subject"] == "person:anna"
+        assert record["predicate"] == "relation:lived_in"
+        assert record["object"] == "place:home"
+        assert record["status"] == "reported"
+        assert record["valid_time"] == {"start": "1987", "end": "1995", "precision": "year"}
+        assert record["transaction_time"]["recorded_at"]
+        assert record["produced_by"] == ["episode:memory"]
+        assert record["visibility"] == "family"
+        assert record["notes"] == "From the family memory."
+        assert record["id"].startswith("assertion:lived-in-")
+        assert not list((tmp_path / "data" / "assertions").glob("*.json"))
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal['id'], safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200, body
+        assert "merged" in body
+        assertion_file = tmp_path / "data" / "assertions" / f"{record['id'].replace(':', '_')}.json"
+        assert assertion_file.exists()
+
+        status, body = get(base + f"/records/{quote('person:anna', safe='')}")
+        assert status == 200
+        assert "/assertions/new?subject=person%3Aanna" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_assertion_value_and_validation(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        _web_seed_assertion_archive(tmp_path)
+
+        status, body = post(
+            base + "/assertions/new",
+            {
+                "subject": "person:anna",
+                "predicate": "relation:lived_in",
+                "value": "1987 in the family home",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 200, body
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        record = json.loads(pending[0].read_text(encoding="utf-8"))["operations"][0]["record"]
+        assert record["value"] == "1987 in the family home"
+        assert "object" not in record
+        for path in pending:
+            path.unlink()
+
+        status, body = post(
+            base + "/assertions/new",
+            {"predicate": "relation:lived_in", "value": "x", "evidence": "episode:memory"},
+        )
+        assert status == 400
+        assert "Subject is required" in body
+
+        status, body = post(
+            base + "/assertions/new",
+            {"subject": "person:anna", "predicate": "lived_in", "value": "x"},
+        )
+        assert status == 400
+        assert "Invalid predicate: lived_in" in body
+
+        status, body = post(
+            base + "/assertions/new",
+            {
+                "subject": "person:anna",
+                "predicate": "relation:lived_in",
+                "object": "place:home",
+                "value": "x",
+            },
+        )
+        assert status == 400
+        assert "not both" in body
+
+        status, body = post(
+            base + "/assertions/new",
+            {"subject": "person:anna", "predicate": "relation:lived_in"},
+        )
+        assert status == 400
+        assert "Object or value is required" in body
+
+        status, body = post(
+            base + "/assertions/new",
+            {
+                "subject": "person:anna",
+                "predicate": "relation:lived_in",
+                "value": "x",
+            },
+        )
+        assert status == 400
+        assert "Evidence is required" in body
+
+        status, body = post(
+            base + "/assertions/new",
+            {
+                "subject": "person:missing",
+                "predicate": "relation:lived_in",
+                "value": "x",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 400
+        assert "Unknown record: person:missing" in body
+
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = get(base + "/assertions/new?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Aggiungi asserzione" in body
+        assert "Scegli un record" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

@@ -586,6 +586,7 @@ Make the web UI comfortably usable by a human end to end (memory â†’ evidence â†
 - `7566049`: new `src/storygram/media.py` plus `storygram media add|list`. Entries are content-addressed (`<slug>-<sha256[:8]>.json`), record URI/SHA-256/MIME/size/visibility/acquisition metadata, refuse silent overwrites (refresh needs `--overwrite`), and never copy the media file or touch `data/`.
 - `7a8c03e`: Firefox WebDriver flow extended through the source and assertion forms; its coverage claim in the docs is now accurate.
 - Checks: `170 passed`; ruff, format and mypy clean; Chromium Playwright flow passed; Firefox WebDriver flow passed.
+- Container regression after these units: image build, healthy start on port 18080, UID 100, auto-init, HTTP, proposal apply, `media add|list`, `proposal show --json`, `/conflicts` rendering and restart persistence all passed through the host socket; test project, volume and image removed.
 
 ### Calibration
 

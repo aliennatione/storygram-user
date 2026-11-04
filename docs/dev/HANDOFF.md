@@ -74,6 +74,16 @@ Results:
 - Containers, project network, project volume and temporary Alpine image from this run were removed. The downloaded model and `storygram:local` remain.
 - The Ollama profile is now `--profile ollama`; `--profile llm` is the llama.cpp service.
 
+## Verified Container Run (2026-11-04, post GUI/CLI units)
+
+- Engine: Podman Engine 5.8.2 through the Docker-compatible API; Docker CLI 29.9.2; Compose v5.6.1.
+- `docker build -t storygram:local /data` succeeded with the current `feature/agent-proposal-flow` tree.
+- `docker compose -p storygram-test` on `STORYGRAM_PORT=18080` reached `healthy`; inside the container: UID `100`, `init-ok`, clean Git tree, `http-ok`.
+- In-container proposal flow: `proposal new`, `list`, `approve --dry-run --json`, `approve --no-commit --json` all succeeded and `data/episodes/episode_docker-check.json` exists.
+- New surfaces verified in the container: `media add` wrote a content-addressed `media-manifest/photo-*.json` with SHA-256/size/MIME, `media list` printed it, `proposal show --json` returned the merged proposal, and `GET /conflicts` rendered.
+- After `docker compose restart`: episode and media entry persisted, container `healthy`.
+- Cleanup: `docker compose -p storygram-test down -v`, image `storygram:local` removed; unrelated containers untouched.
+
 ## Export Round-Trip Unit (2026-11-03)
 
 - `src/storygram/export.py` now provides `export_yaml`, `export_markdown`, `records_from_yaml`, `records_from_jsonld` and `records_from_markdown`.

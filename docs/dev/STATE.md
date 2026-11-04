@@ -296,6 +296,7 @@ Last updated: 2026-11-04
 - Remote prompt A/B: `qwen3-4b` passed dry-run on Italian, English and short-capture fixtures; `qwen3-8b` failed envelope validation on the English fixture and was not selected.
 - Local 3B GGUF: model loaded (about 9 minutes, 1.86 GiB), then produced no token for more than 25 minutes under the 1-CPU quota; stopped and removed. It was not promoted to default.
 - Test containers, project network, the project volume created by this run, and the temporary Alpine image were removed; `storygram:local` and the downloaded GGUF remain.
+- 2026-11-04 post-unit container regression through the host socket (Podman 5.8.2, Docker CLI 29.9.2, Compose v5.6.1): `docker build -t storygram:local /data` passed; Compose project `storygram-test` on port 18080 reached `healthy`; UID `100`, `init-ok`, clean Git tree and `http-ok` inside the container; `proposal new|list|approve --dry-run|approve --no-commit` applied `episode:docker-check`; the new `media add|list` wrote and listed a content-addressed SHA-256 entry; `proposal show --json` returned the merged proposal; `GET /conflicts` rendered; after `restart` the episode and the media entry persisted and the container was `healthy` again. Test project, volume, network and image were removed afterwards.
 
 ## Known Limitations
 

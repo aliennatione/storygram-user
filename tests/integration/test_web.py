@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import threading
+from http.cookiejar import CookieJar
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
+from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 from click.testing import CliRunner
 
@@ -693,6 +694,151 @@ def test_web_genogram_requires_known_person(tmp_path: Path) -> None:
 
         status, body = post(base + "/genogram", {})
         assert status == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_memory_creates_pending_episode_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = get(base + "/memories/new")
+        assert status == 200
+        assert "Add memory" in body
+        assert 'action="/memories/new"' in body
+        assert 'href="/proposals/new"' in body
+
+        status, body = post(
+            base + "/memories/new",
+            {
+                "title": "Nonna's garden",
+                "episode_type": "memory",
+                "captured_at": "1987",
+                "text": "Nonna said she planted tomatoes every spring.",
+                "tags": "family, garden",
+                "visibility": "family",
+            },
+        )
+        assert status == 200
+        assert "Dry-run preview" in body
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        assert proposal["status"] == "proposed"
+        assert proposal["title"] == "Nonna's garden"
+        operation = proposal["operations"][0]
+        assert operation["op"] == "create"
+        assert operation["record_type"] == "Episode"
+        record = operation["record"]
+        assert record["type"] == "Episode"
+        assert record["episode_type"] == "memory"
+        assert record["status"] == "reported"
+        assert record["captured_at"] == "1987"
+        assert record["content"]["text"] == "Nonna said she planted tomatoes every spring."
+        assert record["tags"] == ["family", "garden"]
+        assert record["visibility"] == "family"
+        assert not list((tmp_path / "data" / "episodes").glob("*.json"))
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal['id'], safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200
+        assert "merged" in body
+        episode_file = tmp_path / "data" / "episodes" / f"{record['id'].replace(':', '_')}.json"
+        assert episode_file.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_memory_accepts_known_participants(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+
+        status, body = post(
+            base + "/memories/new",
+            {
+                "text": "Anna remembered the garden.",
+                "participants": "person:anna, person:anna",
+            },
+        )
+        assert status == 200
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        record = proposal["operations"][0]["record"]
+        assert record["participants"] == ["person:anna"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_memory_validates_input(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = post(base + "/memories/new", {"text": "   "})
+        assert status == 400
+        assert "Memory text is required" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/memories/new",
+            {"text": "A memory", "episode_type": "invalid"},
+        )
+        assert status == 400
+        assert "Unsupported episode type: invalid" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/memories/new",
+            {"text": "A memory", "participants": "person:missing"},
+        )
+        assert status == 400
+        assert "Unknown participant: person:missing" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_interface_switches_between_english_and_italian(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = get(base + "/?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Aggiungi memoria" in body
+        assert "Coda di revisione" in body
+        assert "Cronologia" in body
+        assert 'href="/lang/it?next=' in body
+
+        status, body = get(base + "/?lang=en")
+        assert status == 200
+        assert '<html lang="en">' in body
+        assert "Add memory" in body
+        assert "Review queue" in body
+
+        status, body = post(base + "/memories/new?lang=it", {"text": ""})
+        assert status == 400
+        assert "Il testo della memoria è obbligatorio" in body
+
+        jar = CookieJar()
+        opener = build_opener(HTTPCookieProcessor(jar))
+        with opener.open(base + "/lang/it?next=/records") as response:
+            body = response.read().decode()
+        assert "Aggiungi memoria" in body
+        with opener.open(base + "/memories/new") as response:
+            body = response.read().decode()
+        assert "Salva proposta in attesa" in body
+        assert 'name="text"' in body
     finally:
         server.shutdown()
         server.server_close()

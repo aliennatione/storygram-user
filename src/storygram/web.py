@@ -5,14 +5,26 @@ from __future__ import annotations
 import html
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse, urlsplit, urlunsplit
+from uuid import uuid4
 
 from . import proposals as proposals_mod
 from . import validate as validate_mod
 from .genogram import build_genogram
+from .i18n import (
+    current_language,
+    current_path,
+    normalize_language,
+    set_language,
+    set_path,
+)
+from .i18n import (
+    t as _t,
+)
 from .llm import (
     LLMAdapter,
     LLMAdapterError,
@@ -22,10 +34,22 @@ from .llm import (
     provider_from_config,
     save_pending,
 )
-from .registry import RECORD_TYPES, iter_reference_strings
+from .registry import RECORD_TYPES, TYPE_BY_NAME, iter_reference_strings
 from .timeline import build_timeline
 
 MAX_BODY = 4 * 1024 * 1024
+MEMORY_EPISODE_TYPES = (
+    "memory",
+    "interview",
+    "letter",
+    "photograph",
+    "audio",
+    "video",
+    "document",
+    "observation",
+    "other",
+)
+VISIBILITIES = ("private", "restricted", "family", "public")
 
 
 class APIRequestError(Exception):
@@ -40,8 +64,16 @@ def _esc(value: Any) -> str:
 
 
 def _layout(title: str, body: str) -> str:
+    lang = current_language()
+    next_path = quote(current_path(), safe="")
+    en_attr = ' aria-current="true"' if lang == "en" else ""
+    it_attr = ' aria-current="true"' if lang == "it" else ""
+    language_links = (
+        f'<a href="/lang/en?next={next_path}"{en_attr}>EN</a>'
+        f'<a href="/lang/it?next={next_path}"{it_attr}>IT</a>'
+    )
     return f"""<!doctype html>
-<html lang="en">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -52,10 +84,11 @@ def _layout(title: str, body: str) -> str:
 body {{ margin:0; font-family: system-ui, sans-serif; line-height:1.45; }}
 header {{
   border-bottom:1px solid var(--line); padding:12px 24px;
-  display:flex; gap:20px; align-items:center;
+  display:flex; gap:20px; align-items:center; flex-wrap:wrap;
 }}
 header strong {{ font-size:1.1rem; }}
 nav a {{ margin-right:14px; color:var(--accent); text-decoration:none; }}
+nav a[aria-current="true"] {{ font-weight:700; text-decoration:underline; }}
 main {{ max-width:1100px; margin:0 auto; padding:24px; }}
 table {{ width:100%; border-collapse:collapse; margin:12px 0; }}
 th, td {{ text-align:left; border-bottom:1px solid var(--line); padding:8px; vertical-align:top; }}
@@ -80,6 +113,11 @@ button.primary {{ background:var(--accent); color:white; border-color:var(--acce
   padding:7px 9px; border:1px solid var(--line); border-radius:6px;
   background:Canvas; color:CanvasText;
 }}
+form label {{ display:block; margin:10px 0; }}
+form input, form select {{
+  padding:7px 9px; border:1px solid var(--line); border-radius:6px;
+  background:Canvas; color:CanvasText;
+}}
 .warning {{ border-left:4px solid #9a6700; padding:8px 12px; background:#9a670020; margin:12px 0; }}
 .intervals {{ margin:4px 0 0; padding-left:18px; font-size:.9rem; }}
 </style>
@@ -88,11 +126,14 @@ button.primary {{ background:var(--accent); color:white; border-color:var(--acce
 <header>
   <strong>Storygram</strong>
   <nav>
-    <a href="/">Home</a><a href="/records">Records</a><a href="/timeline">Timeline</a>
-    <a href="/genogram">Genogram</a><a href="/proposals">Proposals</a>
-    <a href="/proposals/new">New proposal</a>
-    <a href="/proposals/generate">Generate</a>
+    <a href="/">{_t("Home")}</a><a href="/records">{_t("Records")}</a>
+    <a href="/timeline">{_t("Timeline")}</a>
+    <a href="/genogram">{_t("Genogram")}</a><a href="/proposals">{_t("Proposals")}</a>
+    <a href="/memories/new">{_t("Add memory")}</a>
+    <a href="/proposals/new">{_t("New proposal")}</a>
+    <a href="/proposals/generate">{_t("Generate")}</a>
   </nav>
+  <nav>{language_links}</nav>
 </header>
 <main>{body}</main>
 </body>
@@ -103,11 +144,12 @@ def _errors_block(errors: list[str]) -> str:
     if not errors:
         return ""
     items = "".join(f"<li>{_esc(error)}</li>" for error in errors)
-    return f'<div class="error"><strong>Could not continue</strong><ul>{items}</ul></div>'
+    return f'<div class="error"><strong>{_t("Could not continue")}</strong><ul>{items}</ul></div>'
 
 
 def _status_badge(status: Any) -> str:
-    return f'<span class="badge">{_esc(status or "unknown")}</span>'
+    label = _t(str(status)) if status else _t("unknown")
+    return f'<span class="badge">{_esc(label)}</span>'
 
 
 def _query_value(query: str, key: str) -> str:
@@ -150,19 +192,19 @@ def _notice_block(title: str, items: list[str]) -> str:
 
 
 def _warning_block(items: list[str]) -> str:
-    return _notice_block("Some records could not be loaded", items)
+    return _notice_block(_t("Some records could not be loaded"), items)
 
 
 def _record_links(ids: list[str], known_ids: set[str]) -> str:
     if not ids:
-        return '<p class="muted">None.</p>'
+        return f'<p class="muted">{_t("None.")}</p>'
     items = []
     for record_id in ids:
         if record_id in known_ids:
             href = _record_href(record_id)
             items.append(f'<li><a href="{_esc(href)}">{_esc(record_id)}</a></li>')
         else:
-            items.append(f'<li><span class="muted">{_esc(record_id)} (missing)</span></li>')
+            items.append(f'<li><span class="muted">{_esc(record_id)} {_t("(missing)")}</span></li>')
     return f"<ul>{''.join(items)}</ul>"
 
 
@@ -176,7 +218,7 @@ def _record_link(record_id: Any, known_ids: set[str]) -> str:
     if record_id in known_ids:
         href = _record_href(record_id)
         return f'<a href="{_esc(href)}">{_esc(record_id)}</a>'
-    return f'<span class="muted">{_esc(record_id)} (missing)</span>'
+    return f'<span class="muted">{_esc(record_id)} {_t("(missing)")}</span>'
 
 
 def _interval_label(value: Any) -> str:
@@ -210,7 +252,7 @@ def _interval_cell(representative: Any, aggregated: list[Any]) -> str:
 def _proposal_rows(root: Path) -> str:
     entries = proposals_mod.list_proposals(root, include_applied=True)
     if not entries:
-        return '<p class="muted">No proposals yet.</p>'
+        return f'<p class="muted">{_t("No proposals yet.")}</p>'
     rows = []
     for path, data in entries:
         proposal_id = str(data.get("id", ""))
@@ -225,10 +267,9 @@ def _proposal_rows(root: Path) -> str:
             "</tr>"
         )
     return (
-        "<table><thead><tr><th>ID</th><th>Status</th><th>Title</th>"
-        "<th>Operations</th><th>Location</th></tr></thead><tbody>"
-        + "".join(rows)
-        + "</tbody></table>"
+        f"<table><thead><tr><th>{_t('ID')}</th><th>{_t('Status')}</th>"
+        f"<th>{_t('Title')}</th><th>{_t('Operations')}</th>"
+        f"<th>{_t('Location')}</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
     )
 
 
@@ -238,7 +279,7 @@ def render_home(root: Path) -> str:
     pending = proposals_mod.list_proposals(root, include_applied=False)
     applied = proposals_mod.list_proposals(root, include_applied=True)
     applied = [(path, data) for path, data in applied if data.get("status") == "merged"]
-    status = '<div class="ok">Archive validates.</div>'
+    status = f'<div class="ok">{_t("Archive validates.")}</div>'
     if not result["ok"]:
         status = _errors_block(load_errors + result["errors"])
     counts = []
@@ -247,22 +288,157 @@ def render_home(root: Path) -> str:
         counts.append(f"<li>{_esc(record_type.name)}: {count}</li>")
     body = f"""
 <h1>Storygram</h1>
-<p class="muted">Local-first review surface. Canonical changes require approval.</p>
+<p class="muted">{_t("Local-first review surface. Canonical changes require approval.")}</p>
 {status}
-<h2>Review queue</h2>
-<table><thead><tr><th>Pending</th><th>Merged</th><th>Records</th></tr></thead>
+<h2>{_t("Review queue")}</h2>
+<table><thead><tr><th>{_t("Pending")}</th><th>{_t("Merged")}</th>
+<th>{_t("Records")}</th></tr></thead>
 <tbody><tr><td>{len(pending)}</td><td>{len(applied)}</td><td>{len(records)}</td></tr></tbody></table>
 <p>
-  <a class="button" href="/records">Browse records</a>
-  <a class="button" href="/timeline">Timeline</a>
-  <a class="button" href="/genogram">Genogram</a>
-  <a class="button primary" href="/proposals/new">Create proposal</a>
-  <a class="button" href="/proposals/generate">Generate with Ollama</a>
-  <a class="button" href="/proposals">View proposals</a>
+  <a class="button" href="/records">{_t("Browse records")}</a>
+  <a class="button" href="/timeline">{_t("Timeline")}</a>
+  <a class="button" href="/genogram">{_t("Genogram")}</a>
+  <a class="button primary" href="/memories/new">{_t("Add memory")}</a>
+  <a class="button" href="/proposals/new">{_t("Create proposal")}</a>
+  <a class="button" href="/proposals/generate">{_t("Generate with Ollama")}</a>
+  <a class="button" href="/proposals">{_t("View proposals")}</a>
 </p>
-<h2>Record counts</h2><ul>{"".join(counts)}</ul>
+<h2>{_t("Record counts")}</h2><ul>{"".join(counts)}</ul>
 """
-    return _layout("Home", body)
+    return _layout(_t("Home"), body)
+
+
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _memory_proposal(root: Path, values: dict[str, str]) -> tuple[dict[str, Any] | None, list[str]]:
+    text = values.get("text", "").strip()
+    title = values.get("title", "").strip()
+    episode_type = values.get("episode_type", "").strip() or "memory"
+    captured_at = values.get("captured_at", "").strip()
+    participants = list(dict.fromkeys(_split_csv(values.get("participants", ""))))
+    tags = list(dict.fromkeys(_split_csv(values.get("tags", ""))))
+    visibility = values.get("visibility", "").strip()
+
+    errors: list[str] = []
+    if not text:
+        errors.append(_t("Memory text is required"))
+    if episode_type not in MEMORY_EPISODE_TYPES:
+        errors.append(_t("Unsupported episode type: {value}", value=episode_type))
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+
+    records, _ = validate_mod.load_records(root)
+    known_ids = _known_ids(records)
+    for participant in participants:
+        if participant not in known_ids:
+            errors.append(_t("Unknown participant: {value}", value=participant))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    record: dict[str, Any] = {
+        "id": f"episode:memory-{token}",
+        "type": "Episode",
+        "episode_type": episode_type,
+        "status": "reported",
+        "created_at": now,
+        "updated_at": now,
+        "content": {"text": text},
+    }
+    if title:
+        record["title"] = title
+    if captured_at:
+        record["captured_at"] = captured_at
+    if participants:
+        record["participants"] = participants
+    if tags:
+        record["tags"] = tags
+    if visibility:
+        record["visibility"] = visibility
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["Episode"])
+    if record_errors:
+        return None, record_errors
+
+    proposal_title = title or text.splitlines()[0][:80] or _t("Memory capture")
+    proposal = {
+        "id": f"proposal:memory-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": proposal_title,
+        "rationale": _t("Created from the Add memory form."),
+        "operations": [{"op": "create", "record_type": "Episode", "record": record}],
+    }
+    return proposal, []
+
+
+def render_memory_form(
+    values: dict[str, str] | None = None, errors: list[str] | None = None
+) -> str:
+    values = values or {}
+    episode_type = values.get("episode_type") or "memory"
+    visibility = values.get("visibility") or ""
+    type_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == episode_type else ''}>{_esc(_t(item))}</option>"
+        for item in MEMORY_EPISODE_TYPES
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    intro = _t(
+        "Save a memory as a pending proposal. It does not enter canonical data "
+        "until a human approves the proposal; use the advanced JSON editor for "
+        "other record types."
+    )
+    body = f"""
+<h1>{_t("Add memory")}</h1>
+<p class="muted">
+{intro}
+</p>
+{_errors_block(errors or [])}
+<form method="post" action="/memories/new">
+<label>{_t("Title")}
+  <input name="title" value="{_esc(values.get("title", ""))}" style="width:100%">
+</label>
+<p>
+<label>{_t("Type")} <select name="episode_type">{type_options}</select></label>
+<label>{_t("Captured at")}
+  <input name="captured_at" value="{_esc(values.get("captured_at", ""))}"
+         placeholder="1987 or 1987-05-01"></label>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Memory")}
+  <textarea name="text" spellcheck="true"
+    placeholder="{_t("Write the memory...")}">{_esc(values.get("text", ""))}</textarea>
+</label>
+<p>
+<label>{_t("Participants")}
+  <input name="participants" value="{_esc(values.get("participants", ""))}"
+         placeholder="person:anna, person:bruno" style="width:100%"></label>
+<label>{_t("Tags")}
+  <input name="tags" value="{_esc(values.get("tags", ""))}"
+         placeholder="{_t("family, torino")}" style="width:100%"></label>
+</p>
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add memory"), body)
 
 
 def render_records(root: Path, query: str = "") -> str:
@@ -289,7 +465,7 @@ def render_records(root: Path, query: str = "") -> str:
             href = _record_href(record_id)
             id_cell = f'<a href="{_esc(href)}">{_esc(record_id)}</a>'
         else:
-            id_cell = '<span class="muted">(missing id)</span>'
+            id_cell = f'<span class="muted">{_t("(missing id)")}</span>'
         name = _record_name(data)
         rows.append(
             "<tr>"
@@ -302,11 +478,12 @@ def render_records(root: Path, query: str = "") -> str:
             "</tr>"
         )
 
-    table = '<p class="muted">No records match these filters.</p>'
+    table = f'<p class="muted">{_t("No records match these filters.")}</p>'
     if rows:
         table = (
-            "<table><thead><tr><th>ID</th><th>Type</th><th>Status</th>"
-            "<th>Name / title</th><th>Updated</th><th>File</th></tr></thead><tbody>"
+            f"<table><thead><tr><th>{_t('ID')}</th><th>{_t('Type')}</th>"
+            f"<th>{_t('Status')}</th><th>{_t('Name / title')}</th>"
+            f"<th>{_t('Updated')}</th><th>{_t('File')}</th></tr></thead><tbody>"
             + "".join(rows)
             + "</tbody></table>"
         )
@@ -316,22 +493,33 @@ def render_records(root: Path, query: str = "") -> str:
         f"{' selected' if item.name == record_type else ''}>{_esc(item.name)}</option>"
         for item in RECORD_TYPES
     )
+    records_intro = _t(
+        "Read-only canonical record browser. Showing {shown} of {total} records.",
+        shown=len(filtered),
+        total=len(records),
+    )
     body = f"""
-<h1>Records</h1>
+<h1>{_t("Records")}</h1>
 <p class="muted">
-Read-only canonical record browser. Showing {len(filtered)} of {len(records)} records.
+{records_intro}
 </p>
 {_warning_block(load_errors)}
 <form class="filters" method="get" action="/records">
-  <label>Type <select name="type"><option value="">All types</option>{type_options}</select></label>
-  <label>Status <input name="status" value="{_esc(status)}" placeholder="confirmed"></label>
-  <label>Search <input name="q" value="{_esc(needle)}" placeholder="id, name, notes"></label>
-  <button type="submit">Filter</button>
-  <a class="button" href="/records">Reset</a>
+  <label>{_t("Type")}
+    <select name="type"><option value="">{_t("All types")}</option>{type_options}</select>
+  </label>
+  <label>{_t("Status")}
+    <input name="status" value="{_esc(status)}" placeholder="{_t("confirmed")}">
+  </label>
+  <label>{_t("Search")}
+    <input name="q" value="{_esc(needle)}" placeholder="{_t("id, name, notes")}">
+  </label>
+  <button type="submit">{_t("Filter")}</button>
+  <a class="button" href="/records">{_t("Reset")}</a>
 </form>
 {table}
 """
-    return _layout("Records", body)
+    return _layout(_t("Records"), body)
 
 
 def render_record_detail(root: Path, record_id: str) -> tuple[int, str]:
@@ -342,9 +530,10 @@ def render_record_detail(root: Path, record_id: str) -> tuple[int, str]:
     )
     if match is None:
         return 404, _layout(
-            "Not found",
-            f"<h1>Record not found</h1><p>{_esc(record_id or '(empty id)')}</p>"
-            '<p><a class="button" href="/records">Back to records</a></p>',
+            _t("Not found"),
+            f"<h1>{_t('Record not found')}</h1>"
+            f"<p>{_esc(record_id or _t('(empty id)'))}</p>"
+            f'<p><a class="button" href="/records">{_t("Back to records")}</a></p>',
         )
 
     path, data = match
@@ -363,17 +552,17 @@ def render_record_detail(root: Path, record_id: str) -> tuple[int, str]:
     visibility = data.get("visibility")
     visibility_badge = f'<span class="badge">{_esc(visibility)}</span>' if visibility else ""
     body = f"""
-<p><a class="button" href="/records">Back to records</a></p>
+<p><a class="button" href="/records">{_t("Back to records")}</a></p>
 <h1>{_esc(name)}</h1>
-<p><span class="badge">{_esc(data.get("type") or "unknown")}</span>
+<p><span class="badge">{_esc(data.get("type") or _t("unknown"))}</span>
 {_status_badge(data.get("status"))} {visibility_badge}</p>
 <p class="muted">{_esc(record_id)} · {_esc(_relative_label(root, path))}</p>
 {_warning_block(load_errors)}
-<h2>References</h2>
+<h2>{_t("References")}</h2>
 {_record_links(references, known_ids)}
-<h2>Referenced by</h2>
+<h2>{_t("Referenced by")}</h2>
 {_record_links(backlinks, known_ids)}
-<h2>Record JSON</h2>
+<h2>{_t("Record JSON")}</h2>
 <pre>{_esc(json.dumps(data, indent=2, ensure_ascii=False))}</pre>
 """
     return 200, _layout(record_id, body)
@@ -385,9 +574,10 @@ def render_timeline(root: Path, query: str = "") -> tuple[int, str]:
     known_ids = _known_ids(records)
     if record_id and record_id not in known_ids:
         return 404, _layout(
-            "Timeline not found",
-            f"<h1>Unknown record</h1><p>{_esc(record_id)}</p>"
-            '<p><a class="button" href="/timeline">Back to archive timeline</a></p>',
+            _t("Timeline not found"),
+            f"<h1>{_t('Unknown record')}</h1><p>{_esc(record_id)}</p>"
+            f'<p><a class="button" href="/timeline">'
+            f"{_t('Back to archive timeline')}</a></p>",
         )
 
     entries = build_timeline(root, record_id or None)
@@ -410,32 +600,32 @@ def render_timeline(root: Path, query: str = "") -> tuple[int, str]:
         )
 
     scope = record_id or "archive"
-    table = f'<p class="muted">No timeline entries for {_esc(scope)}.</p>'
+    table = f'<p class="muted">{_t("No timeline entries for {scope}.", scope=scope)}</p>'
     if rows:
         table = (
-            "<table><thead><tr><th>Valid time</th><th>Assertion</th><th>Subject</th>"
-            "<th>Predicate</th><th>Object</th><th>Status</th>"
-            "<th>Transaction time</th><th>Evidence</th></tr></thead><tbody>"
-            + "".join(rows)
-            + "</tbody></table>"
+            f"<table><thead><tr><th>{_t('Valid time')}</th>"
+            f"<th>{_t('Assertion')}</th><th>{_t('Subject')}</th>"
+            f"<th>{_t('Predicate')}</th><th>{_t('Object')}</th>"
+            f"<th>{_t('Status')}</th><th>{_t('Transaction time')}</th>"
+            f"<th>{_t('Evidence')}</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
         )
 
     body = f"""
-<h1>Timeline</h1>
+<h1>{_t("Timeline")}</h1>
 <p class="muted">
-Read-only timeline derived from open assertions. Scope: {_esc(scope)}.
+{_t("Read-only timeline derived from open assertions. Scope: {scope}.", scope=scope)}
 </p>
 {_warning_block(load_errors)}
 <form class="filters" method="get" action="/timeline">
-  <label>Record ID
+  <label>{_t("Record ID")}
     <input name="id" value="{_esc(record_id)}"
            placeholder="person:... / place:... / collection:..."></label>
-  <button type="submit">Show timeline</button>
-  <a class="button" href="/timeline">Archive timeline</a>
+  <button type="submit">{_t("Show timeline")}</button>
+  <a class="button" href="/timeline">{_t("Archive timeline")}</a>
 </form>
 {table}
 """
-    return 200, _layout("Timeline", body)
+    return 200, _layout(_t("Timeline"), body)
 
 
 def render_genogram(root: Path, query: str = "") -> tuple[int, str]:
@@ -444,23 +634,23 @@ def render_genogram(root: Path, query: str = "") -> tuple[int, str]:
     known_ids = _known_ids(records)
     form = f"""
 <form class="filters" method="get" action="/genogram">
-  <label>Person ID
+  <label>{_t("Person ID")}
     <input name="id" value="{_esc(person_id)}" placeholder="person:..."></label>
-  <button type="submit">Show genogram</button>
+  <button type="submit">{_t("Show genogram")}</button>
 </form>
 """
     if not person_id:
         return 400, _layout(
-            "Genogram",
-            "<h1>Genogram</h1>"
-            '<p class="muted">Experimental relationship view. Provide a person ID.</p>'
-            f"{_errors_block(['Provide a person ID'])}{form}",
+            _t("Genogram"),
+            f"<h1>{_t('Genogram')}</h1>"
+            f'<p class="muted">{_t("Experimental relationship view. Provide a person ID.")}</p>'
+            f"{_errors_block([_t('Provide a person ID')])}{form}",
         )
     if person_id not in known_ids:
         return 404, _layout(
-            "Genogram not found",
-            f"<h1>Unknown record</h1><p>{_esc(person_id)}</p>"
-            '<p><a class="button" href="/genogram">Back to genogram</a></p>',
+            _t("Genogram not found"),
+            f"<h1>{_t('Unknown record')}</h1><p>{_esc(person_id)}</p>"
+            f'<p><a class="button" href="/genogram">{_t("Back to genogram")}</a></p>',
         )
 
     result = build_genogram(root, person_id)
@@ -468,9 +658,9 @@ def render_genogram(root: Path, query: str = "") -> tuple[int, str]:
     for relation in result["relations"]:
         supported = relation.get("supported")
         supported_badge = (
-            '<span class="badge">supported</span>'
+            f'<span class="badge">{_t("supported")}</span>'
             if supported
-            else '<span class="badge">unsupported</span>'
+            else f'<span class="badge">{_t("unsupported")}</span>'
         )
         related = relation.get("related_ids") or []
         valid_cell = _interval_cell(relation.get("valid_time"), relation.get("valid_times") or [])
@@ -491,79 +681,91 @@ def render_genogram(root: Path, query: str = "") -> tuple[int, str]:
             "</tr>"
         )
 
-    table = f'<p class="muted">No relations for {_esc(person_id)}.</p>'
+    table = f'<p class="muted">{_t("No relations for {person}.", person=person_id)}</p>'
     if rows:
         table = (
-            "<table><thead><tr><th>Predicate</th><th>Direction</th><th>Subject</th>"
-            "<th>Object</th><th>Supported</th><th>Source record</th>"
-            "<th>Valid time / valid_times</th>"
-            "<th>Transaction time / transaction_times</th><th>Related records</th>"
+            f"<table><thead><tr><th>{_t('Predicate')}</th>"
+            f"<th>{_t('Direction')}</th><th>{_t('Subject')}</th>"
+            f"<th>{_t('Object')}</th><th>{_t('Supported')}</th>"
+            f"<th>{_t('Source record')}</th>"
+            f"<th>{_t('Valid time / valid_times')}</th>"
+            f"<th>{_t('Transaction time / transaction_times')}</th>"
+            f"<th>{_t('Related records')}</th>"
             "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
         )
 
     body = f"""
-<h1>Genogram: {_esc(person_id)}</h1>
+<h1>{_t("Genogram: {person}", person=person_id)}</h1>
 <div class="warning">
-<strong>Experimental</strong>
-<p>This relationship view is experimental and has no temporal filter yet.
-It derives only from canonical records and never writes data.</p>
+<strong>{_t("Experimental")}</strong>
+<p>{
+        _t(
+            "This relationship view is experimental and has no temporal filter yet. "
+            "It derives only from canonical records and never writes data."
+        )
+    }</p>
 </div>
 <p class="muted">
-Read-only, derived from <code>relation:*</code> assertions and endpoint-aware
-Relationship records.
+{_t("Read-only, derived from relation:* assertions and endpoint-aware Relationship records.")}
 </p>
 {_warning_block(load_errors)}
-{_notice_block("Genogram warnings", result["warnings"])}
+{_notice_block(_t("Genogram warnings"), result["warnings"])}
 {form}
 {table}
 """
-    return 200, _layout(f"Genogram {person_id}", body)
+    return 200, _layout(_t("Genogram {person}", person=person_id), body)
 
 
 def render_list(root: Path) -> str:
     body = (
-        "<h1>Proposals</h1>"
-        '<p><a class="button primary" href="/proposals/new">New proposal</a> '
-        '<a class="button" href="/proposals/generate">Generate with Ollama</a></p>'
+        f"<h1>{_t('Proposals')}</h1>"
+        f'<p><a class="button primary" href="/memories/new">{_t("Add memory")}</a> '
+        f'<a class="button" href="/proposals/new">{_t("New proposal")}</a> '
+        f'<a class="button" href="/proposals/generate">{_t("Generate with Ollama")}</a></p>'
         f"{_proposal_rows(root)}"
     )
-    return _layout("Proposals", body)
+    return _layout(_t("Proposals"), body)
 
 
 def _new_form(value: str = "", errors: list[str] | None = None) -> str:
     body = f"""
-<h1>New proposal</h1>
+<h1>{_t("New proposal")}</h1>
 <p class="muted">
-Paste a proposal JSON object. It is saved as pending only; approval is a separate action.
+{_t("Paste a proposal JSON object. It is saved as pending only; approval is a separate action.")}
 </p>
 {_errors_block(errors or [])}
 <form method="post" action="/proposals/new">
 <textarea name="json" spellcheck="false">{_esc(value)}</textarea>
 <p>
-  <button class="primary" type="submit">Save pending proposal</button>
-  <a class="button" href="/proposals">Cancel</a>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
 </p>
 </form>
 """
-    return _layout("New proposal", body)
+    return _layout(_t("New proposal"), body)
 
 
 def _edit_form(proposal_id: str, value: str = "", errors: list[str] | None = None) -> str:
     body = f"""
-<h1>Edit proposal</h1>
+<h1>{_t("Edit proposal")}</h1>
 <p class="muted">
-Editing {_esc(proposal_id)}. The proposal ID cannot change; saving replaces the pending JSON.
+{
+        _t(
+            "Editing {id}. The proposal ID cannot change; saving replaces the pending JSON.",
+            id=proposal_id,
+        )
+    }
 </p>
 {_errors_block(errors or [])}
 <form method="post" action="/proposals/{quote(proposal_id, safe="")}/edit">
 <textarea name="json" spellcheck="false">{_esc(value)}</textarea>
 <p>
-  <button class="primary" type="submit">Save pending proposal</button>
-  <a class="button" href="/proposals/{quote(proposal_id, safe="")}">Cancel</a>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/{quote(proposal_id, safe="")}">{_t("Cancel")}</a>
 </p>
 </form>
 """
-    return _layout(f"Edit {proposal_id}", body)
+    return _layout(_t("Edit {id}", id=proposal_id), body)
 
 
 def render_generate_form(
@@ -577,32 +779,35 @@ def render_generate_form(
         config = provider_config(provider, model, base_url)
     except LLMAdapterError:
         config = ProviderConfig(provider=provider or "ollama")
+    intro = _t(
+        "A local model turns source text into a pending proposal. It cannot approve "
+        "or write canonical data; review the dry-run first. Set "
+        "STORYGRAM_LLM_API_KEY in the server environment for providers that require a key."
+    )
     body = f"""
-<h1>Generate proposal</h1>
+<h1>{_t("Generate proposal")}</h1>
 <p class="muted">
-A local model turns source text into a pending proposal. It cannot approve or
-write canonical data; review the dry-run first. Set <code>STORYGRAM_LLM_API_KEY</code>
-in the server environment for providers that require a key.
+{intro}
 </p>
 {_errors_block(errors or [])}
 <form method="post" action="/proposals/generate">
 <textarea name="source" spellcheck="false"
- placeholder="Paste an interview, note or memory...">{_esc(source)}</textarea>
+ placeholder="{_t("Paste an interview, note or memory...")}">{_esc(source)}</textarea>
 <p>
-<label>Provider
+<label>{_t("Provider")}
 <input name="provider" value="{_esc(config.provider)}" style="padding:6px"></label>
-<label>Model
+<label>{_t("Model")}
 <input name="model" value="{_esc(config.model)}" style="padding:6px"></label>
-<label>LLM URL
+<label>{_t("LLM URL")}
 <input name="url" value="{_esc(config.base_url)}" style="padding:6px; width:20rem"></label>
 </p>
 <p>
-  <button class="primary" type="submit">Generate pending proposal</button>
-  <a class="button" href="/proposals">Cancel</a>
+  <button class="primary" type="submit">{_t("Generate pending proposal")}</button>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
 </p>
 </form>
 """
-    return _layout("Generate proposal", body)
+    return _layout(_t("Generate proposal"), body)
 
 
 def _status_is_open(status: Any) -> bool:
@@ -612,11 +817,14 @@ def _status_is_open(status: Any) -> bool:
 def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None) -> tuple[int, str]:
     path = proposals_mod.find_proposal(root, proposal_id, include_applied=True)
     if path is None:
-        return 404, _layout("Not found", f"<h1>Not found</h1><p>{_esc(proposal_id)}</p>")
+        return 404, _layout(
+            _t("Not found"), f"<h1>{_t('Not found')}</h1><p>{_esc(proposal_id)}</p>"
+        )
     data = proposals_mod._load_json(path)
     if data is None:
         return 500, _layout(
-            "Invalid proposal", f"<h1>Invalid proposal</h1><p>{_esc(proposal_id)}</p>"
+            _t("Invalid proposal"),
+            f"<h1>{_t('Invalid proposal')}</h1><p>{_esc(proposal_id)}</p>",
         )
 
     plan_html = ""
@@ -632,36 +840,36 @@ def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None)
                 f"<li>{_esc(file)}</li>" for file in sorted(str(p) for p in plan.writes)
             )
             plan_html = f"""
-<h2>Dry-run preview</h2>
+<h2>{_t("Dry-run preview")}</h2>
 <ul>{operations}</ul>
-<p class="muted">Files</p><ul>{files}</ul>
+<p class="muted">{_t("Files")}</p><ul>{files}</ul>
 <form method="post" action="/proposals/{quote(proposal_id, safe="")}/approve">
-<button class="primary" name="commit" value="yes" type="submit">Approve and commit</button>
-<button name="commit" value="no" type="submit">Approve without commit</button>
+<button class="primary" name="commit" value="yes" type="submit">{_t("Approve and commit")}</button>
+<button name="commit" value="no" type="submit">{_t("Approve without commit")}</button>
 </form>
 <form method="post" action="/proposals/{quote(proposal_id, safe="")}/reject">
 <p>
-<input name="reason" placeholder="Rejection reason (optional)"
+<input name="reason" placeholder="{_t("Rejection reason (optional)")}"
        style="width:70%; padding:6px">
 </p>
-<button type="submit">Reject</button>
+<button type="submit">{_t("Reject")}</button>
 </form>
 <form method="post" action="/proposals/{quote(proposal_id, safe="")}/withdraw">
 <p>
-<input name="reason" placeholder="Withdrawal reason (optional)"
+<input name="reason" placeholder="{_t("Withdrawal reason (optional)")}"
        style="width:70%; padding:6px">
 </p>
-<button type="submit">Withdraw</button>
+<button type="submit">{_t("Withdraw")}</button>
 </form>
 """
         except proposals_mod.ProposalError as exc:
-            plan_html = f"<h2>Dry-run preview</h2>{_errors_block(exc.errors)}"
+            plan_html = f"<h2>{_t('Dry-run preview')}</h2>{_errors_block(exc.errors)}"
 
     edit_link = ""
     if path.parent == proposals_mod.pending_dir(root) and _status_is_open(data.get("status")):
         edit_link = (
             f'<a class="button" href="/proposals/{quote(proposal_id, safe="")}/edit">'
-            "Edit pending proposal</a> "
+            f"{_t('Edit pending proposal')}</a> "
         )
 
     body = f"""
@@ -672,9 +880,9 @@ def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None)
 </p>
 {_errors_block(errors or [])}
 {plan_html}
-<h2>Proposal JSON</h2>
+<h2>{_t("Proposal JSON")}</h2>
 <pre>{_esc(json.dumps(data, indent=2))}</pre>
-<p>{edit_link}<a class="button" href="/proposals">Back</a></p>
+<p>{edit_link}<a class="button" href="/proposals">{_t("Back")}</a></p>
 """
     return 200, _layout(str(data.get("id")), body)
 
@@ -695,6 +903,20 @@ class StorygramHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         print(f"[web] {self.address_string()} {fmt % args}")
 
+    def _cookie_language(self) -> str | None:
+        raw = self.headers.get("Cookie", "")
+        for part in raw.split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == "storygram_lang":
+                return normalize_language(value)
+        return None
+
+    def _prepare_context(self, parsed: Any) -> None:
+        query_language = _query_value(parsed.query, "lang")
+        set_language(query_language or self._cookie_language())
+        path = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+        set_path(path)
+
     def _send(self, status: int, body: str, content_type: str = "text/html; charset=utf-8") -> None:
         encoded = body.encode("utf-8")
         self.send_response(status)
@@ -704,9 +926,11 @@ class StorygramHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
-    def _redirect(self, location: str) -> None:
+    def _redirect(self, location: str, headers: dict[str, str] | None = None) -> None:
         self.send_response(303)
         self.send_header("Location", location)
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
 
     def _send_json(
@@ -963,8 +1187,23 @@ class StorygramHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        self._prepare_context(parsed)
         if path.startswith("/api/"):
             self._handle_api("GET", path, parsed.query)
+            return
+        if path.startswith("/lang/"):
+            language = normalize_language(path.removeprefix("/lang/"))
+            next_path = _query_value(parsed.query, "next") or "/"
+            if not next_path.startswith("/") or next_path.startswith("//"):
+                next_path = "/"
+            parts = urlsplit(next_path)
+            next_query = parse_qs(parts.query, keep_blank_values=True)
+            next_query.pop("lang", None)
+            next_path = urlunsplit(
+                ("", "", parts.path, urlencode(next_query, doseq=True), parts.fragment)
+            )
+            cookie = f"storygram_lang={language}; Path=/; SameSite=Lax; Max-Age=31536000"
+            self._redirect(next_path, {"Set-Cookie": cookie})
             return
         if path == "/":
             self._send(200, render_home(self.root))
@@ -988,6 +1227,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/proposals":
             self._send(200, render_list(self.root))
             return
+        if path == "/memories/new":
+            self._send(200, render_memory_form())
+            return
         if path == "/proposals/new":
             self._send(200, _new_form())
             return
@@ -1003,13 +1245,18 @@ class StorygramHandler(BaseHTTPRequestHandler):
                     self._send(
                         409,
                         _layout(
-                            "Cannot edit",
-                            f"<h1>Cannot edit applied proposal</h1><p>{_esc(proposal_id)}</p>",
+                            _t("Cannot edit"),
+                            f"<h1>{_t('Cannot edit applied proposal')}</h1>"
+                            f"<p>{_esc(proposal_id)}</p>",
                         ),
                     )
                 else:
                     self._send(
-                        404, _layout("Not found", f"<h1>Not found</h1><p>{_esc(proposal_id)}</p>")
+                        404,
+                        _layout(
+                            _t("Not found"),
+                            f"<h1>{_t('Not found')}</h1><p>{_esc(proposal_id)}</p>",
+                        ),
                     )
                 return
             data = proposals_mod._load_json(pending)
@@ -1017,8 +1264,8 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 self._send(
                     409,
                     _layout(
-                        "Cannot edit",
-                        f"<h1>Proposal is not editable</h1><p>{_esc(proposal_id)}</p>",
+                        _t("Cannot edit"),
+                        f"<h1>{_t('Proposal is not editable')}</h1><p>{_esc(proposal_id)}</p>",
                     ),
                 )
                 return
@@ -1029,18 +1276,45 @@ class StorygramHandler(BaseHTTPRequestHandler):
             status, body = render_detail(self.root, proposal_id)
             self._send(status, body)
             return
-        self._send(404, _layout("Not found", "<h1>Not found</h1>"))
+        self._send(404, _layout(_t("Not found"), f"<h1>{_t('Not found')}</h1>"))
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        self._prepare_context(parsed)
         if path.startswith("/api/"):
             self._handle_api("POST", path, parsed.query)
             return
         try:
             form = self._read_form()
         except ValueError as exc:
-            self._send(413, _layout("Bad request", _errors_block([str(exc)])))
+            self._send(413, _layout(_t("Bad request"), _errors_block([_t(str(exc))])))
+            return
+
+        if path == "/memories/new":
+            values = {
+                key: (form.get(key) or [""])[0]
+                for key in (
+                    "title",
+                    "episode_type",
+                    "captured_at",
+                    "text",
+                    "participants",
+                    "tags",
+                    "visibility",
+                )
+            }
+            proposal, errors = _memory_proposal(self.root, values)
+            if proposal is None:
+                self._send(400, render_memory_form(values, errors))
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(400, render_memory_form(values, exc.errors))
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
             return
 
         if path == "/proposals/generate":
@@ -1053,7 +1327,7 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 self._send(
                     400,
                     render_generate_form(
-                        source, ["Source text is empty"], model, base_url, provider_name
+                        source, [_t("Source text is empty")], model, base_url, provider_name
                     ),
                 )
                 return
@@ -1088,10 +1362,16 @@ class StorygramHandler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(raw)
             except Exception as exc:
-                self._send(400, _edit_form(edit_id, raw, [f"Invalid JSON: {exc}"]))
+                self._send(
+                    400,
+                    _edit_form(edit_id, raw, [_t("Invalid JSON: {error}", error=exc)]),
+                )
                 return
             if not isinstance(data, dict):
-                self._send(400, _edit_form(edit_id, raw, ["Proposal must be a JSON object"]))
+                self._send(
+                    400,
+                    _edit_form(edit_id, raw, [_t("Proposal must be a JSON object")]),
+                )
                 return
             try:
                 proposals_mod.update_pending(self.root, edit_id, data)
@@ -1109,10 +1389,10 @@ class StorygramHandler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(raw)
             except Exception as exc:
-                self._send(400, _new_form(raw, [f"Invalid JSON: {exc}"]))
+                self._send(400, _new_form(raw, [_t("Invalid JSON: {error}", error=exc)]))
                 return
             if not isinstance(data, dict):
-                self._send(400, _new_form(raw, ["Proposal must be a JSON object"]))
+                self._send(400, _new_form(raw, [_t("Proposal must be a JSON object")]))
                 return
             try:
                 proposals_mod.create_pending(self.root, data)
@@ -1159,15 +1439,19 @@ class StorygramHandler(BaseHTTPRequestHandler):
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
             return
 
-        self._send(404, _layout("Not found", "<h1>Not found</h1>"))
+        self._send(404, _layout(_t("Not found"), f"<h1>{_t('Not found')}</h1>"))
 
     def do_PUT(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        self._prepare_context(parsed)
         if path.startswith("/api/"):
             self._handle_api("PUT", path, parsed.query)
             return
-        self._send(405, _layout("Method not allowed", "<h1>Method not allowed</h1>"))
+        self._send(
+            405,
+            _layout(_t("Method not allowed"), f"<h1>{_t('Method not allowed')}</h1>"),
+        )
 
 
 def create_server(

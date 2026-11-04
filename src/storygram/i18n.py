@@ -97,10 +97,19 @@ ITALIAN: dict[str, str] = {
         "Manifest checksummati per i file media conservati fuori da Git."
     ),
     "Add conflict": "Aggiungi conflitto",
+    "Add media asset": "Aggiungi risorsa media",
+    "New media asset": "Nuova risorsa media",
+    "Created from the Add media asset form.": ("Creata dal modulo Aggiungi risorsa media."),
+    "Optional notes about this media asset": "Note opzionali su questa risorsa media",
     "Add an explicit conflict as a pending proposal. It enters canonical data "
     "only after a human approves the proposal.": (
         "Aggiungi un conflitto esplicito come proposta in attesa. Entra nei "
         "dati canonici solo dopo l'approvazione umana della proposta."
+    ),
+    "Add a media asset as a pending proposal. It enters canonical data only "
+    "after a human approves the proposal.": (
+        "Aggiungi una risorsa media come proposta in attesa. Entra nei dati "
+        "canonici solo dopo l'approvazione umana della proposta."
     ),
     "At least two assertions are required": "Sono richieste almeno due asserzioni",
     "Unsupported relation: {value}": "Relazione non supportata: {value}",

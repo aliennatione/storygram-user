@@ -122,7 +122,8 @@ Last updated: 2026-11-04
 - `7566049`: `media add|list` writes content-addressed checksummed manifest entries under `media-manifest/` (URI, SHA-256, MIME, size, visibility, acquisition metadata) without copying media or touching `data/`.
 - `7a8c03e`: Firefox E2E now covers source and assertion forms in addition to memory/person/relationship.
 - New forms: `/annotations/new` (Annotation: targets + evidence, evidence mapped into episode_ids/source_ids), `/narratives/new` (Narrative: author/language/perspective/content_location/related records), `/conflicts/new` (Conflict: assertions + relation/reason/status), and a read-only `/media` page listing checksummed manifest entries. Collection is now part of the generic entity form.
-- Current baseline: `176 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
+- Follow-up: `/media-assets/new` (and aliases `/media/new`, `/mediaassets/new`) creates a pending MediaAsset proposal with visibility, notes and required evidence. Nav links and i18n added. Baseline now 177 passed.
+- Current baseline: `177 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
 - Final container smoke test after the annotation/narrative/conflict/media unit: image rebuilt, project `storygram-final` on port 18080 reached `healthy`, and `/annotations/new`, `/narratives/new`, `/conflicts/new`, `/media` all returned 200 with their titles. Test project, volume and image removed.
 
 ## Current Usable Flows
@@ -133,7 +134,7 @@ Last updated: 2026-11-04
 ## Resume Checklist After a Fresh Container
 
 1. `pip install --break-system-packages -e ".[dev]"`.
-2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `176 passed`).
+2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `177 passed`).
 3. `ruff check src tests && ruff format --check src tests && mypy src`.
 4. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` if `node_modules` is missing.
 5. `apk add chromium firefox geckodriver` for both browser flows; `npm run test:e2e:all`.

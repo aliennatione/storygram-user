@@ -2110,3 +2110,54 @@ def test_web_media_page_lists_registered_entries(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_web_add_media_asset_creates_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Family memory."},
+            },
+        )
+
+        status, body = post(
+            base + "/media-assets/new",
+            {
+                "visibility": "family",
+                "notes": "A media asset note.",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 200, body
+        assert "Dry-run preview" in body
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        record = proposal["operations"][0]["record"]
+        assert record["type"] == "MediaAsset"
+        assert record["visibility"] == "family"
+        assert record["notes"] == "A media asset note."
+        assert record["id"].startswith("media:")
+        assert not list((tmp_path / "data" / "media-assets").glob("*.json"))
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal['id'], safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200, body
+        assert "merged" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

@@ -217,6 +217,7 @@ form input, form select {{
     <a href="/annotations/new">{_t("Add annotation")}</a>
     <a href="/narratives/new">{_t("Add narrative")}</a>
     <a href="/conflicts/new">{_t("Add conflict")}</a>
+    <a href="/media-assets/new">{_t("Add media asset")}</a>
     <a href="/media">{_t("Media")}</a>
     <a href="/proposals/new">{_t("New proposal")}</a>
     <a href="/proposals/generate">{_t("Generate")}</a>
@@ -450,6 +451,7 @@ def render_home(root: Path) -> str:
   <a class="button" href="/annotations/new">{_t("Add annotation")}</a>
   <a class="button" href="/narratives/new">{_t("Add narrative")}</a>
   <a class="button" href="/conflicts/new">{_t("Add conflict")}</a>
+  <a class="button" href="/media-assets/new">{_t("Add media asset")}</a>
   <a class="button" href="/media">{_t("Media")}</a>
   <a class="button" href="/proposals/new">{_t("Create proposal")}</a>
   <a class="button" href="/proposals/generate">{_t("Generate with Ollama")}</a>
@@ -1798,6 +1800,109 @@ def render_conflict_form(
     return _layout(_t("Add conflict"), body)
 
 
+def _media_asset_proposal(
+    root: Path, values: dict[str, str], evidence: list[str]
+) -> tuple[dict[str, Any] | None, list[str]]:
+    visibility = values.get("visibility", "").strip()
+    notes = values.get("notes", "").strip()
+    evidence = list(dict.fromkeys(item for item in evidence if item))
+
+    known_evidence = {record_id for record_id, _, _ in _evidence_records(root)}
+    errors: list[str] = []
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    if not evidence:
+        errors.append(_t("Evidence is required"))
+    for record_id in evidence:
+        if record_id not in known_evidence:
+            errors.append(_t("Unknown evidence: {value}", value=record_id))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    record: dict[str, Any] = {
+        "id": f"media:asset-{token}",
+        "type": "MediaAsset",
+        "status": "reported",
+        "created_at": now,
+        "updated_at": now,
+    }
+    if visibility:
+        record["visibility"] = visibility
+    if notes:
+        record["notes"] = notes
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["MediaAsset"])
+    if record_errors:
+        return None, record_errors
+
+    proposal = {
+        "id": f"proposal:media-asset-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t("New media asset"),
+        "rationale": _t("Created from the Add media asset form."),
+        "operations": [
+            {
+                "op": "create",
+                "record_type": "MediaAsset",
+                "record": record,
+                "evidence": evidence,
+            }
+        ],
+    }
+    return proposal, []
+
+
+def render_media_asset_form(
+    root: Path,
+    values: dict[str, str] | None = None,
+    errors: list[str] | None = None,
+    selected_evidence: list[str] | None = None,
+) -> str:
+    values = values or {}
+    visibility = values.get("visibility") or ""
+    notes_value = _esc(values.get("notes", ""))
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    evidence_block = _evidence_fieldset(root, selected_evidence)
+    intro = _t(
+        "Add a media asset as a pending proposal. It enters canonical data only "
+        "after a human approves the proposal."
+    )
+    body = f"""
+<h1>{_t("Add media asset")}</h1>
+<p class="muted">{intro}</p>
+{_errors_block(errors or [])}
+<form method="post" action="/media-assets/new">
+<p>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true"
+    placeholder="{_t("Optional notes about this media asset")}">{notes_value}</textarea>
+</label>
+{evidence_block}
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add media asset"), body)
+
+
 def render_memory_form(
     values: dict[str, str] | None = None, errors: list[str] | None = None
 ) -> str:
@@ -3001,6 +3106,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/narratives/new":
             self._send(200, render_narrative_form(self.root))
             return
+        if path in {"/media/new", "/media-assets/new", "/mediaassets/new"}:
+            self._send(200, render_media_asset_form(self.root))
+            return
         if path == "/proposals/new":
             self._send(200, _new_form())
             return
@@ -3288,6 +3396,25 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 self._send(
                     400, render_conflict_form(self.root, values, exc.errors, assertions, evidence)
                 )
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path in {"/media/new", "/media-assets/new", "/mediaassets/new"}:
+            values = {
+                "visibility": (form.get("visibility") or [""])[0],
+                "notes": (form.get("notes") or [""])[0],
+            }
+            evidence = form.get("evidence") or []
+            proposal, errors = _media_asset_proposal(self.root, values, evidence)
+            if proposal is None:
+                self._send(400, render_media_asset_form(self.root, values, errors, evidence))
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(400, render_media_asset_form(self.root, values, exc.errors, evidence))
                 return
             proposal_id = str(proposal["id"])
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")

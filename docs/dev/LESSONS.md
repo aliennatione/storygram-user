@@ -164,3 +164,5 @@
 - Filter selectable entities to active records and validate them server-side; a disabled option or missing select value is not validation.
 - Reject identical relationship endpoints and unsupported predicates before creating a proposal. Early validation keeps the review queue clean.
 - Omit empty optional temporal fields instead of storing empty strings; schema-valid emptiness and meaningful absence are different.
+- Distinguish evidence records from semantic claims when setting `evidence_required`. A Source is evidence and should be creatable on its own; a Person or Relationship is a claim and needs evidence.
+- Cover standalone evidence import as well as form creation; otherwise the registry flag can regress only on one path.

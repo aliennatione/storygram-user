@@ -37,7 +37,7 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-The web UI exposes the same engine, including a read-only **Records** browser with type/status/visibility/text filters and JSON/JSON-LD/YAML/Markdown export downloads for the current filter, record detail with raw JSON plus reference and backlink links, an **Add memory** form that creates pending Episode proposals, **Add person** and **Add relationship** forms that create evidence-backed pending proposals, a **Generate** page for local/Ollama or OpenAI-compatible models and an edit link for pending proposals. The header switches the interface between English and Italian:
+The web UI exposes the same engine, including a read-only **Records** browser with type/status/visibility/text filters and JSON/JSON-LD/YAML/Markdown export downloads for the current filter, record detail with raw JSON plus reference and backlink links, an **Add memory** form that creates pending Episode proposals, **Add source**, **Add person** and **Add relationship** forms that create pending evidence records or evidence-backed proposals, a **Generate** page for local/Ollama or OpenAI-compatible models and an edit link for pending proposals. The header switches the interface between English and Italian:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080

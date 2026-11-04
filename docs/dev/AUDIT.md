@@ -556,10 +556,11 @@ Make the local web UI comfortably usable by a human for adding a memory, with En
 - Extended the Playwright Chromium flow with the Add memory form, Italian home rendering and approval of the generated Episode.
 - Added `tests/e2e/firefox.mjs` using system Firefox plus WebDriver/geckodriver; it covers the bilingual home, Add memory form, pending proposal, approval and records search.
 - Added `npm run test:e2e:firefox` and `npm run test:e2e:all`; documented the Alpine prerequisites `firefox` and `geckodriver`.
-- Checks: `153 passed`; ruff, format and mypy clean; Chromium Playwright flow passed; Firefox WebDriver flow passed.
+- Checks: `156 passed`; ruff, format and mypy clean; Chromium Playwright flow passed; Firefox WebDriver flow passed.
 - Follow-up fix `f416922`: the schema format check now enforces RFC3339 date-time and date values, including `captured_at`, `created_at` and `updated_at`. Regression tests cover invalid dates, timezone-less timestamps and the Add memory form.
 - Follow-up `04d0f16`: the Records browser filters by visibility and exports the current filter as JSON, JSON-LD, YAML or Markdown through `GET /export`; invalid formats/visibilities return 400. Integration and Chromium E2E cover both.
 - Follow-ups `2a1e24c`, `a198d95`, `ea150f6`: Add person and Add relationship forms create pending proposals only. Both require existing Episode/Source/Annotation evidence; relationships use the genogram-supported predicates and preserve optional valid-time intervals. Integration tests cover creation, approval, validation and Italian rendering; Chromium E2E covers both forms end to end.
+- Follow-ups `bbdf268`, `fd410ad`: the Add source form creates pending Source proposals. Source creation no longer requires prior evidence because a Source is itself evidence; import and web tests approve standalone sources.
 
 ### Calibration
 

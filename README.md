@@ -19,7 +19,7 @@ Open `http://localhost:8080`, browse canonical records read-only, then paste or 
 
 The **Records** page filters by type, status, visibility or text and opens a read-only detail with raw JSON plus reference and backlink links. The same filters drive JSON, JSON-LD, YAML and Markdown export downloads from `/export`; the page exposes no write route, so canonical changes still require a proposal and human approval.
 
-The **Add memory** form turns free text into a pending Episode proposal with an optional title, date, participants, tags and visibility. The **Add person** and **Add relationship** forms create evidence-backed pending proposals for people and family relationships, including optional valid-time intervals. They never write canonical data; approval is still required. The interface is available in English and Italian through the EN/IT switch in the header.
+The **Add memory** form turns free text into a pending Episode proposal with an optional title, date, participants, tags and visibility. The **Add source** form registers documentary or oral evidence, and the **Add person** and **Add relationship** forms create evidence-backed pending proposals for people and family relationships, including optional valid-time intervals. They never write canonical data; approval is still required. The interface is available in English and Italian through the EN/IT switch in the header.
 
 The **Timeline** page renders archive-level or entity/place/collection timelines from open assertions, with links to assertions, records and evidence. The **Genogram** page is an experimental, read-only relationship view with supported-predicate badges, warnings, and both representative and aggregated temporal intervals. Neither page exposes a write route.
 

@@ -288,3 +288,10 @@
 - Subject and object are selected from active Person records. The form rejects identical endpoints, unknown people, unsupported predicates, invalid visibility and missing evidence before writing.
 - Optional `valid_time` is preserved as start/end/precision. Empty temporal fields are omitted rather than stored as empty strings.
 - Both forms create pending proposals only. They do not write canonical data or auto-approve, preserving the human gate.
+
+## Standalone Source Creation (2026-11-04)
+
+- Source records are evidence, not semantic claims. They no longer require prior Episode/Source/Annotation evidence, so a human or importer can register a standalone register, interview or document.
+- The Add source form creates a pending Source proposal with title, optional source type, visibility and notes. Approval still goes through the normal proposal planner.
+- Sources remain `is_evidence=True`, so they can support later Person, Relationship and Assertion proposals.
+- Annotation remains evidence-required because an annotation is about existing target records and needs evidence to be meaningful.

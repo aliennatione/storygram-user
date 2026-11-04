@@ -113,17 +113,18 @@ Last updated: 2026-11-04
 - `04d0f16`: the Records browser filters by visibility and offers filtered JSON, JSON-LD, YAML and Markdown downloads through `GET /export`. Export responses use the correct content type and `Content-Disposition`; invalid formats/visibilities return 400. Integration and Chromium E2E cover the filter and export path.
 - `2a1e24c`: the Add person form creates a pending Person proposal backed by at least one existing Episode/Source/Annotation evidence record.
 - `a198d95`: the Add relationship form creates a pending Relationship proposal with subject, supported `relation:*` predicate, object, optional valid-time start/end/precision, visibility and evidence. `ea150f6` extends Chromium E2E through both forms.
-- Current baseline: `153 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
+- `fd410ad`: the Add source form creates a pending Source proposal with title, source type, visibility and notes. `bbdf268` allows standalone Source creation without prior evidence: a Source is itself evidence and can support later person/relationship proposals. Import and web tests cover standalone source approval.
+- Current baseline: `156 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
 
 ## Current Usable Flows
 
-- Human web flow: open the UI, choose EN/IT, add a memory, then add people and family relationships backed by that memory, or use **Generate**; inspect the dry-run, approve/reject/withdraw, then browse **Records** with type/status/visibility/text filters, download the filtered export and open **Timeline** or **Genogram**. No browser route applies canonical data without the normal approval action.
+- Human web flow: open the UI, choose EN/IT, add a memory and/or source, then add people and family relationships backed by that evidence, or use **Generate**; inspect the dry-run, approve/reject/withdraw, then browse **Records** with type/status/visibility/text filters, download the filtered export and open **Timeline** or **Genogram**. No browser route applies canonical data without the normal approval action.
 - Agent CLI flow: `init`, `proposal new|list|show|generate|approve|reject|withdraw`, `import`, `export`, `search`, `rebuild`, `timeline`, `genogram`, `ingest episode`. Agents can create pending proposals only; approval remains human-only.
 
 ## Resume Checklist After a Fresh Container
 
 1. `pip install --break-system-packages -e ".[dev]"`.
-2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `153 passed`).
+2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `156 passed`).
 3. `ruff check src tests && ruff format --check src tests && mypy src`.
 4. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` if `node_modules` is missing.
 5. `apk add chromium firefox geckodriver` for both browser flows; `npm run test:e2e:all`.
@@ -131,7 +132,7 @@ Last updated: 2026-11-04
 
 ## Next Steps
 
-1. Continue the human GUI: add forms for sources, places/events and other common record types, then links between records and related proposals. Keep all browser write paths behind proposals.
+1. Continue the human GUI: add forms for places/events and other common record types, then links between records and related proposals. Keep all browser write paths behind proposals.
 2. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, Relationship temporal fields are modelled and all intervals are aggregated. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
 3. Re-run Python/lint/format/mypy and both browser flows after any change; keep bilingual docs in sync.
 4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.

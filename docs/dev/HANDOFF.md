@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-04
 Branch: `feature/agent-proposal-flow`
-Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, endpoint-aware Relationship records, then collection/archive timeline scopes on 2026-11-04. Use `git log --oneline -20`.
+Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, endpoint-aware Relationship records, collection/archive timeline scopes, then genogram deduplication on 2026-11-04. Use `git log --oneline -20`.
 
 ## Compacted Context
 
@@ -10,8 +10,8 @@ Recent commits: API/provider/withdraw series, legacy command hardening, local GG
 - Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `129 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
-- Relationship records now carry an optional all-or-nothing `subject`/`predicate`/`object` triple, and `genogram` reads complete records alongside `relation:*` assertions. It remains experimental.
+- Python baseline: `131 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Relationship records now carry an optional all-or-nothing `subject`/`predicate`/`object` triple, and `genogram` reads complete records alongside `relation:*` assertions, deduplicating equivalent triples. It remains experimental.
 - Export round-trips are implemented: JSON-LD/YAML/Markdown export plus reversible module parsers and tests. JSON/JSON-LD/YAML are lossless at record level; Markdown uses YAML front matter as source of truth.
 - Safe import is implemented: `storygram import FILE` wraps JSON/JSON-LD/YAML/Markdown exports in a schema-validated, create-only pending proposal. It runs the approval dry-run planner before writing and touches only `proposals/`; canonical data still requires human approval.
 - Local GGUF helpers are tracked: `scripts/download-model.sh` downloads a checksummed Qwen 1.5B Q4_K_M file by default, and `scripts/llm-up.sh` starts the `llm` llama.cpp Compose profile with a read-only model mount. The model itself is untracked. The 1.5B file is a smoke test; the 3B file is not practical on 1 CPU.
@@ -113,11 +113,20 @@ Results:
 - Tests cover archive inclusion, collection members, closed membership, CLI scope validation and the empty-archive message.
 - Checks in this unit: `129 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
 
+## Genogram Deduplication Unit (2026-11-04)
+
+- `genogram` groups relations by `(subject, predicate, object)` and emits one entry per equivalent triple.
+- A `Relationship` representative is preferred over an `Assertion`; ties within a type are resolved by sorted `record_id`.
+- Every entry includes `related_ids`, the sorted IDs of all contributing records. Existing `assertion_id`, `relationship_id`, `record_id` and `record_type` keys are preserved.
+- Distinct predicates for the same endpoints are not merged. Closed-status filtering and person scoping happen before deduplication.
+- No schema, canonical write, proposal, approval or commit behaviour changed.
+- Checks in this unit: `131 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
+
 ## Next Objective
 
 The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
 
-1. Keep `genogram` experimental until reviewed against real fixtures; timeline scopes are complete for the current model.
+1. Keep `genogram` experimental until temporal validity and real-fixture behaviour are reviewed; duplicate representations are deduplicated and timeline scopes are complete for the current model.
 2. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
 3. Keep the local GGUF helpers honest: they wire inference only. The 1.5B model is a smoke test, the 3B model is impractical on 1 CPU, and qwen3-4b is the single quality reference. Always dry-run generated proposals.
 4. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
@@ -252,7 +261,7 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 - Host bind path mismatch with the development container; the helper's `/hosttmp/...` path is not the host path.
 - LLM output can be envelope-valid but record-invalid; always dry-run. Never treat generation as approval.
 - The API key must stay in the environment; `.env` is gitignored and excluded from the build context.
-- `genogram` is experimental. It reads complete endpoint-aware Relationship records and `relation:*` assertions; bare Relationship records produce an incomplete-endpoints warning.
+- `genogram` is experimental. It reads complete endpoint-aware Relationship records and `relation:*` assertions, deduplicates equivalent triples, and warns on bare Relationship records with incomplete endpoints.
 - JSON-LD export is a minimal `@id`/`@type` projection, not a full RDF round-trip; `records_from_jsonld` reverses that projection only.
 - Markdown export treats YAML front matter as the source of truth; body-only edits are not re-imported.
 - `import` only creates pending proposals; it never writes canonical data. Records that require evidence fail the import unless an imported capture or `--evidence` is supplied.

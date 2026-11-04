@@ -122,3 +122,8 @@
 - `timeline --all` and a record ID must be mutually exclusive. A Click argument with `required=False` plus an explicit validation check prevents an accidental archive timeline.
 - An archive-level empty result is not an unknown record. Handle `--all` before the `_record_exists` lookup so an empty archive exits successfully.
 - Reuse the same closed-status filter for every timeline scope; adding a new scope must not bypass superseded/archived/rejected exclusion.
+- Deduplicate genogram relations by the exact `(subject, predicate, object)` triple, not by ID or record type. The same link can legitimately arrive as both an Assertion and a Relationship.
+- Prefer Relationship over Assertion when both describe the same triple, and resolve ties by sorted `record_id`; otherwise output depends on filesystem order.
+- Keep deduplication additive: preserve existing keys and expose every contributing ID in `related_ids` instead of dropping provenance.
+- Do not merge different predicates between the same endpoints. That would hide real conflicts rather than deduplicate representations.
+- Deduplicate after closed-status filtering and person scoping, so a closed duplicate cannot promote an otherwise hidden relation.

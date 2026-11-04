@@ -194,7 +194,7 @@
 - Relationship remains a distinct canonical type rather than being folded into Assertion: it can be referenced as an entity, while Assertions remain propositions about entities, events or relationships.
 - `genogram` now reads complete Relationship records and `relation:*` assertions. It scopes both to the requested person, skips closed relations and warns about unsupported predicates and incomplete Relationship records.
 - Output keeps the existing `assertion_id` key for assertions, adds `relationship_id` for Relationship records, and always includes `record_id` and `record_type`. This preserves existing consumers while making the source explicit.
-- Genogram stays experimental. Endpoint modelling is a prerequisite, not a promotion: duplicate representations, temporal validity and real-fixture review remain open.
+- Genogram stays experimental. Endpoint modelling is a prerequisite, not a promotion: temporal validity and real-fixture review remain open.
 - Generation continues to prefer Assertions. The prompt no longer states that Relationship has no endpoints, but still forbids model-generated Relationship records to keep the proposal path conservative.
 - This is a read-only product increment: no canonical write, proposal, approval or commit behavior changed.
 
@@ -207,3 +207,11 @@
 - Archive-level timelines include every open assertion. Closed assertions (`superseded`, `archived`, `rejected`) remain excluded in all scopes.
 - `timeline --all` succeeds on an empty archive and reports that there are no entries; an unknown record ID still fails with `Unknown record`.
 - This is a read-only product increment: no canonical write, proposal, approval or commit behavior changed.
+
+## Genogram Deduplication (2026-11-04)
+
+- Equivalent relations are grouped by the exact `(subject, predicate, object)` triple. The key deliberately excludes record type, status and evidence so an Assertion and a Relationship describing the same link collapse to one output entry.
+- A Relationship representative is preferred over an Assertion because Relationship is the dedicated canonical relation type. Ties within the same record type are resolved by sorted `record_id`, keeping output deterministic regardless of filesystem order.
+- The merged entry keeps the representative's existing keys (`assertion_id` or `relationship_id`, plus `record_id` and `record_type`) and adds `related_ids`, the sorted IDs of every contributing record. This is additive and preserves existing consumers.
+- Distinct predicates between the same endpoints remain distinct. Deduplication is not a semantic merge and does not decide which conflicting relation is true.
+- Closed-status filtering and person scoping still happen before deduplication. No schema change, canonical write, proposal, approval or commit behaviour changed.

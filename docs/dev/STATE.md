@@ -5,7 +5,7 @@ Last updated: 2026-11-04
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support, followed by collection/archive timeline scopes on 2026-11-04; see `git log --oneline -20`.
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support, followed by collection/archive timeline scopes and deterministic genogram deduplication on 2026-11-04; see `git log --oneline -20`.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
@@ -81,7 +81,7 @@ Last updated: 2026-11-04
 - `rebuild` and `search` now use an idempotent SQLite/FTS5 index with a signature check, exact ID/type matching, content fallback, deterministic ordering and reports for malformed records.
 - `conflicts` merges explicit and assertion-derived contradictions, applies status filters to both, deduplicates unordered pairs and includes both assertion records plus evidence.
 - `timeline` excludes superseded/archived/rejected assertions, sorts by valid-time start, includes evidence fields and distinguishes unknown records from known records with no entries. It now supports entity, place, collection and archive scopes.
-- `genogram` is explicitly experimental, scopes relations to `relation:*` assertions for the requested person, marks unsupported predicates and ignores unscoped Relationship records.
+- `genogram` is explicitly experimental, scopes `relation:*` assertions and endpoint-aware Relationship records to the requested person, marks unsupported predicates and warns about incomplete Relationship records.
 - `get` and `list` now accept `--archive`, matching the documented examples.
 - New tests: `test_ingest.py` CLI coverage, `test_export.py`, `test_search.py`, `test_conflicts.py`, `test_timeline.py`, `test_genogram.py`, `test_read_cli.py`.
 - 2026-11-03 export round-trip unit: `export_yaml`, `export_markdown`, `records_from_yaml`, `records_from_jsonld` and `records_from_markdown` added in `export.py`; `export --format` now accepts `yaml` and `markdown`; existing `json`/`jsonld` output is unchanged except the added parsers. `tests/integration/test_export_roundtrip.py` covers Person, Episode and Assertion round-trips, malformed parser input and CLI output parsing.
@@ -93,12 +93,12 @@ Last updated: 2026-11-04
 - Model-quality unit: `qwen3-4b` is the single reference model. The prompt now produces dry-run-valid proposals for Italian, English and short captures. The local 1.5B model remains a smoke test; the local 3B model was stopped after it produced no tokens in more than 25 minutes on 1 CPU.
 - Export round-trip unit is implemented and documented: JSON/JSON-LD/YAML/Markdown exports plus reversible module parsers.
 - Safe import and capture metadata are implemented: an export becomes a validated create-only pending proposal, and `ingest` writes a checksummed inbox sidecar.
-- Relationship records now model optional `subject`/`predicate`/`object` endpoint triples, and `genogram` reads complete Relationship records as well as `relation:*` assertions.
+- Relationship records now model optional `subject`/`predicate`/`object` endpoint triples, and `genogram` reads complete Relationship records as well as `relation:*` assertions, deduplicating equivalent triples.
 - Timelines now support entity, place, collection and archive scopes. Collection timelines include direct `relation:member_of` members.
 
 ## Next Steps
 
-1. Keep `genogram` experimental until the endpoint-aware output is reviewed against real fixtures; keep approval UI/CLI-only and consider advisory (non-applying) model review later.
+1. Keep `genogram` experimental until temporal validity and real-fixture behaviour are reviewed; duplicate representations are deduplicated. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
 3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
 4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
 5. Run the optional Ollama container profile only when network/time permit; it remains unverified.
@@ -174,9 +174,18 @@ Last updated: 2026-11-04
 - This unit is read-only for canonical data: no ingestion, proposal, approval or commit behavior changed.
 - Tests cover endpoint validation, complete/incomplete Relationship records, person scoping, closed relations and the CLI warning path. Full suite was `124 passed` for that unit.
 
+## Genogram Deduplication (2026-11-04)
+
+- `genogram` groups relations by `(subject, predicate, object)` and emits one entry per equivalent triple.
+- A `Relationship` representative is preferred over an `Assertion`; ties within a record type are resolved by sorted `record_id` for deterministic output.
+- Every entry now carries `related_ids`, the sorted list of all contributing record IDs. Representative keys such as `relationship_id` or `assertion_id` remain unchanged.
+- Distinct predicates between the same endpoints are not merged. Closed-status filtering and person scoping still apply before deduplication.
+- This unit is read-only: no schema change, canonical write, proposal, approval or commit behaviour changed.
+- Tests cover cross-type deduplication, multiple duplicate assertions, deterministic representative selection and distinct predicates. Full suite is now `131 passed`.
+
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest`: `129 passed`.
+- `PYTHONPATH=/data/src python -m pytest`: `131 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -229,7 +238,7 @@ Last updated: 2026-11-04
 - Capture MIME type is best-effort via Python `mimetypes`; unknown types are recorded as `null`.
 - `export` supports JSON, YAML, Markdown and a minimal JSON-LD projection. JSON/YAML/JSON-LD round-trip through module parsers; Markdown round-trips only through front matter.
 - `import` turns an export into a create-only pending proposal; it never writes canonical data. Records whose type requires evidence need either an imported Episode/Source/Annotation or `--evidence`; otherwise the import fails at validation.
-- `genogram` remains experimental: it now reads endpoint-aware Relationship records and `relation:*` assertions, but duplicate relation representations and real-fixture review are still open.
+- `genogram` remains experimental: it reads endpoint-aware Relationship records and `relation:*` assertions and deduplicates equivalent triples, but temporal validity and real-fixture review are still open.
 - Relationship endpoints are optional as a group; bare legacy records remain valid but produce a genogram warning because they cannot be scoped.
 - Timeline collection membership is expressed through `relation:member_of` assertions, one level deep; nested collections and Collection `member_ids` are not modelled.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.

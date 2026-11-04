@@ -419,3 +419,26 @@ Close FR-010 by extending the deterministic timeline from entity/place matches t
 1. Keep collection membership in Assertions unless a reviewed Collection membership model is introduced.
 2. Keep all timeline scopes subject to the same closed-status filter and deterministic ordering.
 3. Next product gap: keep `genogram` experimental and review duplicate relationship representations; timelines are complete for the current model.
+
+## 2026-11-04 - genogram deduplication
+
+### Current objective
+
+Remove duplicate genogram entries when the same relation is represented by both an Assertion and a Relationship, without changing canonical data or the approval gate.
+
+### Point of situation
+
+- `genogram` collected complete Relationship records first and then `relation:*` assertions, so the same triple could appear twice.
+- Relations are now grouped by exact `(subject, predicate, object)`.
+- A Relationship representative is preferred over an Assertion; ties within a type are resolved by sorted `record_id`.
+- Each merged entry includes `related_ids`, the sorted IDs of every contributing record, while preserving existing `assertion_id`/`relationship_id`/`record_id`/`record_type` keys.
+- Distinct predicates for the same endpoints remain separate. Closed-status filtering and person scoping still run before deduplication.
+- No schema, canonical write path, proposal flow, approval gate or commit behavior changed.
+- Tests cover cross-type deduplication, multiple duplicate assertions, deterministic representative selection and distinct predicates.
+- Full suite is `131 passed`; ruff, format, mypy and Playwright E2E pass.
+
+### Calibration
+
+1. Keep deduplication keyed by the exact triple; do not infer semantic equivalence between different predicates.
+2. Keep `related_ids` as the provenance trail so deduplication does not hide contributing records.
+3. Next product gap: evaluate optional temporal fields on Relationship; keep `genogram` experimental until real-fixture review.

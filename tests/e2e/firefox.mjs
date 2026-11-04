@@ -177,7 +177,39 @@ async function main() {
     await waitForText("Episode");
     assert.match(await bodyText(), new RegExp(record.id));
 
-    console.log("Firefox WebDriver e2e: bilingual home, add memory and approval passed");
+    for (const name of ["Firefox Nonna", "Firefox Nonno"]) {
+      await navigate(`${server.base}people/new`);
+      await waitForText("Add person");
+      await sendKeys(await css('input[name="name"]'), name);
+      await click(await css(`input[name="evidence"][value="${record.id}"]`));
+      await click(await xpath("//button[normalize-space()='Save pending proposal']"));
+      await waitForText("Dry-run preview");
+      await click(await xpath("//button[normalize-space()='Approve without commit']"));
+      await waitForText("merged");
+    }
+    const formPeople = readdirSync(join(root, "data", "people"))
+      .map((file) => JSON.parse(readFileSync(join(root, "data", "people", file), "utf8")))
+      .map((person) => person.id)
+      .sort();
+    assert.equal(formPeople.length, 2);
+
+    await navigate(`${server.base}relationships/new`);
+    await waitForText("Add relationship");
+    await click(await xpath(`//select[@name='subject']/option[@value='${formPeople[0]}']`));
+    await click(
+      await xpath("//select[@name='predicate']/option[@value='relation:parent']"),
+    );
+    await click(await xpath(`//select[@name='object']/option[@value='${formPeople[1]}']`));
+    await click(await css(`input[name="evidence"][value="${record.id}"]`));
+    await click(await xpath("//button[normalize-space()='Save pending proposal']"));
+    await waitForText("Dry-run preview");
+    await click(await xpath("//button[normalize-space()='Approve without commit']"));
+    await waitForText("merged");
+    assert.equal(readdirSync(join(root, "data", "relationships")).length, 1);
+
+    console.log(
+      "Firefox WebDriver e2e: bilingual home, add memory, person/relationship forms and approval passed",
+    );
   } finally {
     if (sessionId) {
       await webdriver(port, "DELETE", `/session/${sessionId}`).catch(() => {});

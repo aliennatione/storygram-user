@@ -53,6 +53,12 @@ MEMORY_EPISODE_TYPES = (
     "other",
 )
 VISIBILITIES = ("private", "restricted", "family", "public")
+ENTITY_TYPES = {
+    "Place": "place",
+    "Event": "event",
+    "Organization": "organization",
+    "Period": "period",
+}
 SOURCE_TYPES = (
     "oral",
     "written",
@@ -153,6 +159,7 @@ form input, form select {{
     <a href="/memories/new">{_t("Add memory")}</a>
     <a href="/sources/new">{_t("Add source")}</a>
     <a href="/people/new">{_t("Add person")}</a>
+    <a href="/entities/new">{_t("Add entity")}</a>
     <a href="/relationships/new">{_t("Add relationship")}</a>
     <a href="/proposals/new">{_t("New proposal")}</a>
     <a href="/proposals/generate">{_t("Generate")}</a>
@@ -367,6 +374,7 @@ def render_home(root: Path) -> str:
   <a class="button primary" href="/memories/new">{_t("Add memory")}</a>
   <a class="button" href="/sources/new">{_t("Add source")}</a>
   <a class="button" href="/people/new">{_t("Add person")}</a>
+  <a class="button" href="/entities/new">{_t("Add entity")}</a>
   <a class="button" href="/relationships/new">{_t("Add relationship")}</a>
   <a class="button" href="/proposals/new">{_t("Create proposal")}</a>
   <a class="button" href="/proposals/generate">{_t("Generate with Ollama")}</a>
@@ -444,6 +452,130 @@ def _memory_proposal(root: Path, values: dict[str, str]) -> tuple[dict[str, Any]
         "operations": [{"op": "create", "record_type": "Episode", "record": record}],
     }
     return proposal, []
+
+
+def _entity_proposal(
+    root: Path, values: dict[str, str], evidence: list[str]
+) -> tuple[dict[str, Any] | None, list[str]]:
+    entity_type = values.get("entity_type", "").strip() or "Place"
+    name = values.get("name", "").strip()
+    notes = values.get("notes", "").strip()
+    visibility = values.get("visibility", "").strip()
+    evidence = list(dict.fromkeys(item for item in evidence if item))
+
+    errors: list[str] = []
+    if entity_type not in ENTITY_TYPES:
+        errors.append(_t("Unsupported entity type: {value}", value=entity_type))
+    if not name:
+        errors.append(_t("Name is required"))
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    known_evidence = {record_id for record_id, _, _ in _evidence_records(root)}
+    if not evidence:
+        errors.append(_t("Evidence is required"))
+    for record_id in evidence:
+        if record_id not in known_evidence:
+            errors.append(_t("Unknown evidence: {value}", value=record_id))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    record: dict[str, Any] = {
+        "id": f"{ENTITY_TYPES[entity_type]}:{_slug(name)}-{token}",
+        "type": entity_type,
+        "name": name,
+        "status": "reported",
+        "created_at": now,
+        "updated_at": now,
+    }
+    if notes:
+        record["notes"] = notes
+    if visibility:
+        record["visibility"] = visibility
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME[entity_type])
+    if record_errors:
+        return None, record_errors
+
+    proposal = {
+        "id": f"proposal:entity-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t("New {type}: {name}", type=_t(entity_type), name=name),
+        "rationale": _t("Created from the Add entity form."),
+        "operations": [
+            {
+                "op": "create",
+                "record_type": entity_type,
+                "record": record,
+                "evidence": evidence,
+            }
+        ],
+    }
+    return proposal, []
+
+
+def render_entity_form(
+    root: Path,
+    values: dict[str, str] | None = None,
+    errors: list[str] | None = None,
+    selected_evidence: list[str] | None = None,
+) -> str:
+    values = values or {}
+    entity_type = values.get("entity_type") or "Place"
+    visibility = values.get("visibility") or ""
+    notes_value = _esc(values.get("notes", ""))
+    type_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == entity_type else ''}>{_esc(_t(item))}</option>"
+        for item in ENTITY_TYPES
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    evidence_block = _evidence_fieldset(root, selected_evidence)
+    intro = _t(
+        "Add a place, event, organization or period as a pending proposal. It needs "
+        "existing evidence and enters canonical data only after approval."
+    )
+    body = f"""
+<h1>{_t("Add entity")}</h1>
+<p class="muted">
+{intro}
+</p>
+{_errors_block(errors or [])}
+<form method="post" action="/entities/new">
+<p>
+<label>{_t("Record type")}
+  <select name="entity_type">{type_options}</select>
+</label>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Name")}
+  <input name="name" value="{_esc(values.get("name", ""))}" required style="width:100%">
+</label>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true"
+    placeholder="{_t("Optional notes about this record")}">{notes_value}</textarea>
+</label>
+{evidence_block}
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add entity"), body)
 
 
 def _source_proposal(root: Path, values: dict[str, str]) -> tuple[dict[str, Any] | None, list[str]]:
@@ -1833,6 +1965,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/people/new":
             self._send(200, render_person_form(self.root))
             return
+        if path == "/entities/new":
+            self._send(200, render_entity_form(self.root))
+            return
         if path == "/relationships/new":
             self._send(200, render_relationship_form(self.root))
             return
@@ -1964,6 +2099,30 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 proposals_mod.create_pending(self.root, proposal)
             except proposals_mod.ProposalError as exc:
                 self._send(400, render_person_form(self.root, values, exc.errors, evidence))
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path == "/entities/new":
+            values = {
+                key: (form.get(key) or [""])[0]
+                for key in (
+                    "entity_type",
+                    "name",
+                    "notes",
+                    "visibility",
+                )
+            }
+            evidence = form.get("evidence") or []
+            proposal, errors = _entity_proposal(self.root, values, evidence)
+            if proposal is None:
+                self._send(400, render_entity_form(self.root, values, errors, evidence))
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(400, render_entity_form(self.root, values, exc.errors, evidence))
                 return
             proposal_id = str(proposal["id"])
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")

@@ -37,6 +37,24 @@ ITALIAN: dict[str, str] = {
     "archival": "archivistica",
     "registry": "anagrafica",
     "website": "sito web",
+    "Add entity": "Aggiungi entità",
+    "Record type": "Tipo di record",
+    "Place": "Luogo",
+    "Event": "Evento",
+    "Organization": "Organizzazione",
+    "Period": "Periodo",
+    "Unsupported entity type: {value}": "Tipo di entità non supportato: {value}",
+    "New {type}: {name}": "Nuovo record {type}: {name}",
+    "Created from the Add entity form.": "Creato dal modulo Aggiungi entità.",
+    "Optional notes about this record": "Note opzionali su questo record",
+    (
+        "Add a place, event, organization or period as a pending proposal. It needs "
+        "existing evidence and enters canonical data only after approval."
+    ): (
+        "Aggiungi un luogo, un evento, un'organizzazione o un periodo come proposta "
+        "in attesa. Richiede evidenza esistente ed entra nei dati canonici solo dopo "
+        "l'approvazione."
+    ),
     "Add person": "Aggiungi persona",
     "Name": "Nome",
     "Notes": "Note",

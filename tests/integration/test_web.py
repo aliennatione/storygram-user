@@ -8,6 +8,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
+import pytest
 from click.testing import CliRunner
 
 from storygram.cli import main
@@ -1240,6 +1241,136 @@ def test_web_add_source_validates_input(tmp_path: Path) -> None:
         assert '<html lang="it">' in body
         assert "Aggiungi fonte" in body
         assert "Tipo di fonte" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+@pytest.mark.parametrize(
+    ("entity_type", "prefix"),
+    [
+        ("Place", "place"),
+        ("Event", "event"),
+        ("Organization", "organization"),
+        ("Period", "period"),
+    ],
+)
+def test_web_add_entity_creates_pending_proposal(
+    tmp_path: Path, entity_type: str, prefix: str
+) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Family memory."},
+            },
+        )
+
+        status, body = post(
+            base + "/entities/new",
+            {
+                "entity_type": entity_type,
+                "name": "Family home",
+                "visibility": "family",
+                "notes": "Synthetic fixture.",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 200, body
+        assert "Dry-run preview" in body
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        assert proposal["status"] == "proposed"
+        assert proposal["title"] == f"New {entity_type}: Family home"
+        operation = proposal["operations"][0]
+        assert operation["op"] == "create"
+        assert operation["record_type"] == entity_type
+        assert operation["evidence"] == ["episode:memory"]
+        record = operation["record"]
+        assert record["type"] == entity_type
+        assert record["name"] == "Family home"
+        assert record["status"] == "reported"
+        assert record["visibility"] == "family"
+        assert record["notes"] == "Synthetic fixture."
+        assert record["id"].startswith(f"{prefix}:family-home-")
+        assert not list((tmp_path / "data" / f"{prefix}s").glob("*.json"))
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal['id'], safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200, body
+        assert "merged" in body
+        entity_file = tmp_path / "data" / f"{prefix}s" / f"{record['id'].replace(':', '_')}.json"
+        assert entity_file.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_entity_validates_input(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = get(base + "/entities/new")
+        assert status == 200
+        assert "Add entity" in body
+        assert 'action="/entities/new"' in body
+
+        status, body = post(
+            base + "/entities/new",
+            {"entity_type": "Place", "name": "   ", "evidence": "episode:missing"},
+        )
+        assert status == 400
+        assert "Name is required" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/entities/new",
+            {"entity_type": "Vehicle", "name": "Family car", "evidence": "episode:memory"},
+        )
+        assert status == 400
+        assert "Unsupported entity type: Vehicle" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/entities/new",
+            {"entity_type": "Place", "name": "Family home"},
+        )
+        assert status == 400
+        assert "Evidence is required" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/entities/new",
+            {
+                "entity_type": "Place",
+                "name": "Family home",
+                "evidence": "episode:missing",
+            },
+        )
+        assert status == 400
+        assert "Unknown evidence: episode:missing" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = get(base + "/entities/new?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Aggiungi entità" in body
+        assert "Tipo di record" in body
+        assert "Luogo" in body
     finally:
         server.shutdown()
         server.server_close()

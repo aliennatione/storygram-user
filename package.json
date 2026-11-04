@@ -3,7 +3,9 @@
   "private": true,
   "description": "Browser end-to-end tests for the Storygram local UI",
   "scripts": {
-    "test:e2e": "node tests/e2e/web.mjs"
+    "test:e2e": "node tests/e2e/web.mjs",
+    "test:e2e:firefox": "node tests/e2e/firefox.mjs",
+    "test:e2e:all": "npm run test:e2e && npm run test:e2e:firefox"
   },
   "devDependencies": {
     "playwright": "^1.64.1"

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -233,6 +233,44 @@ try {
   assert.match(genogramText, /relationship:e2e-parent/);
   assert.match(genogramText, /assertion:e2e-parent/);
 
+  await page.goto(`${server.base}?lang=it`);
+  const italianHome = await page.locator("body").innerText();
+  assert.match(italianHome, /Aggiungi memoria/);
+  assert.match(italianHome, /Coda di revisione/);
+  assert.match(italianHome, /Cronologia/);
+  await page.goto(server.base);
+
+  await page
+    .getByRole("banner")
+    .getByRole("link", { name: "Add memory", exact: true })
+    .click();
+  await page.waitForSelector('textarea[name="text"]');
+  assert.match(await page.locator("h1").innerText(), /Add memory/);
+  await page.locator('input[name="title"]').fill("Browser memory input");
+  await page.locator('input[name="captured_at"]').fill("1987");
+  await page
+    .locator('textarea[name="text"]')
+    .fill("A memory entered through the browser form.");
+  await page.locator('input[name="tags"]').fill("e2e, memory");
+  await page.getByRole("button", { name: "Save pending proposal" }).click();
+  await page.waitForSelector("text=Dry-run preview");
+  const pendingFiles = readdirSync(join(root, "proposals")).filter((name) =>
+    name.endsWith(".json"),
+  );
+  assert.equal(pendingFiles.length, 1);
+  const memoryProposal = JSON.parse(
+    readFileSync(join(root, "proposals", pendingFiles[0]), "utf8"),
+  );
+  assert.equal(memoryProposal.status, "proposed");
+  const memoryRecord = memoryProposal.operations[0].record;
+  assert.equal(memoryRecord.type, "Episode");
+  assert.equal(memoryRecord.content.text, "A memory entered through the browser form.");
+  await page.getByRole("button", { name: "Approve without commit" }).click();
+  await page.waitForFunction(() => document.body.innerText.includes("merged"));
+  assert.ok(
+    existsSync(join(root, "data", "episodes", `${memoryRecord.id.replace(":", "_")}.json`)),
+  );
+
   await page.goto(`${server.base}proposals/new`);
   await page.locator('textarea[name="json"]').fill(
     JSON.stringify(proposal("proposal:e2e-2", "episode:e2e-note-2", "Browser reject flow")),
@@ -248,7 +286,7 @@ try {
   assert.equal(rejected.notes, "duplicate");
 
   console.log(
-    "Playwright e2e: edit, approve, reject, browse, timeline and genogram flows passed",
+    "Playwright e2e: edit, approve, reject, browse, timeline, genogram, add memory and Italian UI flows passed",
   );
 } finally {
   if (browser) await browser.close();

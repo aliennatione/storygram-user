@@ -374,3 +374,4 @@ Suggested opening prompt (Italian):
 - Tools verified: `status` shows manim+slidev available, vcr unavailable on Alpine.
 - Example render succeeded: `generated/demos/manim/demo_prova.py` -> MP4.
 - Example slidev build succeeded: `generated/demos/vcr/storygram-intro`.
+- Storygram demos created: `generated/demos/manim/.../StorygramTimeline.mp4`, `.../StorygramProposalFlow.mp4`; bilingual Slidev course in `generated/demos/vcr/storygram_intro/en` and `.../it` (built sites in `dist/`). Consume: play MP4 with any media player; open `dist/index.html` in a browser; dev server via `slidev en/index.md`; re-render/rebuild via `scripts/demo_tools.py` and `slidev build`. All derived and gitignored; no canonical data touched.

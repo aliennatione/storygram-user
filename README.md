@@ -131,6 +131,28 @@ npm run test:e2e:firefox
 
 Browser tests use Node Playwright with system Chromium for the full flow. The Firefox smoke flow uses WebDriver/geckodriver with system Firefox. On Alpine: `apk add chromium firefox geckodriver nodejs npm`. `npm run test:e2e:all` runs both.
 
+## Demos
+
+All demo material is derived and gitignored under `generated/demos/`; it never touches canonical data.
+
+Manim animations (synthetic data):
+
+- `generated/demos/manim/media/videos/storygram_timeline/480p15/StorygramTimeline.mp4`
+- `generated/demos/manim/media/videos/storygram_proposal_flow/480p15/StorygramProposalFlow.mp4`
+
+Play them with any media player (for example `ffplay` or `mpv`). Re-render with:
+
+```bash
+PYTHONPATH=/data/src python scripts/demo_tools.py render manim generated/demos/manim/storygram_timeline.py
+PYTHONPATH=/data/src python scripts/demo_tools.py render manim generated/demos/manim/storygram_proposal_flow.py
+```
+
+Slidev introduction course (bilingual):
+
+- Built site: `generated/demos/vcr/storygram_intro/en/dist/index.html` (English) and `.../it/dist/index.html` (Italian). Open either file in a browser.
+- Dev server: `cd generated/demos/vcr/storygram_intro && slidev en/index.md` (or `it/index.md`).
+- Rebuild: `cd generated/demos/vcr/storygram_intro && slidev build en/index.md --out dist` (and the same for `it/`).
+
 ## Documentation
 
 - [English guide](docs/en/README.md)

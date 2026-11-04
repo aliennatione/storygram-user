@@ -139,3 +139,25 @@ docker compose -p storygram-test exec ollama ollama pull llama3.2
 ```
 
 Il container predefinito inizializza automaticamente `/data` e Git quando serve, gira come utente non-root `storygram` (UID/GID 100:101) e persiste i dati in un volume nominato. Per un bind mount, assegna alla directory host quell'UID/GID; scoprili con `docker run --rm --entrypoint id storygram:local`. Imposta `STORYGRAM_AUTO_INIT=0` per disattivare. Il profilo Ollama è opzionale; il nucleo deterministico e la UI funzionano senza. Usa un nome progetto e una porta unici per i test e rimuovi solo le risorse create.
+
+## Demo
+
+Materiale derivato e ignorato da Git in `generated/demos/`; non tocca mai i dati canonici.
+
+Animazioni Manim (dati sintetici):
+
+- `generated/demos/manim/media/videos/storygram_timeline/480p15/StorygramTimeline.mp4`
+- `generated/demos/manim/media/videos/storygram_proposal_flow/480p15/StorygramProposalFlow.mp4`
+
+Riproducile con qualsiasi player. Per ri-renderizzare:
+
+```bash
+PYTHONPATH=/data/src python scripts/demo_tools.py render manim generated/demos/manim/storygram_timeline.py
+PYTHONPATH=/data/src python scripts/demo_tools.py render manim generated/demos/manim/storygram_proposal_flow.py
+```
+
+Corso Slidev di introduzione (bilingue):
+
+- Sito generato: `generated/demos/vcr/storygram_intro/en/dist/index.html` e `.../it/dist/index.html`.
+- Server di sviluppo: `cd generated/demos/vcr/storygram_intro && slidev en/index.md`.
+- Per rigenerare: `cd generated/demos/vcr/storygram_intro && slidev build en/index.md --out dist`.

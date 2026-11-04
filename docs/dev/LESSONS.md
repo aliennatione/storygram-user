@@ -154,3 +154,6 @@
 - Keep the Add memory form create-only. Editing or deleting canonical records belongs to the existing proposal workflow, not to a convenience form.
 - Server-rendered HTML with standard forms works across Chromium and Firefox without a frontend framework; verify browser compatibility at the HTTP/rendering layer.
 - On Alpine musl, Playwright's bundled Firefox cannot run because it is a glibc build. Use system Firefox with geckodriver/WebDriver for the Firefox smoke flow instead of forcing the bundled binary.
+- Do not assume `jsonschema` enforces every `format`. Check `FormatChecker().checkers` and register the formats you rely on, especially `date-time`.
+- A format-only subschema without `"type": "string"` can silently skip checks; make the type explicit when the value must be a string.
+- Test both the schema and the user-facing form for temporal validation. A green schema test does not prove the form path is protected.

@@ -107,8 +107,9 @@ Last updated: 2026-11-04
 - Translated navigation, headings, table headers, buttons, placeholders, status badges, episode types, visibility options and web-originated errors. Canonical IDs, type names and stored JSON stay unchanged.
 - Integration tests cover pending-only creation, approval after form input, known participants, validation errors, English default, Italian rendering and cookie-based switching.
 - Playwright Chromium covers Add memory, Italian rendering and approval. A separate Firefox WebDriver flow covers bilingual home, Add memory, approval and records search.
-- Checks: `146 passed`; ruff, format and mypy clean; `npm run test:e2e` passed; `npm run test:e2e:firefox` passed; `npm run test:e2e:all` passed.
+- Checks: `148 passed`; ruff, format and mypy clean; `npm run test:e2e` passed; `npm run test:e2e:firefox` passed; `npm run test:e2e:all` passed.
 - Commits: `b374d5e` (bilingual Add memory form), `166543d` (Add memory/Italian/Firefox E2E).
+- Follow-up `f416922`: schema format validation now enforces RFC3339 date-time and date values. Before this fix, `jsonschema` silently skipped `date-time` because the optional checker was absent; invalid `captured_at`/`created_at` values could reach proposals. Regression tests cover invalid dates, timezone-less timestamps and the Add memory form.
 
 ## Current Usable Flows
 
@@ -118,7 +119,7 @@ Last updated: 2026-11-04
 ## Resume Checklist After a Fresh Container
 
 1. `pip install --break-system-packages -e ".[dev]"`.
-2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `146 passed`).
+2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `148 passed`).
 3. `ruff check src tests && ruff format --check src tests && mypy src`.
 4. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` if `node_modules` is missing.
 5. `apk add chromium firefox geckodriver` for both browser flows; `npm run test:e2e:all`.

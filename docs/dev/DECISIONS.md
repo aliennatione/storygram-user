@@ -264,3 +264,10 @@
 - No JavaScript is required. Server-rendered forms, standard CSS and cookies keep the UI usable without a frontend build and make Firefox support a rendering concern rather than a framework concern.
 - Canonical type names, IDs and stored JSON remain untranslated. Only presentation labels (navigation, headings, buttons, status badges, episode types and visibility options) are localized.
 - Firefox verification uses system Firefox through WebDriver/geckodriver. Playwright's bundled Firefox is a glibc build and does not run on Alpine musl; system Firefox is the supported path for the Firefox smoke flow.
+
+## Explicit RFC3339 Format Checks (2026-11-04)
+
+- JSON Schema `format` is only enforced when a matching checker exists. `jsonschema` does not install the `date-time` checker by default, so relying on the library alone silently accepted invalid timestamps.
+- The validator now registers explicit `date` and `date-time` checkers using the standard library. `date-time` requires a full RFC3339 value with a timezone; naive local timestamps are rejected.
+- The Episode `dateTimeOrDate` schema now gives every branch an explicit string type. This keeps the schema honest and makes the format checks apply inside `anyOf`.
+- Invalid dates fail before proposal creation, so the Add memory form cannot persist malformed temporal data.

@@ -556,7 +556,8 @@ Make the local web UI comfortably usable by a human for adding a memory, with En
 - Extended the Playwright Chromium flow with the Add memory form, Italian home rendering and approval of the generated Episode.
 - Added `tests/e2e/firefox.mjs` using system Firefox plus WebDriver/geckodriver; it covers the bilingual home, Add memory form, pending proposal, approval and records search.
 - Added `npm run test:e2e:firefox` and `npm run test:e2e:all`; documented the Alpine prerequisites `firefox` and `geckodriver`.
-- Checks: `146 passed`; ruff, format and mypy clean; Chromium Playwright flow passed; Firefox WebDriver flow passed.
+- Checks: `148 passed`; ruff, format and mypy clean; Chromium Playwright flow passed; Firefox WebDriver flow passed.
+- Follow-up fix `f416922`: the schema format check now enforces RFC3339 date-time and date values, including `captured_at`, `created_at` and `updated_at`. Regression tests cover invalid dates, timezone-less timestamps and the Add memory form.
 
 ### Calibration
 

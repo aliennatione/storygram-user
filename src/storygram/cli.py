@@ -386,6 +386,85 @@ def import_cmd(
     click.echo(f"Next: storygram proposal approve {result['proposal_id']} --dry-run")
 
 
+@main.group()
+def media() -> None:
+    """Register external media files in the local checksummed manifest."""
+
+
+@media.command("add")
+@click.argument("file", type=click.Path(exists=True, dir_okay=False))
+@click.option("--uri", default=None, help="External URI or path recorded in the manifest")
+@click.option(
+    "--visibility",
+    default=None,
+    type=click.Choice(["private", "restricted", "family", "public"]),
+)
+@click.option("--acquired-at", default=None, help="Acquisition timestamp recorded as-is")
+@click.option("--notes", default=None, help="Free-form notes for the manifest entry")
+@click.option("--name", default=None, help="Manifest label; defaults to the file name")
+@click.option("--overwrite", is_flag=True, help="Refresh an existing entry for this file")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def media_add(
+    file: str,
+    uri: str | None,
+    visibility: str | None,
+    acquired_at: str | None,
+    notes: str | None,
+    name: str | None,
+    overwrite: bool,
+    archive_path: str | None,
+    as_json: bool,
+) -> None:
+    """Register FILE in media-manifest/ without copying or committing it."""
+    from .media import MediaError, add_media
+
+    try:
+        entry = add_media(
+            _root(archive_path),
+            file,
+            uri=uri,
+            visibility=visibility,
+            acquired_at=acquired_at,
+            notes=notes,
+            name=name,
+            overwrite=overwrite,
+        )
+    except MediaError as exc:
+        _fail(str(exc), as_json)
+    if as_json:
+        click.echo(json.dumps(entry, indent=2))
+        return
+    click.echo(f"Registered {entry['id']}")
+    click.echo(f"  uri: {entry['uri']}")
+    click.echo(f"  sha256: {entry['checksum']['value']}")
+    click.echo(f"  size: {entry['size']} bytes")
+
+
+@media.command("list")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def media_list(archive_path: str | None, as_json: bool) -> None:
+    """List registered media manifest entries."""
+    from .media import list_media
+
+    entries = list_media(_root(archive_path))
+    if as_json:
+        click.echo(json.dumps(entries, indent=2))
+        return
+    if not entries:
+        click.echo("No media registered.")
+        return
+    for entry in entries:
+        checksum = entry.get("checksum") or {}
+        value = checksum.get("value", "")
+        mime_type = entry.get("mime_type") or "-"
+        click.echo(
+            f"{entry.get('id', '')} {value[:12]} {entry.get('size', 0)} "
+            f"{mime_type} {entry.get('uri', '')}"
+        )
+
+
 @main.command()
 @click.option("--host", default="0.0.0.0", show_default=True)
 @click.option("--port", default=8080, type=int, show_default=True)

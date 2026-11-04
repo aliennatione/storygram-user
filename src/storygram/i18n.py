@@ -97,6 +97,10 @@ ITALIAN: dict[str, str] = {
     "Created from the Add assertion form.": "Creata dal modulo Aggiungi asserzione.",
     "Optional notes about this assertion": "Note opzionali su questa asserzione",
     "disputed": "contestato",
+    "Related proposals": "Proposte correlate",
+    "Affected records": "Record interessati",
+    "No proposal touches this record yet.": ("Nessuna proposta tocca ancora questo record."),
+    "(pending)": "(in attesa)",
     "Add relationship": "Aggiungi relazione",
     (
         "Add a relationship as a pending proposal. It enters canonical data only "

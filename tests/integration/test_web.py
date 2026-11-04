@@ -1571,3 +1571,70 @@ def test_web_add_assertion_value_and_validation(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_web_record_and_proposal_cross_links(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Family memory."},
+            },
+        )
+
+        status, body = get(base + "/records/episode%3Amemory")
+        assert status == 200
+        assert "Related proposals" in body
+        assert "No proposal touches this record yet." in body
+
+        status, body = post(
+            base + "/people/new",
+            {"name": "Link Person", "evidence": "episode:memory"},
+        )
+        assert status == 200, body
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        proposal_id = proposal["id"]
+        person_id = proposal["operations"][0]["record"]["id"]
+
+        status, body = get(base + f"/proposals/{quote(proposal_id, safe='')}")
+        assert status == 200
+        assert "Affected records" in body
+        assert person_id in body
+        assert "(pending)" in body
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal_id, safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200, body
+
+        status, body = get(base + f"/records/{quote(person_id, safe='')}")
+        assert status == 200
+        assert "Related proposals" in body
+        assert f"/proposals/{quote(proposal_id, safe='')}" in body
+        assert proposal_id in body
+
+        status, body = get(base + f"/proposals/{quote(proposal_id, safe='')}")
+        assert status == 200
+        assert "Affected records" in body
+        assert f"/records/{quote(person_id, safe='')}" in body
+        assert "(pending)" not in body
+
+        status, body = get(base + "/records/episode%3Amemory")
+        assert status == 200
+        assert "No proposal touches this record yet." in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

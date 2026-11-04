@@ -270,6 +270,18 @@ def _record_links(ids: list[str], known_ids: set[str]) -> str:
     return f"<ul>{''.join(items)}</ul>"
 
 
+def _related_proposals_html(items: list[tuple[str, str, str]]) -> str:
+    if not items:
+        return f'<p class="muted">{_t("No proposal touches this record yet.")}</p>'
+    rows = "".join(
+        f'<li><a href="/proposals/{quote(proposal_id, safe="")}">{_esc(proposal_id)}</a> '
+        f"{_status_badge(status)} "
+        f'<span class="muted">{_esc(title)}</span></li>'
+        for proposal_id, status, title in items
+    )
+    return f"<ul>{rows}</ul>"
+
+
 def _known_ids(records: list[tuple[Path, dict[str, Any]]]) -> set[str]:
     return {str(data["id"]) for _, data in records if isinstance(data.get("id"), str)}
 
@@ -1518,6 +1530,39 @@ def render_records(root: Path, query: str = "") -> str:
     return _layout(_t("Records"), body)
 
 
+def _operation_record_ids(operation: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    for key in ("record_id", "target_id"):
+        value = operation.get(key)
+        if isinstance(value, str) and value:
+            ids.append(value)
+    record = operation.get("record")
+    if isinstance(record, dict) and isinstance(record.get("id"), str):
+        ids.append(record["id"])
+    return ids
+
+
+def _proposals_for_record(root: Path, record_id: str) -> list[tuple[str, str, str]]:
+    results: set[tuple[str, str, str]] = set()
+    for _, data in proposals_mod.list_proposals(root, include_applied=True):
+        operations = data.get("operations")
+        if not isinstance(operations, list):
+            continue
+        touched = any(
+            isinstance(operation, dict) and record_id in _operation_record_ids(operation)
+            for operation in operations
+        )
+        if touched:
+            results.add(
+                (
+                    str(data.get("id") or ""),
+                    str(data.get("status") or ""),
+                    str(data.get("title") or ""),
+                )
+            )
+    return sorted(results)
+
+
 def render_record_detail(root: Path, record_id: str) -> tuple[int, str]:
     records, load_errors = validate_mod.load_records(root)
     match = next(
@@ -1560,6 +1605,8 @@ def render_record_detail(root: Path, record_id: str) -> tuple[int, str]:
 {_record_links(references, known_ids)}
 <h2>{_t("Referenced by")}</h2>
 {_record_links(backlinks, known_ids)}
+<h2>{_t("Related proposals")}</h2>
+{_related_proposals_html(_proposals_for_record(root, record_id))}
 <h2>{_t("Record JSON")}</h2>
 <pre>{_esc(json.dumps(data, indent=2, ensure_ascii=False))}</pre>
 """
@@ -1812,6 +1859,28 @@ def _status_is_open(status: Any) -> bool:
     return status in {"draft", "proposed", "under_review", "approved"}
 
 
+def _affected_records_html(root: Path, proposal: dict[str, Any]) -> str:
+    records, _ = validate_mod.load_records(root)
+    known_ids = {str(item.get("id")) for _, item in records if isinstance(item.get("id"), str)}
+    affected: list[str] = []
+    operations = proposal.get("operations")
+    for operation in operations if isinstance(operations, list) else []:
+        if not isinstance(operation, dict):
+            continue
+        for record_id in _operation_record_ids(operation):
+            if record_id not in affected:
+                affected.append(record_id)
+    if not affected:
+        return f'<p class="muted">{_t("None.")}</p>'
+    rows = []
+    for record_id in affected:
+        if record_id in known_ids:
+            rows.append(f'<li><a href="{_esc(_record_href(record_id))}">{_esc(record_id)}</a></li>')
+        else:
+            rows.append(f'<li>{_esc(record_id)} <span class="muted">{_t("(pending)")}</span></li>')
+    return f"<ul>{''.join(rows)}</ul>"
+
+
 def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None) -> tuple[int, str]:
     path = proposals_mod.find_proposal(root, proposal_id, include_applied=True)
     if path is None:
@@ -1878,6 +1947,8 @@ def render_detail(root: Path, proposal_id: str, errors: list[str] | None = None)
 </p>
 {_errors_block(errors or [])}
 {plan_html}
+<h2>{_t("Affected records")}</h2>
+{_affected_records_html(root, data)}
 <h2>{_t("Proposal JSON")}</h2>
 <pre>{_esc(json.dumps(data, indent=2))}</pre>
 <p>{edit_link}<a class="button" href="/proposals">{_t("Back")}</a></p>

@@ -26,8 +26,8 @@ ITALIAN: dict[str, str] = {
     "Created from the Add person form.": "Creata dal modulo Aggiungi persona.",
     "Evidence is required": "L'evidenza è obbligatoria",
     "Unknown evidence: {value}": "Evidenza sconosciuta: {value}",
-    "Add a memory or source before adding a person.": (
-        "Aggiungi una memoria o una fonte prima di aggiungere una persona."
+    "Add a memory or source before adding this record.": (
+        "Aggiungi una memoria o una fonte prima di aggiungere questo record."
     ),
     "Add relationship": "Aggiungi relazione",
     (

@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 import re
+import unicodedata
 from collections.abc import Callable
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -58,6 +59,7 @@ EXPORT_FORMATS = {
     "yaml": ("application/yaml; charset=utf-8", "storygram-export.yaml"),
     "markdown": ("text/markdown; charset=utf-8", "storygram-export.md"),
 }
+EXPORT_LABELS = {"json": "JSON", "jsonld": "JSON-LD", "yaml": "YAML", "markdown": "Markdown"}
 
 
 class APIRequestError(Exception):
@@ -253,7 +255,7 @@ def _evidence_fieldset(root: Path, selected_evidence: list[str] | None) -> str:
     selected = set(selected_evidence or [])
     evidence_records = _evidence_records(root)
     if not evidence_records:
-        return f'<p class="warning">{_t("Add a memory or source before adding a person.")}</p>'
+        return f'<p class="warning">{_t("Add a memory or source before adding this record.")}</p>'
     options = "".join(
         f'<label class="checkbox"><input type="checkbox" name="evidence" '
         f'value="{_esc(record_id)}"{" checked" if record_id in selected else ""}> '
@@ -432,7 +434,8 @@ def _memory_proposal(root: Path, values: dict[str, str]) -> tuple[dict[str, Any]
 
 
 def _slug(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
+    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_value.casefold()).strip("-")
     return slug[:40] or "person"
 
 
@@ -946,7 +949,7 @@ def render_records(root: Path, query: str = "") -> str:
     ]
     export_links = " ".join(
         f'<a class="button" href="/export?{_esc(urlencode([*export_params, ("format", fmt)]))}">'
-        f"{_t('Export {format}', format=fmt.upper())}</a>"
+        f"{_t('Export {format}', format=EXPORT_LABELS[fmt])}</a>"
         for fmt in EXPORT_FORMATS
     )
     records_intro = _t(

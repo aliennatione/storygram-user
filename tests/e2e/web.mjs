@@ -26,6 +26,7 @@ function proposal(id, episodeId, title) {
           type: "Episode",
           episode_type: "other",
           status: "reported",
+          visibility: "family",
           created_at: now,
           updated_at: now,
         },
@@ -126,6 +127,14 @@ try {
   await page.waitForFunction(() => document.body.innerText.includes("Record JSON"));
   assert.match(page.url(), /records\/episode%3Ae2e-note/);
   assert.match(await page.locator("h1").innerText(), /episode:e2e-note/);
+
+  await page.goto(`${server.base}records?visibility=family`);
+  assert.match(await page.locator("body").innerText(), /episode:e2e-note/);
+  const exported = await page.request.get(`${server.base}export?format=json&visibility=family`);
+  assert.equal(exported.status(), 200);
+  assert.match(exported.headers()["content-disposition"], /attachment/);
+  const exportedRecords = await exported.json();
+  assert.ok(exportedRecords.some((record) => record.id === "episode:e2e-note"));
 
   const relations = {
     id: "proposal:e2e-relations",
@@ -286,7 +295,7 @@ try {
   assert.equal(rejected.notes, "duplicate");
 
   console.log(
-    "Playwright e2e: edit, approve, reject, browse, timeline, genogram, add memory and Italian UI flows passed",
+    "Playwright e2e: edit, approve, reject, browse, visibility export, timeline, genogram, add memory and Italian UI flows passed",
   );
 } finally {
   if (browser) await browser.close();

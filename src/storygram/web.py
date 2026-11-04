@@ -12,6 +12,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse, urlsplit, urlunsplit
 from uuid import uuid4
 
+from . import export as export_mod
 from . import proposals as proposals_mod
 from . import validate as validate_mod
 from .genogram import build_genogram
@@ -50,6 +51,12 @@ MEMORY_EPISODE_TYPES = (
     "other",
 )
 VISIBILITIES = ("private", "restricted", "family", "public")
+EXPORT_FORMATS = {
+    "json": ("application/json; charset=utf-8", "storygram-export.json"),
+    "jsonld": ("application/ld+json; charset=utf-8", "storygram-export.jsonld"),
+    "yaml": ("application/yaml; charset=utf-8", "storygram-export.yaml"),
+    "markdown": ("text/markdown; charset=utf-8", "storygram-export.md"),
+}
 
 
 class APIRequestError(Exception):
@@ -441,10 +448,75 @@ def render_memory_form(
     return _layout(_t("Add memory"), body)
 
 
+def _visibility_filter(query: str) -> set[str] | None:
+    values = set(_split_csv(_query_value(query, "visibility")))
+    if not values:
+        return None
+    return values
+
+
+def render_export(root: Path, query: str) -> tuple[int, str, str, dict[str, str]]:
+    export_format = _query_value(query, "format") or "json"
+    if export_format not in EXPORT_FORMATS:
+        return (
+            400,
+            _layout(
+                _t("Export"),
+                f"<h1>{_t('Unsupported export format')}</h1>"
+                f"<p>{_esc(export_format)}</p>"
+                f'<p><a class="button" href="/records">{_t("Back to records")}</a></p>',
+            ),
+            "text/html; charset=utf-8",
+            {},
+        )
+    visibility = _visibility_filter(query)
+    if visibility is not None:
+        invalid = sorted(visibility - set(VISIBILITIES))
+        if invalid:
+            return (
+                400,
+                _layout(
+                    _t("Export"),
+                    f"<h1>{_t('Unsupported visibility')}</h1>"
+                    f"<p>{_esc(', '.join(invalid))}</p>"
+                    f'<p><a class="button" href="/records">{_t("Back to records")}</a></p>',
+                ),
+                "text/html; charset=utf-8",
+                {},
+            )
+    try:
+        if export_format == "json":
+            payload = json.dumps(
+                export_mod.export_json(root, visibility), indent=2, ensure_ascii=False
+            )
+        elif export_format == "jsonld":
+            payload = json.dumps(
+                export_mod.export_jsonld(root, visibility), indent=2, ensure_ascii=False
+            )
+        elif export_format == "yaml":
+            payload = export_mod.export_yaml(root, visibility)
+        else:
+            payload = export_mod.export_markdown(root, visibility)
+    except export_mod.ExportError as exc:
+        return (
+            500,
+            _layout(
+                _t("Export"),
+                f"<h1>{_t('Could not export archive')}</h1><p>{_esc(exc)}</p>",
+            ),
+            "text/html; charset=utf-8",
+            {},
+        )
+    content_type, filename = EXPORT_FORMATS[export_format]
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return 200, payload, content_type, headers
+
+
 def render_records(root: Path, query: str = "") -> str:
     record_type = _query_value(query, "type")
     status = _query_value(query, "status")
     needle = _query_value(query, "q")
+    visibility = _query_value(query, "visibility")
     records, load_errors = validate_mod.load_records(root)
 
     filtered = []
@@ -452,6 +524,8 @@ def render_records(root: Path, query: str = "") -> str:
         if record_type and data.get("type") != record_type:
             continue
         if status and data.get("status") != status:
+            continue
+        if visibility and data.get("visibility") != visibility:
             continue
         if needle and needle.casefold() not in _record_search_text(data).casefold():
             continue
@@ -493,6 +567,26 @@ def render_records(root: Path, query: str = "") -> str:
         f"{' selected' if item.name == record_type else ''}>{_esc(item.name)}</option>"
         for item in RECORD_TYPES
     )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    export_params = [
+        (key, value)
+        for key, value in (
+            ("type", record_type),
+            ("status", status),
+            ("q", needle),
+            ("visibility", visibility),
+        )
+        if value
+    ]
+    export_links = " ".join(
+        f'<a class="button" href="/export?{_esc(urlencode([*export_params, ("format", fmt)]))}">'
+        f"{_t('Export {format}', format=fmt.upper())}</a>"
+        for fmt in EXPORT_FORMATS
+    )
     records_intro = _t(
         "Read-only canonical record browser. Showing {shown} of {total} records.",
         shown=len(filtered),
@@ -511,12 +605,18 @@ def render_records(root: Path, query: str = "") -> str:
   <label>{_t("Status")}
     <input name="status" value="{_esc(status)}" placeholder="{_t("confirmed")}">
   </label>
+  <label>{_t("Visibility")}
+    <select name="visibility">
+      <option value="">{_t("All visibilities")}</option>{visibility_options}
+    </select>
+  </label>
   <label>{_t("Search")}
     <input name="q" value="{_esc(needle)}" placeholder="{_t("id, name, notes")}">
   </label>
   <button type="submit">{_t("Filter")}</button>
   <a class="button" href="/records">{_t("Reset")}</a>
 </form>
+<p>{export_links}</p>
 {table}
 """
     return _layout(_t("Records"), body)
@@ -917,12 +1017,20 @@ class StorygramHandler(BaseHTTPRequestHandler):
         path = parsed.path + (f"?{parsed.query}" if parsed.query else "")
         set_path(path)
 
-    def _send(self, status: int, body: str, content_type: str = "text/html; charset=utf-8") -> None:
+    def _send(
+        self,
+        status: int,
+        body: str,
+        content_type: str = "text/html; charset=utf-8",
+        headers: dict[str, str] | None = None,
+    ) -> None:
         encoded = body.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(encoded)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(encoded)
 
@@ -1210,6 +1318,10 @@ class StorygramHandler(BaseHTTPRequestHandler):
             return
         if path == "/records":
             self._send(200, render_records(self.root, parsed.query))
+            return
+        if path == "/export":
+            status, body, content_type, headers = render_export(self.root, parsed.query)
+            self._send(status, body, content_type, headers)
             return
         if path.startswith("/records/"):
             record_id = path.removeprefix("/records/").strip("/")

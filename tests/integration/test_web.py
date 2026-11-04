@@ -355,13 +355,16 @@ def test_web_records_browse_is_read_only(tmp_path: Path) -> None:
     server, thread, base = start(tmp_path)
     try:
         anna_path = write_record(
-            tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi")
+            tmp_path,
+            "people",
+            "person_anna.json",
+            {**person("person:anna", "Anna Rossi"), "visibility": "private"},
         )
         write_record(
             tmp_path,
             "people",
             "person_bruno.json",
-            person("person:bruno", "Bruno Bianchi", "archived"),
+            {**person("person:bruno", "Bruno Bianchi", "archived"), "visibility": "family"},
         )
         before = anna_path.read_text(encoding="utf-8")
 
@@ -380,6 +383,12 @@ def test_web_records_browse_is_read_only(tmp_path: Path) -> None:
         assert status == 200
         assert "person:bruno" in body
         assert "person:anna" not in body
+
+        status, body = get(base + "/records?" + urlencode({"visibility": "family"}))
+        assert status == 200
+        assert "person:bruno" in body
+        assert "person:anna" not in body
+        assert "Export JSON" in body
 
         status, body = get(base + "/records/" + quote("person:anna", safe=""))
         assert status == 200
@@ -847,6 +856,54 @@ def test_web_interface_switches_between_english_and_italian(tmp_path: Path) -> N
             body = response.read().decode()
         assert "Salva proposta in attesa" in body
         assert 'name="text"' in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_records_export_formats_and_visibility(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "people",
+            "person_anna.json",
+            {**person("person:anna", "Anna Rossi"), "visibility": "private"},
+        )
+        write_record(
+            tmp_path,
+            "people",
+            "person_bruno.json",
+            {**person("person:bruno", "Bruno Bianchi"), "visibility": "family"},
+        )
+
+        with urlopen(base + "/export?format=json&visibility=family") as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"].startswith("application/json")
+            assert "attachment" in response.headers["Content-Disposition"]
+            payload = json.loads(response.read().decode())
+        assert [record["id"] for record in payload] == ["person:bruno"]
+
+        with urlopen(base + "/export?format=jsonld&visibility=private") as response:
+            payload = json.loads(response.read().decode())
+        assert [node["@id"] for node in payload["@graph"]] == ["person:anna"]
+
+        with urlopen(base + "/export?format=yaml") as response:
+            body = response.read().decode()
+        assert "person:anna" in body and "person:bruno" in body
+
+        with urlopen(base + "/export?format=markdown") as response:
+            body = response.read().decode()
+        assert "storygram:record" in body
+
+        status, body = get(base + "/export?format=invalid")
+        assert status == 400
+        assert "Unsupported export format" in body
+
+        status, body = get(base + "/export?format=json&visibility=secret")
+        assert status == 400
+        assert "Unsupported visibility" in body
     finally:
         server.shutdown()
         server.server_close()

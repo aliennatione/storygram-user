@@ -93,6 +93,7 @@ RECORD_TYPES: tuple[RecordType, ...] = (
         schema_file="source.schema.json",
         id_prefix="source",
         metadata_fields=("notes", "visibility"),
+        evidence_required=False,
         is_evidence=True,
     ),
     RecordType(

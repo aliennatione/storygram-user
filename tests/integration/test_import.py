@@ -22,6 +22,17 @@ EPISODE = {
     "visibility": "public",
 }
 
+SOURCE = {
+    "id": "source:register",
+    "type": "Source",
+    "title": "Synthetic family register",
+    "source_type": "registry",
+    "status": "reported",
+    "created_at": NOW,
+    "updated_at": NOW,
+    "visibility": "family",
+}
+
 PERSON = {
     "id": "person:maria",
     "type": "Person",
@@ -36,7 +47,7 @@ PERSON = {
 
 def make_archive(root: Path) -> Path:
     shutil.copytree(Path("schema"), root / "schema")
-    for directory in ("episodes", "people", "assertions", "places"):
+    for directory in ("episodes", "people", "assertions", "places", "sources"):
         (root / "data" / directory).mkdir(parents=True, exist_ok=True)
     (root / "data" / "proposals").mkdir(parents=True, exist_ok=True)
     (root / "proposals").mkdir()
@@ -49,6 +60,7 @@ def write_record(root: Path, record: dict) -> Path:
         "Person": "people",
         "Assertion": "assertions",
         "Place": "places",
+        "Source": "sources",
     }
     path = root / "data" / directories[record["type"]] / (record["id"].replace(":", "_") + ".json")
     path.write_text(json.dumps(record), encoding="utf-8")
@@ -286,3 +298,46 @@ def test_import_requires_known_format_or_explicit_override(tmp_path):
     assert rejected.exit_code == 1
     assert "use --format" in rejected.output
     assert accepted.exit_code == 0, accepted.output
+
+
+def test_import_standalone_source_does_not_require_evidence(tmp_path):
+    target = make_archive(tmp_path / "target")
+    source = make_archive(tmp_path / "source")
+    write_record(source, SOURCE)
+    export_file = tmp_path / "source.json"
+    export_file.write_text(json.dumps(export_json(source)), encoding="utf-8")
+    runner = CliRunner()
+
+    imported = runner.invoke(
+        main,
+        [
+            "import",
+            str(export_file),
+            "--archive",
+            str(target),
+            "--id",
+            "proposal:import-source",
+            "--json",
+        ],
+    )
+
+    assert imported.exit_code == 0, imported.output
+    result = json.loads(imported.output)
+    assert result["operations"][0].get("evidence", []) == []
+    assert len(pending_files(target)) == 1
+
+    approved = runner.invoke(
+        main,
+        [
+            "proposal",
+            "approve",
+            "proposal:import-source",
+            "--archive",
+            str(target),
+            "--no-commit",
+            "--json",
+        ],
+    )
+
+    assert approved.exit_code == 0, approved.output
+    assert (target / "data" / "sources" / "source_register.json").exists()

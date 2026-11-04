@@ -140,6 +140,13 @@ Last updated: 2026-11-04
 5. `apk add chromium firefox geckodriver` for both browser flows; `npm run test:e2e:all`.
 6. Do not commit `archive/`, `chatgpt.md` or `session-ses_*.md`.
 
+## Ollama Profile Verification (2026-11-04)
+
+- Started `storygram-ollama` project on port 18082 with `--profile ollama`; image built as `storygram:local`.
+- Ollama service and app container reached `Up`; app called Ollama at `http://ollama:11434`.
+- Pulled `tinyllama` successfully. Generation via the app timed out on the 1-CPU quota, so the profile is wired but not quality-verified.
+- Removed the test project, network and volumes. The Ollama profile remains optional and unverified for model quality; `qwen3-4b` stays the reference via OpenAI-compatible endpoint.
+
 ## Next Steps
 
 1. Optional GUI polish: creation forms for Annotation, Narrative, Collection, Conflict and MediaAsset records (the advanced JSON editor covers them today), plus media browsing in the UI. Keep all browser write paths behind proposals.

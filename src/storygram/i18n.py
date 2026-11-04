@@ -29,6 +29,35 @@ ITALIAN: dict[str, str] = {
     "Add a memory or source before adding a person.": (
         "Aggiungi una memoria o una fonte prima di aggiungere una persona."
     ),
+    "Add relationship": "Aggiungi relazione",
+    (
+        "Add a relationship as a pending proposal. It enters canonical data only "
+        "after a human approves the proposal."
+    ): (
+        "Aggiungi una relazione come proposta in attesa. Entra nei dati canonici "
+        "solo dopo l'approvazione umana della proposta."
+    ),
+    "Choose a person": "Scegli una persona",
+    "Choose a predicate": "Scegli un predicato",
+    "Start": "Inizio",
+    "End": "Fine",
+    "Precision": "Precisione",
+    "Optional notes about this relationship": "Note opzionali su questa relazione",
+    "New relationship: {subject} → {object}": "Nuova relazione: {subject} → {object}",
+    "Created from the Add relationship form.": "Creata dal modulo Aggiungi relazione.",
+    "Subject is required": "Il soggetto è obbligatorio",
+    "Object is required": "L'oggetto è obbligatorio",
+    "Unknown person: {value}": "Persona sconosciuta: {value}",
+    "Subject and object must be different": "Soggetto e oggetto devono essere diversi",
+    "Unsupported predicate: {value}": "Predicato non supportato: {value}",
+    "Add at least two people before adding a relationship.": (
+        "Aggiungi almeno due persone prima di aggiungere una relazione."
+    ),
+    "day": "giorno",
+    "month": "mese",
+    "year": "anno",
+    "decade": "decennio",
+    "approximate": "approssimativo",
     (
         "Add a person as a pending proposal. The person enters canonical data only "
         "after a human approves the proposal."

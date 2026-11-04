@@ -16,7 +16,7 @@ from uuid import uuid4
 from . import export as export_mod
 from . import proposals as proposals_mod
 from . import validate as validate_mod
-from .genogram import build_genogram
+from .genogram import FAMILY_PREDICATES, build_genogram
 from .i18n import (
     current_language,
     current_path,
@@ -139,6 +139,7 @@ form input, form select {{
     <a href="/genogram">{_t("Genogram")}</a><a href="/proposals">{_t("Proposals")}</a>
     <a href="/memories/new">{_t("Add memory")}</a>
     <a href="/people/new">{_t("Add person")}</a>
+    <a href="/relationships/new">{_t("Add relationship")}</a>
     <a href="/proposals/new">{_t("New proposal")}</a>
     <a href="/proposals/generate">{_t("Generate")}</a>
   </nav>
@@ -233,6 +234,36 @@ def _evidence_records(root: Path) -> list[tuple[str, str, str]]:
     return sorted(evidence, key=lambda item: (item[1], item[0]))
 
 
+def _person_records(root: Path) -> list[tuple[str, str]]:
+    records, _ = validate_mod.load_records(root)
+    people = []
+    for _, data in records:
+        record_id = data.get("id")
+        if (
+            not isinstance(record_id, str)
+            or data.get("type") != "Person"
+            or data.get("status") in {"archived", "rejected"}
+        ):
+            continue
+        people.append((record_id, _record_name(data)))
+    return sorted(people, key=lambda item: (item[1].casefold(), item[0]))
+
+
+def _evidence_fieldset(root: Path, selected_evidence: list[str] | None) -> str:
+    selected = set(selected_evidence or [])
+    evidence_records = _evidence_records(root)
+    if not evidence_records:
+        return f'<p class="warning">{_t("Add a memory or source before adding a person.")}</p>'
+    options = "".join(
+        f'<label class="checkbox"><input type="checkbox" name="evidence" '
+        f'value="{_esc(record_id)}"{" checked" if record_id in selected else ""}> '
+        f"{_esc(record_type)} · {_esc(record_id)}"
+        f"{' · ' + _esc(name) if name else ''}</label>"
+        for record_id, record_type, name in evidence_records
+    )
+    return f"<fieldset><legend>{_t('Evidence')}</legend>{options}</fieldset>"
+
+
 def _record_link(record_id: Any, known_ids: set[str]) -> str:
     if not isinstance(record_id, str) or not record_id:
         return '<span class="muted">—</span>'
@@ -321,6 +352,7 @@ def render_home(root: Path) -> str:
   <a class="button" href="/genogram">{_t("Genogram")}</a>
   <a class="button primary" href="/memories/new">{_t("Add memory")}</a>
   <a class="button" href="/people/new">{_t("Add person")}</a>
+  <a class="button" href="/relationships/new">{_t("Add relationship")}</a>
   <a class="button" href="/proposals/new">{_t("Create proposal")}</a>
   <a class="button" href="/proposals/generate">{_t("Generate with Ollama")}</a>
   <a class="button" href="/proposals">{_t("View proposals")}</a>
@@ -474,20 +506,7 @@ def render_person_form(
     values = values or {}
     visibility = values.get("visibility") or ""
     notes_value = _esc(values.get("notes", ""))
-    selected_evidence_set = set(selected_evidence or [])
-    evidence_records = _evidence_records(root)
-    evidence_options = "".join(
-        f'<label class="checkbox"><input type="checkbox" name="evidence" '
-        f'value="{_esc(record_id)}"{" checked" if record_id in selected_evidence_set else ""}> '
-        f"{_esc(record_type)} · {_esc(record_id)}"
-        f"{' · ' + _esc(name) if name else ''}</label>"
-        for record_id, record_type, name in evidence_records
-    )
-    evidence_block = (
-        f"<fieldset><legend>{_t('Evidence')}</legend>{evidence_options}</fieldset>"
-        if evidence_records
-        else f'<p class="warning">{_t("Add a memory or source before adding a person.")}</p>'
-    )
+    evidence_block = _evidence_fieldset(root, selected_evidence)
     visibility_options = "".join(
         f'<option value="{_esc(item)}"'
         f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
@@ -527,6 +546,204 @@ def render_person_form(
 </form>
 """
     return _layout(_t("Add person"), body)
+
+
+def _relationship_proposal(
+    root: Path, values: dict[str, str], evidence: list[str]
+) -> tuple[dict[str, Any] | None, list[str]]:
+    subject = values.get("subject", "").strip()
+    predicate = values.get("predicate", "").strip()
+    object_id = values.get("object", "").strip()
+    start = values.get("start", "").strip()
+    end = values.get("end", "").strip()
+    precision = values.get("precision", "").strip()
+    visibility = values.get("visibility", "").strip()
+    notes = values.get("notes", "").strip()
+    evidence = list(dict.fromkeys(item for item in evidence if item))
+
+    people = {record_id for record_id, _ in _person_records(root)}
+    errors: list[str] = []
+    if not subject:
+        errors.append(_t("Subject is required"))
+    elif subject not in people:
+        errors.append(_t("Unknown person: {value}", value=subject))
+    if not object_id:
+        errors.append(_t("Object is required"))
+    elif object_id not in people:
+        errors.append(_t("Unknown person: {value}", value=object_id))
+    if subject and subject == object_id:
+        errors.append(_t("Subject and object must be different"))
+    if predicate not in FAMILY_PREDICATES:
+        errors.append(_t("Unsupported predicate: {value}", value=predicate))
+    if visibility and visibility not in VISIBILITIES:
+        errors.append(_t("Unsupported visibility: {value}", value=visibility))
+    known_evidence = {record_id for record_id, _, _ in _evidence_records(root)}
+    if not evidence:
+        errors.append(_t("Evidence is required"))
+    for record_id in evidence:
+        if record_id not in known_evidence:
+            errors.append(_t("Unknown evidence: {value}", value=record_id))
+    if errors:
+        return None, errors
+
+    now = datetime.now(UTC).isoformat()
+    token = uuid4().hex[:12]
+    record: dict[str, Any] = {
+        "id": f"relationship:{token}",
+        "type": "Relationship",
+        "subject": subject,
+        "predicate": predicate,
+        "object": object_id,
+        "status": "reported",
+        "created_at": now,
+        "updated_at": now,
+    }
+    valid_time = {}
+    if start:
+        valid_time["start"] = start
+    if end:
+        valid_time["end"] = end
+    if precision:
+        valid_time["precision"] = precision
+    if valid_time:
+        record["valid_time"] = valid_time
+    if visibility:
+        record["visibility"] = visibility
+    if notes:
+        record["notes"] = notes
+
+    record_errors = validate_mod.validate_instance(root, record, TYPE_BY_NAME["Relationship"])
+    if record_errors:
+        return None, record_errors
+
+    people_by_id = dict(_person_records(root))
+    proposal = {
+        "id": f"proposal:relationship-{token}",
+        "type": "Proposal",
+        "status": "proposed",
+        "created_at": now,
+        "updated_at": now,
+        "title": _t(
+            "New relationship: {subject} → {object}",
+            subject=people_by_id.get(subject, subject),
+            object=people_by_id.get(object_id, object_id),
+        ),
+        "rationale": _t("Created from the Add relationship form."),
+        "operations": [
+            {
+                "op": "create",
+                "record_type": "Relationship",
+                "record": record,
+                "evidence": evidence,
+            }
+        ],
+    }
+    return proposal, []
+
+
+def render_relationship_form(
+    root: Path,
+    values: dict[str, str] | None = None,
+    errors: list[str] | None = None,
+    selected_evidence: list[str] | None = None,
+) -> str:
+    values = values or {}
+    subject = values.get("subject") or ""
+    predicate = values.get("predicate") or ""
+    object_id = values.get("object") or ""
+    precision = values.get("precision") or ""
+    visibility = values.get("visibility") or ""
+    notes_value = _esc(values.get("notes", ""))
+    people = _person_records(root)
+    warning = ""
+    if len(people) < 2:
+        warning = (
+            f'<p class="warning">{_t("Add at least two people before adding a relationship.")}</p>'
+        )
+    subject_options = f'<option value="">{_t("Choose a person")}</option>' + "".join(
+        f'<option value="{_esc(record_id)}"'
+        f"{' selected' if record_id == subject else ''}>"
+        f"{_esc(name or record_id)} · {_esc(record_id)}</option>"
+        for record_id, name in people
+    )
+    object_options = f'<option value="">{_t("Choose a person")}</option>' + "".join(
+        f'<option value="{_esc(record_id)}"'
+        f"{' selected' if record_id == object_id else ''}>"
+        f"{_esc(name or record_id)} · {_esc(record_id)}</option>"
+        for record_id, name in people
+    )
+    predicate_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == predicate else ''}>{_esc(item)}</option>"
+        for item in sorted(FAMILY_PREDICATES)
+    )
+    precision_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == precision else ''}>{_esc(_t(item))}</option>"
+        for item in ("day", "month", "year", "decade", "approximate", "unknown")
+    )
+    visibility_options = "".join(
+        f'<option value="{_esc(item)}"'
+        f"{' selected' if item == visibility else ''}>{_esc(_t(item))}</option>"
+        for item in VISIBILITIES
+    )
+    evidence_block = _evidence_fieldset(root, selected_evidence)
+    intro = _t(
+        "Add a relationship as a pending proposal. It enters canonical data only "
+        "after a human approves the proposal."
+    )
+    body = f"""
+<h1>{_t("Add relationship")}</h1>
+<p class="muted">
+{intro}
+</p>
+{warning}
+{_errors_block(errors or [])}
+<form method="post" action="/relationships/new">
+<p>
+<label>{_t("Subject")}
+  <select name="subject">{subject_options}</select>
+</label>
+<label>{_t("Predicate")}
+  <select name="predicate">
+    <option value="">{_t("Choose a predicate")}</option>{predicate_options}
+  </select>
+</label>
+<label>{_t("Object")}
+  <select name="object">{object_options}</select>
+</label>
+</p>
+<p>
+<label>{_t("Start")}
+  <input name="start" value="{_esc(values.get("start", ""))}" placeholder="1987"></label>
+<label>{_t("End")}
+  <input name="end" value="{_esc(values.get("end", ""))}" placeholder="1995"></label>
+<label>{_t("Precision")}
+  <select name="precision">
+    <option value="">{_t("Unspecified")}</option>{precision_options}
+  </select>
+</label>
+</p>
+<p>
+<label>{_t("Visibility")}
+  <select name="visibility">
+    <option value="">{_t("Unspecified")}</option>{visibility_options}
+  </select>
+</label>
+</p>
+<label>{_t("Notes")}
+  <textarea name="notes" spellcheck="true"
+    placeholder="{_t("Optional notes about this relationship")}">{notes_value}</textarea>
+</label>
+{evidence_block}
+<p>
+  <button class="primary" type="submit">{_t("Save pending proposal")}</button>
+  <a class="button" href="/proposals/new">{_t("Advanced JSON editor")}</a>
+  <a class="button" href="/proposals">{_t("Cancel")}</a>
+</p>
+</form>
+"""
+    return _layout(_t("Add relationship"), body)
 
 
 def render_memory_form(
@@ -1490,6 +1707,9 @@ class StorygramHandler(BaseHTTPRequestHandler):
         if path == "/people/new":
             self._send(200, render_person_form(self.root))
             return
+        if path == "/relationships/new":
+            self._send(200, render_relationship_form(self.root))
+            return
         if path == "/proposals/new":
             self._send(200, _new_form())
             return
@@ -1595,6 +1815,34 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 proposals_mod.create_pending(self.root, proposal)
             except proposals_mod.ProposalError as exc:
                 self._send(400, render_person_form(self.root, values, exc.errors, evidence))
+                return
+            proposal_id = str(proposal["id"])
+            self._redirect(f"/proposals/{quote(proposal_id, safe='')}")
+            return
+
+        if path == "/relationships/new":
+            values = {
+                key: (form.get(key) or [""])[0]
+                for key in (
+                    "subject",
+                    "predicate",
+                    "object",
+                    "start",
+                    "end",
+                    "precision",
+                    "visibility",
+                    "notes",
+                )
+            }
+            evidence = form.get("evidence") or []
+            proposal, errors = _relationship_proposal(self.root, values, evidence)
+            if proposal is None:
+                self._send(400, render_relationship_form(self.root, values, errors, evidence))
+                return
+            try:
+                proposals_mod.create_pending(self.root, proposal)
+            except proposals_mod.ProposalError as exc:
+                self._send(400, render_relationship_form(self.root, values, exc.errors, evidence))
                 return
             proposal_id = str(proposal["id"])
             self._redirect(f"/proposals/{quote(proposal_id, safe='')}")

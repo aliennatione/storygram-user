@@ -1012,3 +1012,156 @@ def test_web_add_person_validates_input(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_web_add_relationship_creates_pending_proposal(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Anna is Bruno's mother."},
+            },
+        )
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+        write_record(tmp_path, "people", "person_bruno.json", person("person:bruno", "Bruno Rossi"))
+
+        status, body = get(base + "/relationships/new")
+        assert status == 200
+        assert "Add relationship" in body
+        assert 'action="/relationships/new"' in body
+        assert "person:anna" in body and "person:bruno" in body
+        assert "episode:memory" in body
+
+        status, body = post(
+            base + "/relationships/new",
+            {
+                "subject": "person:anna",
+                "predicate": "relation:parent",
+                "object": "person:bruno",
+                "start": "1987",
+                "end": "1995",
+                "precision": "year",
+                "visibility": "family",
+                "notes": "Recorded from the family interview.",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 200
+        assert "Dry-run preview" in body
+
+        pending = list((tmp_path / "proposals").glob("*.json"))
+        assert len(pending) == 1
+        proposal = json.loads(pending[0].read_text(encoding="utf-8"))
+        assert proposal["status"] == "proposed"
+        assert proposal["title"] == "New relationship: Anna Rossi → Bruno Rossi"
+        operation = proposal["operations"][0]
+        assert operation["op"] == "create"
+        assert operation["record_type"] == "Relationship"
+        assert operation["evidence"] == ["episode:memory"]
+        record = operation["record"]
+        assert record["type"] == "Relationship"
+        assert record["subject"] == "person:anna"
+        assert record["predicate"] == "relation:parent"
+        assert record["object"] == "person:bruno"
+        assert record["status"] == "reported"
+        assert record["valid_time"] == {"start": "1987", "end": "1995", "precision": "year"}
+        assert record["visibility"] == "family"
+        assert record["notes"] == "Recorded from the family interview."
+        assert not list((tmp_path / "data" / "relationships").glob("*.json"))
+
+        status, body = post(
+            base + f"/proposals/{quote(proposal['id'], safe='')}/approve",
+            {"commit": "no"},
+        )
+        assert status == 200, body
+        assert "merged" in body
+        relationship_file = (
+            tmp_path / "data" / "relationships" / f"{record['id'].replace(':', '_')}.json"
+        )
+        assert relationship_file.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_web_add_relationship_validates_input(tmp_path: Path) -> None:
+    server, thread, base = start(tmp_path)
+    try:
+        status, body = get(base + "/relationships/new")
+        assert status == 200
+        assert "Add at least two people before adding a relationship." in body
+
+        write_record(tmp_path, "people", "person_anna.json", person("person:anna", "Anna Rossi"))
+        write_record(tmp_path, "people", "person_bruno.json", person("person:bruno", "Bruno Rossi"))
+        write_record(
+            tmp_path,
+            "episodes",
+            "episode_memory.json",
+            {
+                "id": "episode:memory",
+                "type": "Episode",
+                "episode_type": "memory",
+                "status": "reported",
+                "created_at": NOW,
+                "updated_at": NOW,
+                "content": {"text": "Family memory."},
+            },
+        )
+
+        status, body = post(
+            base + "/relationships/new",
+            {
+                "subject": "person:anna",
+                "predicate": "relation:parent",
+                "object": "person:anna",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 400
+        assert "Subject and object must be different" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/relationships/new",
+            {
+                "subject": "person:anna",
+                "predicate": "relation:friend",
+                "object": "person:bruno",
+                "evidence": "episode:memory",
+            },
+        )
+        assert status == 400
+        assert "Unsupported predicate: relation:friend" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = post(
+            base + "/relationships/new",
+            {
+                "subject": "person:anna",
+                "predicate": "relation:parent",
+                "object": "person:bruno",
+            },
+        )
+        assert status == 400
+        assert "Evidence is required" in body
+        assert not list((tmp_path / "proposals").glob("*.json"))
+
+        status, body = get(base + "/relationships/new?lang=it")
+        assert status == 200
+        assert '<html lang="it">' in body
+        assert "Aggiungi relazione" in body
+        assert "Scegli una persona" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

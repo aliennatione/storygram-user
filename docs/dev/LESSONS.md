@@ -166,3 +166,4 @@
 - Omit empty optional temporal fields instead of storing empty strings; schema-valid emptiness and meaningful absence are different.
 - Distinguish evidence records from semantic claims when setting `evidence_required`. A Source is evidence and should be creatable on its own; a Person or Relationship is a claim and needs evidence.
 - Cover standalone evidence import as well as form creation; otherwise the registry flag can regress only on one path.
+- Prefer a typed generic form when schemas are genuinely identical; keep dedicated forms where fields or validation diverge.

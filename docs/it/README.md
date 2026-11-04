@@ -37,7 +37,7 @@ storygram proposal approve proposal:example-1 --archive ./archive --dry-run
 storygram proposal approve proposal:example-1 --archive ./archive
 ```
 
-La UI web usa lo stesso motore, inclusa una pagina **Records** in sola lettura con filtri per tipo/stato/visibilità/testo e download di export JSON/JSON-LD/YAML/Markdown per il filtro corrente, dettaglio con JSON grezzo e link a riferimenti e backlink, un modulo **Aggiungi memoria** che crea proposte Episode in attesa, moduli **Aggiungi fonte**, **Aggiungi persona** e **Aggiungi relazione** che creano record di evidenza o proposte in attesa supportate da evidenza, una pagina **Generate** per modelli locali/Ollama o compatibili OpenAI e un link di modifica per le proposte pendenti. L'header cambia l'interfaccia tra inglese e italiano:
+La UI web usa lo stesso motore, inclusa una pagina **Records** in sola lettura con filtri per tipo/stato/visibilità/testo e download di export JSON/JSON-LD/YAML/Markdown per il filtro corrente, dettaglio con JSON grezzo e link a riferimenti e backlink, un modulo **Aggiungi memoria** che crea proposte Episode in attesa, moduli **Aggiungi fonte**, **Aggiungi entità**, **Aggiungi persona** e **Aggiungi relazione** che creano record di evidenza o proposte in attesa supportate da evidenza, una pagina **Generate** per modelli locali/Ollama o compatibili OpenAI e un link di modifica per le proposte pendenti. L'header cambia l'interfaccia tra inglese e italiano:
 
 ```bash
 storygram web --archive ./archive --host 0.0.0.0 --port 8080

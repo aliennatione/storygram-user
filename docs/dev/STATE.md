@@ -114,7 +114,8 @@ Last updated: 2026-11-04
 - `2a1e24c`: the Add person form creates a pending Person proposal backed by at least one existing Episode/Source/Annotation evidence record.
 - `a198d95`: the Add relationship form creates a pending Relationship proposal with subject, supported `relation:*` predicate, object, optional valid-time start/end/precision, visibility and evidence. `ea150f6` extends Chromium E2E through both forms.
 - `fd410ad`: the Add source form creates a pending Source proposal with title, source type, visibility and notes. `bbdf268` allows standalone Source creation without prior evidence: a Source is itself evidence and can support later person/relationship proposals. Import and web tests cover standalone source approval.
-- Current baseline: `156 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
+- `68e2f02`: the Add entity form creates pending Place, Event, Organization or Period proposals with evidence, notes and visibility. Integration tests cover all four types and validation; Chromium E2E covers source and place creation.
+- Current baseline: `161 passed`; ruff/format/mypy clean; Chromium and Firefox E2E passing.
 
 ## Current Usable Flows
 
@@ -124,7 +125,7 @@ Last updated: 2026-11-04
 ## Resume Checklist After a Fresh Container
 
 1. `pip install --break-system-packages -e ".[dev]"`.
-2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `156 passed`).
+2. `PYTHONPATH=/data/src python -m pytest -q -o addopts=''` (expect `161 passed`).
 3. `ruff check src tests && ruff format --check src tests && mypy src`.
 4. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` if `node_modules` is missing.
 5. `apk add chromium firefox geckodriver` for both browser flows; `npm run test:e2e:all`.
@@ -132,7 +133,7 @@ Last updated: 2026-11-04
 
 ## Next Steps
 
-1. Continue the human GUI: add forms for places/events and other common record types, then links between records and related proposals. Keep all browser write paths behind proposals.
+1. Continue the human GUI: add forms for assertions/conflicts and links between records and related proposals. Keep all browser write paths behind proposals.
 2. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, Relationship temporal fields are modelled and all intervals are aggregated. Keep approval UI/CLI-only and consider advisory (non-applying) model review later.
 3. Re-run Python/lint/format/mypy and both browser flows after any change; keep bilingual docs in sync.
 4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.

@@ -295,3 +295,8 @@
 - The Add source form creates a pending Source proposal with title, optional source type, visibility and notes. Approval still goes through the normal proposal planner.
 - Sources remain `is_evidence=True`, so they can support later Person, Relationship and Assertion proposals.
 - Annotation remains evidence-required because an annotation is about existing target records and needs evidence to be meaningful.
+
+## Generic Entity Form (2026-11-04)
+
+- Place, Event, Organization and Period share the same minimal schema shape (`name`, `notes`, `visibility`, status and timestamps), so one Add entity form with a type selector avoids four near-identical forms.
+- The form creates pending proposals only, requires existing evidence, and keeps Person and Relationship as dedicated forms because their fields and validation differ.

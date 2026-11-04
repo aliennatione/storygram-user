@@ -690,5 +690,58 @@ def proposal_withdraw(
     _emit(result, as_json, f"Withdrew {proposal_id}")
 
 
+@proposal.command("review")
+@click.argument("proposal_id")
+@click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
+@click.option(
+    "--provider",
+    default=None,
+    help="Ollama or OpenAI-compatible provider; default $STORYGRAM_LLM_PROVIDER or ollama",
+)
+@click.option("--model", default=None, help="Model name; default $STORYGRAM_LLM_MODEL")
+@click.option("--url", "base_url", default=None, help="LLM base URL; default $STORYGRAM_LLM_URL")
+@click.option(
+    "--api-key",
+    default=None,
+    envvar="STORYGRAM_LLM_API_KEY",
+    help="Bearer token for OpenAI-compatible providers; prefer the env var",
+)
+@click.option("--json", "as_json", is_flag=True)
+def proposal_review(
+    proposal_id: str,
+    archive_path: str | None,
+    provider: str | None,
+    model: str | None,
+    base_url: str | None,
+    api_key: str | None,
+    as_json: bool,
+) -> None:
+    """Request an advisory, non-applying model review of a proposal."""
+    from .llm import (
+        LLMAdapterError,
+        provider_config,
+        provider_from_config,
+        review_proposal,
+    )
+
+    root = _root(archive_path)
+    path = proposals_mod.find_proposal(root, proposal_id, include_applied=True)
+    if path is None:
+        _fail(f"Proposal not found: {proposal_id}", as_json)
+    data = proposals_mod._load_json(path)
+    if not isinstance(data, dict):
+        _fail(f"Proposal is not valid JSON: {proposal_id}", as_json)
+    try:
+        config = provider_config(provider, model, base_url, api_key)
+    except LLMAdapterError as exc:
+        _fail(str(exc), as_json)
+    try:
+        feedback = review_proposal(provider_from_config(config), data)
+    except LLMAdapterError as exc:
+        _fail(str(exc), as_json)
+    output = {"ok": True, "proposal_id": proposal_id, "review": feedback}
+    _emit(output, as_json, f"Reviewed {proposal_id}")
+
+
 if __name__ == "__main__":
     main()

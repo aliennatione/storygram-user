@@ -438,6 +438,42 @@ class LLMAdapter:
         return proposal
 
 
+def build_review_prompt(proposal: dict[str, Any]) -> str:
+    return (
+        "You are an advisory reviewer for a Storygram proposal. "
+        "Do not approve or apply anything. Return JSON only with keys: "
+        "summary (string), issues (array of strings), suggestions (array of strings), "
+        "dry_run_valid (boolean). "
+        "Proposal JSON:\n" + json.dumps(proposal, indent=2)
+    )
+
+
+def review_proposal(provider: Provider, proposal: dict[str, Any]) -> dict[str, Any]:
+    """Return advisory feedback without mutating canonical data or the proposal."""
+    response = provider.complete(build_review_prompt(proposal))
+    data = extract_json(response)
+    if not isinstance(data, dict):
+        raise LLMAdapterError("Review response must be a JSON object")
+    summary = data.get("summary", "")
+    issues = data.get("issues", [])
+    suggestions = data.get("suggestions", [])
+    dry_run_valid = data.get("dry_run_valid", False)
+    if not isinstance(summary, str):
+        summary = str(summary)
+    if not isinstance(issues, list):
+        issues = [str(issues)]
+    if not isinstance(suggestions, list):
+        suggestions = [str(suggestions)]
+    if not isinstance(dry_run_valid, bool):
+        dry_run_valid = bool(dry_run_valid)
+    return {
+        "summary": summary,
+        "issues": [str(item) for item in issues],
+        "suggestions": [str(item) for item in suggestions],
+        "dry_run_valid": dry_run_valid,
+    }
+
+
 def referenced_ids(proposal: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(iter_reference_strings(proposal)))
 

@@ -366,3 +366,33 @@ def test_api_reject_and_withdraw_pending_proposals(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_api_review_is_advisory_and_does_not_apply(tmp_path: Path) -> None:
+    def factory(cfg):
+        return CallableProvider(
+            lambda prompt: '{"summary":"ok","issues":[],"suggestions":[],"dry_run_valid":true}'
+        )
+
+    server, thread, base = start(tmp_path, provider_factory=factory)
+    try:
+        status, body = request(base, "/api/proposals", method="POST", body=proposal())
+        assert status == 201, body
+        proposal_id = body["proposal"]["id"]
+
+        status, body = request(
+            base, f"/api/proposals/{quote(proposal_id, safe='')}/review", method="POST", body={}
+        )
+        assert status == 200, body
+        assert body["review"]["dry_run_valid"] is True
+        assert body["review"]["summary"] == "ok"
+
+        # proposal still pending, canonical data untouched
+        status, body = request(base, f"/api/proposals/{quote(proposal_id, safe='')}")
+        assert status == 200
+        assert body["proposal"]["status"] == "proposed"
+        assert not list((tmp_path / "data" / "episodes").glob("*.json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

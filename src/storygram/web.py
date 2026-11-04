@@ -36,6 +36,7 @@ from .llm import (
     ProviderConfig,
     provider_config,
     provider_from_config,
+    review_proposal,
     save_pending,
 )
 from .media import list_media
@@ -2966,6 +2967,51 @@ class StorygramHandler(BaseHTTPRequestHandler):
             return
         self._send_json(200, result)
 
+    def _api_review(self, proposal_id: str) -> None:
+        path = proposals_mod.find_proposal(self.root, proposal_id)
+        applied_path = None
+        if path is None:
+            applied_path = proposals_mod.find_applied_proposal(self.root, proposal_id)
+        source_path = path or applied_path
+        if source_path is None:
+            self._api_error(404, f"proposal not found: {proposal_id}")
+            return
+        data = proposals_mod._load_json(source_path)
+        if not isinstance(data, dict):
+            self._api_error(500, f"cannot read proposal: {proposal_id}")
+            return
+        try:
+            body = self._read_json(required=False)
+        except APIRequestError as exc:
+            self._api_error(exc.status, exc.message)
+            return
+        provider_name = body.get("provider")
+        model = body.get("model")
+        base_url = body.get("url", body.get("ollama_url"))
+        api_key = body.get("api_key")
+        for value, name in (
+            (provider_name, "provider"),
+            (model, "model"),
+            (base_url, "url"),
+            (api_key, "api_key"),
+        ):
+            if value is not None and not isinstance(value, str):
+                self._api_error(400, f"{name} must be a string")
+                return
+        try:
+            config = provider_config(provider_name, model, base_url, api_key)
+        except LLMAdapterError as exc:
+            self._api_error(400, str(exc))
+            return
+        factory = cast(StorygramServer, self.server).provider_factory
+        provider = factory(config) if factory is not None else provider_from_config(config)
+        try:
+            feedback = review_proposal(provider, data)
+        except LLMAdapterError as exc:
+            self._api_error(502, str(exc))
+            return
+        self._send_json(200, {"ok": True, "proposal_id": proposal_id, "review": feedback})
+
     def _handle_api(self, method: str, path: str, query: str) -> None:
         segments = [unquote(part) for part in path.strip("/").split("/") if part]
         if len(segments) < 2 or segments[0] != "api" or segments[1] != "proposals":
@@ -3003,13 +3049,19 @@ class StorygramHandler(BaseHTTPRequestHandler):
             if not proposal_id.startswith("proposal:"):
                 self._api_error(400, "proposal id must start with proposal:")
                 return
-            if action not in {"reject", "withdraw"}:
-                self._api_error(404, "API route not found")
+            if action in {"reject", "withdraw"}:
+                if method != "POST":
+                    self._api_error(405, "method not allowed", {"Allow": "POST"})
+                    return
+                self._api_close(proposal_id, "rejected" if action == "reject" else "withdrawn")
                 return
-            if method != "POST":
-                self._api_error(405, "method not allowed", {"Allow": "POST"})
+            if action == "review":
+                if method != "POST":
+                    self._api_error(405, "method not allowed", {"Allow": "POST"})
+                    return
+                self._api_review(proposal_id)
                 return
-            self._api_close(proposal_id, "rejected" if action == "reject" else "withdrawn")
+            self._api_error(404, "API route not found")
             return
         self._api_error(404, "API route not found")
 

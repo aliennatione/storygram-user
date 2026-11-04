@@ -157,3 +157,6 @@
 - Do not assume `jsonschema` enforces every `format`. Check `FormatChecker().checkers` and register the formats you rely on, especially `date-time`.
 - A format-only subschema without `"type": "string"` can silently skip checks; make the type explicit when the value must be a string.
 - Test both the schema and the user-facing form for temporal validation. A green schema test does not prove the form path is protected.
+- Reuse the CLI export module in the web route. A second export implementation would drift on ordering, visibility and format details.
+- Preserve active filters in export links; otherwise the downloaded file no longer matches what the user is looking at.
+- Reject invalid export parameters explicitly. Falling back to an unfiltered export can leak records the user did not intend to share.

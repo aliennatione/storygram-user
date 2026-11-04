@@ -17,7 +17,7 @@ storygram web --archive ./archive --host 0.0.0.0 --port 8080
 
 Apri `http://localhost:8080`, consulta i record canonici in sola lettura, poi incolla o genera una proposta e controlla il dry-run prima di approvare. L'approvazione è l'unico percorso verso `data/`.
 
-La pagina **Records** filtra per tipo, stato o testo e apre un dettaglio in sola lettura con JSON grezzo e link a riferimenti e backlink. Non espone route di scrittura; le modifiche canoniche richiedono ancora una proposta e l'approvazione umana.
+La pagina **Records** filtra per tipo, stato, visibilità o testo e apre un dettaglio in sola lettura con JSON grezzo e link a riferimenti e backlink. Gli stessi filtri alimentano i download di export JSON, JSON-LD, YAML e Markdown da `/export`; la pagina non espone route di scrittura, quindi le modifiche canoniche richiedono ancora una proposta e l'approvazione umana.
 
 Il modulo **Aggiungi memoria** trasforma testo libero in una proposta Episode in attesa, con titolo, data, partecipanti, tag e visibilità opzionali. Non scrive mai dati canonici; l'approvazione resta obbligatoria. L'interfaccia è disponibile in inglese e italiano tramite il selettore EN/IT nell'header.
 

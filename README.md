@@ -17,7 +17,7 @@ storygram web --archive ./archive --host 0.0.0.0 --port 8080
 
 Open `http://localhost:8080`, browse canonical records read-only, then paste or generate a proposal and review the dry-run before approving. Approval is the only path into `data/`.
 
-The **Records** page filters by type, status or text and opens a read-only detail with raw JSON plus reference and backlink links. It exposes no write route; canonical changes still require a proposal and human approval.
+The **Records** page filters by type, status, visibility or text and opens a read-only detail with raw JSON plus reference and backlink links. The same filters drive JSON, JSON-LD, YAML and Markdown export downloads from `/export`; the page exposes no write route, so canonical changes still require a proposal and human approval.
 
 The **Add memory** form turns free text into a pending Episode proposal with an optional title, date, participants, tags and visibility. It never writes canonical data; approval is still required. The interface is available in English and Italian through the EN/IT switch in the header.
 

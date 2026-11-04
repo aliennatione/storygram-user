@@ -271,3 +271,11 @@
 - The validator now registers explicit `date` and `date-time` checkers using the standard library. `date-time` requires a full RFC3339 value with a timezone; naive local timestamps are rejected.
 - The Episode `dateTimeOrDate` schema now gives every branch an explicit string type. This keeps the schema honest and makes the format checks apply inside `anyOf`.
 - Invalid dates fail before proposal creation, so the Add memory form cannot persist malformed temporal data.
+
+## Browser Visibility Filters and Export (2026-11-04)
+
+- The Records page reuses the existing canonical record list and applies type, status, visibility and text filters in memory. Visibility is a first-class filter because privacy is a product invariant, not a presentation detail.
+- Export is a GET-only route (`/export`) and reuses the CLI export module. The browser does not reimplement export formats or bypass the registry-driven reader.
+- Export links preserve the active filters, so a human can inspect a subset and download exactly that subset in JSON, JSON-LD, YAML or Markdown.
+- Export responses are attachments with explicit content types. Invalid formats or visibility values return 400 instead of silently exporting the whole archive.
+- The export route never writes canonical data; it is a read projection like the records, timeline and genogram pages.

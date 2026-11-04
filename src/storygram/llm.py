@@ -303,7 +303,7 @@ def build_prompt(source_text: str, known_ids: list[str] | None = None) -> str:
         "- Use an existing ID when the known list contains the same entity.",
         "- Semantic operations must cite evidence IDs.",
         "  Evidence must be episode:, source: or annotation:.",
-        "- NEVER create Relationship records: that schema has no endpoints yet.",
+        "- NEVER create Relationship records in generated proposals; prefer Assertions.",
         "- Represent a relationship as an Assertion with predicate relation:sibling",
         "  (or another relation:* predicate), subject/object person IDs,",
         "  transaction_time.recorded_at and evidence on the operation.",

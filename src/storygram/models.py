@@ -216,6 +216,9 @@ class Event(BaseModel):
 class Relationship(BaseModel):
     id: str = Field(pattern=r"^relationship:[A-Za-z0-9][A-Za-z0-9._~-]*$")
     type: Literal["Relationship"]
+    subject: str | None = None
+    predicate: str | None = Field(default=None, pattern=r"^relation:[A-Za-z0-9][A-Za-z0-9._~-]*$")
+    object: str | None = None
     status: Literal[
         "draft", "proposed", "reported", "confirmed", "disputed", "rejected", "archived"
     ]

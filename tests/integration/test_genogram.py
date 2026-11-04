@@ -19,14 +19,33 @@ def write(root: Path, relative: str, data: dict) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
-def assertion(assertion_id: str, subject: str, predicate: str, obj: str) -> dict:
+def assertion(
+    assertion_id: str, subject: str, predicate: str, obj: str, status: str = "reported"
+) -> dict:
     return {
         "id": assertion_id,
         "type": "Assertion",
         "subject": subject,
         "predicate": predicate,
         "object": obj,
-        "status": "reported",
+        "status": status,
+    }
+
+
+def relationship(
+    relationship_id: str,
+    subject: str | None,
+    predicate: str | None,
+    obj: str | None,
+    status: str = "reported",
+) -> dict:
+    return {
+        "id": relationship_id,
+        "type": "Relationship",
+        "subject": subject,
+        "predicate": predicate,
+        "object": obj,
+        "status": status,
     }
 
 
@@ -58,9 +77,41 @@ def test_genogram_scopes_assertions_to_person(tmp_path):
     assert all(item["supported"] for item in result["relations"])
 
 
-def test_genogram_ignores_unscoped_relationship_records(tmp_path):
+def test_genogram_includes_endpoint_aware_relationship_records(tmp_path):
     root = make_archive(tmp_path)
-    write(root, "relationships/family.json", {"id": "relationship:family", "type": "Relationship"})
+    write(
+        root,
+        "relationships/out.json",
+        relationship("relationship:out", "person:anna", "relation:parent", "person:bruno"),
+    )
+    write(
+        root,
+        "relationships/in.json",
+        relationship("relationship:in", "person:carla", "relation:parent", "person:anna"),
+    )
+    write(
+        root,
+        "relationships/other.json",
+        relationship("relationship:other", "person:bruno", "relation:parent", "person:carla"),
+    )
+
+    result = build_genogram(root, "person:anna")
+
+    assert [item["relationship_id"] for item in result["relations"]] == [
+        "relationship:in",
+        "relationship:out",
+    ]
+    assert [item["record_type"] for item in result["relations"]] == [
+        "Relationship",
+        "Relationship",
+    ]
+    assert [item["direction"] for item in result["relations"]] == ["incoming", "outgoing"]
+    assert all(item["supported"] for item in result["relations"])
+
+
+def test_genogram_warns_on_incomplete_relationship_endpoints(tmp_path):
+    root = make_archive(tmp_path)
+    write(root, "relationships/family.json", relationship("relationship:family", None, None, None))
     write(
         root,
         "assertions/out.json",
@@ -70,7 +121,33 @@ def test_genogram_ignores_unscoped_relationship_records(tmp_path):
     result = build_genogram(root, "person:anna")
 
     assert [item["assertion_id"] for item in result["relations"]] == ["assertion:out"]
-    assert any("no endpoint metadata" in warning for warning in result["warnings"])
+    assert any("complete endpoints" in warning for warning in result["warnings"])
+
+
+def test_genogram_skips_closed_relations(tmp_path):
+    root = make_archive(tmp_path)
+    write(
+        root,
+        "relationships/archived.json",
+        relationship(
+            "relationship:archived", "person:anna", "relation:parent", "person:bruno", "archived"
+        ),
+    )
+    write(
+        root,
+        "assertions/superseded.json",
+        assertion(
+            "assertion:superseded",
+            "person:anna",
+            "relation:parent",
+            "person:carla",
+            "superseded",
+        ),
+    )
+
+    result = build_genogram(root, "person:anna")
+
+    assert result["relations"] == []
 
 
 def test_genogram_keeps_unsupported_relations_as_warnings(tmp_path):

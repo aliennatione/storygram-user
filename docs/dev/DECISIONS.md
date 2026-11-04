@@ -215,3 +215,12 @@
 - The merged entry keeps the representative's existing keys (`assertion_id` or `relationship_id`, plus `record_id` and `record_type`) and adds `related_ids`, the sorted IDs of every contributing record. This is additive and preserves existing consumers.
 - Distinct predicates between the same endpoints remain distinct. Deduplication is not a semantic merge and does not decide which conflicting relation is true.
 - Closed-status filtering and person scoping still happen before deduplication. No schema change, canonical write, proposal, approval or commit behaviour changed.
+
+## Relationship Temporal Fields (2026-11-04)
+
+- Relationship now accepts optional `valid_time` and `transaction_time` with the same inner shapes as Assertion. Reusing the shapes keeps bitemporal semantics consistent across relation records.
+- Both fields are optional rather than required. Existing archives contain bare Relationship records and must remain schema-valid; the Assertion type keeps `transaction_time` required.
+- `transaction_time.recorded_at` is required whenever the object is present, and `valid_time.precision` stays constrained. Optionality applies to the fields, not to their internal structure.
+- `genogram` exposes both fields when the source record provides them. Missing fields become `null`, so consumers can distinguish absent temporal data from a populated interval.
+- Deduplication remains keyed by the exact relation triple. The representative supplies temporal fields and `related_ids` preserves every contributing record; this unit does not attempt semantic merging of different intervals.
+- No canonical write, proposal, approval or commit behaviour changed.

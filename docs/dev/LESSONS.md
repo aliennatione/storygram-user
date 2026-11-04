@@ -127,3 +127,7 @@
 - Keep deduplication additive: preserve existing keys and expose every contributing ID in `related_ids` instead of dropping provenance.
 - Do not merge different predicates between the same endpoints. That would hide real conflicts rather than deduplicate representations.
 - Deduplicate after closed-status filtering and person scoping, so a closed duplicate cannot promote an otherwise hidden relation.
+- Adding temporal fields to Relationship should reuse the Assertion `validTime`/`transactionTime` shapes. A second time vocabulary would drift.
+- Keep new Relationship temporal fields optional for backward compatibility, but require `transaction_time.recorded_at` when the object is present; optionality is not permission for a half-shaped interval.
+- When deduplication keeps one representative, temporal fields on the representative can hide different intervals from duplicate records. Preserve `related_ids` and document that this is not a semantic merge.
+- Expose missing temporal fields as `null` in genogram output; omitting the keys would make old and new output shapes harder to distinguish.

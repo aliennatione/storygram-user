@@ -442,3 +442,26 @@ Remove duplicate genogram entries when the same relation is represented by both 
 1. Keep deduplication keyed by the exact triple; do not infer semantic equivalence between different predicates.
 2. Keep `related_ids` as the provenance trail so deduplication does not hide contributing records.
 3. Next product gap: evaluate optional temporal fields on Relationship; keep `genogram` experimental until real-fixture review.
+
+## 2026-11-04 - Relationship temporal fields
+
+### Current objective
+
+Model optional valid and transaction time on Relationship and expose it in the genogram, without changing canonical write paths or the approval gate.
+
+### Point of situation
+
+- `relationship.schema.json` previously modelled endpoints but no temporal fields, so a dated relation could only carry time through a separate Assertion.
+- The schema now accepts optional `valid_time` and `transaction_time`, reusing the Assertion shapes. Internal structure is still validated when present.
+- Both schema copies are byte-identical, and `models.Relationship` mirrors the optional `ValidTime`/`TransactionTime` models.
+- `genogram` copies both fields into every relation entry when present; missing values appear as `null`.
+- Deduplication remains keyed by the exact triple. The representative supplies temporal fields and `related_ids` keeps provenance; no semantic interval merge is attempted.
+- No canonical write path, proposal flow, approval gate or commit behavior changed.
+- Tests cover schema acceptance, malformed temporal shapes, genogram output and legacy compatibility.
+- Full suite is `134 passed`; ruff, format, mypy and Playwright E2E pass.
+
+### Calibration
+
+1. Reuse Assertion temporal shapes for Relationship; do not invent a second vocabulary.
+2. Keep fields optional for legacy archives, but validate their contents when present.
+3. Next product gap: real-fixture genogram review; consider whether temporal intervals should affect deduplication or view filtering before promoting the command from experimental.

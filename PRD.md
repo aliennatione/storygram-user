@@ -192,6 +192,8 @@ valid_time:
   precision: year
 ```
 
+Relationship records may carry the same optional `valid_time` and `transaction_time` fields when the relation itself has a represented or recorded interval. Assertions remain the general proposition type.
+
 ### 9.2 Transaction time
 
 `recorded_at` and `recorded_until` represent when the proposition was present in the Storygram record.

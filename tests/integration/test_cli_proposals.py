@@ -205,3 +205,29 @@ def test_withdraw_marks_pending_proposal(tmp_path: Path, monkeypatch) -> None:
     data = json.loads((tmp_path / "proposals" / "proposal_cli-1.json").read_text())
     assert data["status"] == "withdrawn"
     assert data["notes"] == "wrong source"
+
+
+def test_proposal_show_json_for_agents(tmp_path: Path, monkeypatch) -> None:
+    init_archive(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    incoming = write_proposal(tmp_path, proposal())
+    runner = CliRunner()
+
+    created = runner.invoke(main, ["proposal", "new", "--file", str(incoming)])
+    assert created.exit_code == 0, created.output
+
+    shown = runner.invoke(main, ["proposal", "show", "proposal:cli-1", "--json"])
+    assert shown.exit_code == 0, shown.output
+    payload = json.loads(shown.output)
+    assert payload["id"] == "proposal:cli-1"
+    assert payload["operations"][0]["record"]["id"] == "episode:cli-note"
+
+    missing = runner.invoke(main, ["proposal", "show", "proposal:nope", "--json"])
+    assert missing.exit_code == 1
+    error = json.loads(missing.output)
+    assert error["ok"] is False
+    assert "Proposal not found" in error["errors"][0]
+
+    missing_plain = runner.invoke(main, ["proposal", "show", "proposal:nope"])
+    assert missing_plain.exit_code == 1
+    assert "Proposal not found" in missing_plain.output

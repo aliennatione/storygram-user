@@ -526,12 +526,19 @@ def proposal_list(include_applied: bool, archive_path: str | None, as_json: bool
 @proposal.command("show")
 @click.argument("proposal_id")
 @click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
-def proposal_show(proposal_id: str, archive_path: str | None) -> None:
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def proposal_show(proposal_id: str, archive_path: str | None, as_json: bool) -> None:
     """Show a pending or applied proposal."""
     root = _root(archive_path)
     path = proposals_mod.find_proposal(root, proposal_id, include_applied=True)
     if path is None:
-        _fail(f"Proposal not found: {proposal_id}")
+        _fail(f"Proposal not found: {proposal_id}", as_json)
+    if as_json:
+        data = proposals_mod._load_json(path)
+        if data is None:
+            _fail(f"Proposal is not valid JSON: {proposal_id}", as_json)
+        _emit(data, True)
+        return
     click.echo(path.read_text(encoding="utf-8"))
 
 

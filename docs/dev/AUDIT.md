@@ -465,3 +465,28 @@ Model optional valid and transaction time on Relationship and expose it in the g
 1. Reuse Assertion temporal shapes for Relationship; do not invent a second vocabulary.
 2. Keep fields optional for legacy archives, but validate their contents when present.
 3. Next product gap: real-fixture genogram review; consider whether temporal intervals should affect deduplication or view filtering before promoting the command from experimental.
+
+## 2026-11-04 - genogram temporal review
+
+### Current objective
+
+Review genogram behaviour on a realistic family fixture and decide whether temporal intervals should affect deduplication or view filtering before considering promotion from experimental.
+
+### Point of situation
+
+- The fixture `tests/fixtures/genogram_family.json` models four people, a place, two spouse intervals for the same pair, duplicate Assertion/Relationship parent records, an archived spouse and an unsupported lived-in relation.
+- Before this unit, the second spouse interval was only visible through `related_ids`; the singular temporal fields came from the lexically first record.
+- Decision: an edge remains one exact `(subject, predicate, object)` triple. Intervals do not split edges and no `--at` filter is added.
+- Deduplicated entries now aggregate `valid_times` and `transaction_times` across all contributing records, while singular fields remain on the representative.
+- Representative selection is Relationship before Assertion, then latest `transaction_time.recorded_at`, then smallest `record_id`.
+- Closed relations are filtered before aggregation, so archived/superseded/rejected intervals are excluded.
+- The fixture test validates each record and checks interval aggregation, recency, archived exclusion and unsupported-predicate warnings.
+- Full suite is `135 passed`; ruff, format, mypy and Playwright E2E pass.
+- No canonical write path, proposal flow, approval gate or commit behavior changed.
+
+### Calibration
+
+1. Keep genogram edges structural; do not split them by temporal interval.
+2. Aggregate intervals whenever a representative is chosen so the view does not silently lose history.
+3. Defer `--at` until interval-overlap semantics for approximate/open dates are designed.
+4. Keep genogram experimental until it is reviewed on real user data, not only synthetic fixtures.

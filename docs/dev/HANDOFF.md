@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-04
 Branch: `feature/agent-proposal-flow`
-Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, endpoint-aware Relationship records, collection/archive timeline scopes, genogram deduplication, then optional Relationship temporal fields on 2026-11-04. Use `git log --oneline -20`.
+Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, endpoint-aware Relationship records, collection/archive timeline scopes, genogram deduplication, optional Relationship temporal fields, then genogram temporal interval aggregation on 2026-11-04. Use `git log --oneline -20`.
 
 ## Compacted Context
 
@@ -10,8 +10,8 @@ Recent commits: API/provider/withdraw series, legacy command hardening, local GG
 - Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `134 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
-- Relationship records now carry an optional all-or-nothing `subject`/`predicate`/`object` triple plus optional `valid_time`/`transaction_time`; `genogram` reads complete records alongside `relation:*` assertions, deduplicates equivalent triples and exposes temporal fields. It remains experimental.
+- Python baseline: `135 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Relationship records now carry an optional all-or-nothing `subject`/`predicate`/`object` triple plus optional `valid_time`/`transaction_time`; `genogram` reads complete records alongside `relation:*` assertions, deduplicates equivalent triples and aggregates all temporal intervals. It remains experimental.
 - Export round-trips are implemented: JSON-LD/YAML/Markdown export plus reversible module parsers and tests. JSON/JSON-LD/YAML are lossless at record level; Markdown uses YAML front matter as source of truth.
 - Safe import is implemented: `storygram import FILE` wraps JSON/JSON-LD/YAML/Markdown exports in a schema-validated, create-only pending proposal. It runs the approval dry-run planner before writing and touches only `proposals/`; canonical data still requires human approval.
 - Local GGUF helpers are tracked: `scripts/download-model.sh` downloads a checksummed Qwen 1.5B Q4_K_M file by default, and `scripts/llm-up.sh` starts the `llm` llama.cpp Compose profile with a read-only model mount. The model itself is untracked. The 1.5B file is a smoke test; the 3B file is not practical on 1 CPU.
@@ -132,11 +132,20 @@ Results:
 - No canonical write, proposal, approval or commit behaviour changed.
 - Checks in this unit: `134 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
 
+## Genogram Temporal Review Unit (2026-11-04)
+
+- Added `tests/fixtures/genogram_family.json`, a realistic synthetic family with two spouse intervals for the same pair, duplicate Assertion/Relationship parent records, an archived spouse and an unsupported lived-in relation.
+- Decision: one edge per exact `(subject, predicate, object)` triple; temporal intervals do not split edges; no `--at` filter yet.
+- Deduplicated entries now carry `valid_times` and `transaction_times` aggregated across all contributing records, plus representative singular fields.
+- Representative selection: Relationship before Assertion, then latest `transaction_time.recorded_at`, then smallest `record_id`.
+- Closed relations are filtered before deduplication. The fixture test validates records and checks aggregation, recency, archived exclusion and warnings.
+- Checks in this unit: `135 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
+
 ## Next Objective
 
 The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
 
-1. Keep `genogram` experimental until real-fixture behaviour is reviewed; duplicate representations are deduplicated, Relationship temporal fields are modelled and timeline scopes are complete for the current model.
+1. Keep `genogram` experimental until reviewed on real user data; duplicate representations are deduplicated, temporal intervals are aggregated and timeline scopes are complete for the current model.
 2. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
 3. Keep the local GGUF helpers honest: they wire inference only. The 1.5B model is a smoke test, the 3B model is impractical on 1 CPU, and qwen3-4b is the single quality reference. Always dry-run generated proposals.
 4. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.
@@ -271,7 +280,7 @@ A skipped or failed remote pull is not a blocker for the offline container deliv
 - Host bind path mismatch with the development container; the helper's `/hosttmp/...` path is not the host path.
 - LLM output can be envelope-valid but record-invalid; always dry-run. Never treat generation as approval.
 - The API key must stay in the environment; `.env` is gitignored and excluded from the build context.
-- `genogram` is experimental. It reads complete endpoint-aware Relationship records and `relation:*` assertions, deduplicates equivalent triples, exposes optional temporal fields and warns on bare Relationship records with incomplete endpoints.
+- `genogram` is experimental. It reads complete endpoint-aware Relationship records and `relation:*` assertions, deduplicates equivalent triples, aggregates temporal intervals, and warns on bare Relationship records with incomplete endpoints. There is no `--at` filter yet.
 - JSON-LD export is a minimal `@id`/`@type` projection, not a full RDF round-trip; `records_from_jsonld` reverses that projection only.
 - Markdown export treats YAML front matter as the source of truth; body-only edits are not re-imported.
 - `import` only creates pending proposals; it never writes canonical data. Records that require evidence fail the import unless an imported capture or `--evidence` is supplied.

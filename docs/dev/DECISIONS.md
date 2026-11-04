@@ -211,7 +211,7 @@
 ## Genogram Deduplication (2026-11-04)
 
 - Equivalent relations are grouped by the exact `(subject, predicate, object)` triple. The key deliberately excludes record type, status and evidence so an Assertion and a Relationship describing the same link collapse to one output entry.
-- A Relationship representative is preferred over an Assertion because Relationship is the dedicated canonical relation type. Ties within the same record type are resolved by sorted `record_id`, keeping output deterministic regardless of filesystem order.
+- A Relationship representative is preferred over an Assertion because Relationship is the dedicated canonical relation type. This unit used sorted `record_id` as a deterministic tie-break; the temporal review below supersedes it with latest transaction time before `record_id`.
 - The merged entry keeps the representative's existing keys (`assertion_id` or `relationship_id`, plus `record_id` and `record_type`) and adds `related_ids`, the sorted IDs of every contributing record. This is additive and preserves existing consumers.
 - Distinct predicates between the same endpoints remain distinct. Deduplication is not a semantic merge and does not decide which conflicting relation is true.
 - Closed-status filtering and person scoping still happen before deduplication. No schema change, canonical write, proposal, approval or commit behaviour changed.
@@ -224,3 +224,13 @@
 - `genogram` exposes both fields when the source record provides them. Missing fields become `null`, so consumers can distinguish absent temporal data from a populated interval.
 - Deduplication remains keyed by the exact relation triple. The representative supplies temporal fields and `related_ids` preserves every contributing record; this unit does not attempt semantic merging of different intervals.
 - No canonical write, proposal, approval or commit behaviour changed.
+
+## Genogram Temporal Semantics (2026-11-04)
+
+- A genogram edge is identified by the exact `(subject, predicate, object)` triple. Different valid intervals for the same triple remain one edge; the genogram is a structural view, not a timeline.
+- Temporal intervals do not enter the deduplication key. Splitting by interval would prevent Assertion/Relationship deduplication and produce parallel family edges for the same relationship.
+- All distinct `valid_time` and `transaction_time` objects from contributing records are aggregated into `valid_times` and `transaction_times`, sorted and deduplicated. This avoids losing intervals when one representative is chosen.
+- Singular `valid_time`/`transaction_time` remain representative fields for compatibility. Consumers that need complete temporal history use the aggregated arrays.
+- Representative selection is Relationship before Assertion, then the latest `transaction_time.recorded_at`, then the smallest `record_id`. Type priority keeps the canonical relation record; recency makes the singular temporal fields meaningful.
+- No `--at` filter is added in this unit. Temporal filtering needs explicit overlap semantics for year/month/decade/approximate precision and open intervals, so it is deferred.
+- Closed records are filtered before aggregation. The genogram remains experimental until reviewed on real user data.

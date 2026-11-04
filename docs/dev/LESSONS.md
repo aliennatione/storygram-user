@@ -131,3 +131,8 @@
 - Keep new Relationship temporal fields optional for backward compatibility, but require `transaction_time.recorded_at` when the object is present; optionality is not permission for a half-shaped interval.
 - When deduplication keeps one representative, temporal fields on the representative can hide different intervals from duplicate records. Preserve `related_ids` and document that this is not a semantic merge.
 - Expose missing temporal fields as `null` in genogram output; omitting the keys would make old and new output shapes harder to distinguish.
+- Do not split genogram edges by temporal interval. It would break Assertion/Relationship deduplication and create parallel family edges for the same relationship.
+- When a structural view chooses one representative, aggregate temporal intervals from every contributing record; a single representative interval silently loses history.
+- Prefer the most recent `transaction_time.recorded_at` as the representative tie-break, not lexical `record_id`; the newest record is more likely to reflect the current representation.
+- Keep type priority before recency when deduplicating Relationship and Assertion: the dedicated canonical type remains the representative even if an assertion was recorded later.
+- Realistic fixtures reveal semantics that unit-level duplicate tests miss. Two spouse intervals for the same pair exposed the difference between structural deduplication and temporal identity.

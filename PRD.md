@@ -432,7 +432,7 @@ The system MUST generate an entity-, place-, collection- or archive-level timeli
 
 ### FR-011 Genogram view
 
-The system MUST generate a structured and human-readable relationship view. Unsupported relation types MUST remain visible as metadata or warnings.
+The system MUST generate a structured and human-readable relationship view. An exact `(subject, predicate, object)` triple is one relationship edge even when multiple records describe it; all distinct valid and transaction intervals from those records MUST remain available in the view. Unsupported relation types MUST remain visible as metadata or warnings.
 
 ### FR-012 Narrative view
 

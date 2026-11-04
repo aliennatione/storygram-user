@@ -139,7 +139,32 @@ def _deduplicate(relations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return merged
 
 
-def build_genogram(root: Path, person_id: str) -> dict[str, Any]:
+def _year_value(value: Any) -> int | None:
+    if not isinstance(value, str) or len(value) < 4:
+        return None
+    prefix = value[:4]
+    if not prefix.isdigit():
+        return None
+    try:
+        return int(prefix)
+    except ValueError:
+        return None
+
+
+def _intervals_overlap_at(valid_times: list[dict[str, Any]], at_year: int) -> bool:
+    if not valid_times:
+        return True
+    for value in valid_times:
+        if not isinstance(value, dict):
+            continue
+        start = _year_value(value.get("start"))
+        end = _year_value(value.get("end"))
+        if (start is None or start <= at_year) and (end is None or end >= at_year):
+            return True
+    return False
+
+
+def build_genogram(root: Path, person_id: str, at: str | None = None) -> dict[str, Any]:
     relations = []
     warnings: set[str] = set()
 
@@ -166,8 +191,17 @@ def build_genogram(root: Path, person_id: str) -> dict[str, Any]:
         if entry is not None:
             relations.append(entry)
 
+    merged = _deduplicate(relations)
+    at_year = _year_value(at) if at else None
+    if at_year is not None:
+        merged = [
+            relation
+            for relation in merged
+            if _intervals_overlap_at(relation.get("valid_times") or [], at_year)
+        ]
     return {
         "person": person_id,
-        "relations": sorted(_deduplicate(relations), key=lambda item: str(item["record_id"])),
+        "at": at,
+        "relations": sorted(merged, key=lambda item: str(item["record_id"])),
         "warnings": sorted(warnings),
     }

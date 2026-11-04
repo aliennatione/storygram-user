@@ -2287,12 +2287,15 @@ def render_timeline(root: Path, query: str = "") -> tuple[int, str]:
 
 def render_genogram(root: Path, query: str = "") -> tuple[int, str]:
     person_id = _query_value(query, "id")
+    at_value = _query_value(query, "at")
     records, load_errors = validate_mod.load_records(root)
     known_ids = _known_ids(records)
     form = f"""
 <form class="filters" method="get" action="/genogram">
   <label>{_t("Person ID")}
     <input name="id" value="{_esc(person_id)}" placeholder="person:..."></label>
+  <label>{_t("At (year)")}
+    <input name="at" value="{_esc(at_value)}" placeholder="1990"></label>
   <button type="submit">{_t("Show genogram")}</button>
 </form>
 """
@@ -2310,7 +2313,7 @@ def render_genogram(root: Path, query: str = "") -> tuple[int, str]:
             f'<p><a class="button" href="/genogram">{_t("Back to genogram")}</a></p>',
         )
 
-    result = build_genogram(root, person_id)
+    result = build_genogram(root, person_id, at=at_value or None)
     rows = []
     for relation in result["relations"]:
         supported = relation.get("supported")

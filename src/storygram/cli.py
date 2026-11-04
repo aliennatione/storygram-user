@@ -270,13 +270,14 @@ def timeline(
 
 @main.command()
 @click.argument("record_id")
+@click.option("--at", "at_value", default=None, help="Filter relations overlapping this year/date")
 @click.option("--archive", "archive_path", type=click.Path(exists=True), default=None)
 @click.option("--json", "as_json", is_flag=True)
-def genogram(record_id: str, archive_path: str | None, as_json: bool) -> None:
+def genogram(record_id: str, at_value: str | None, archive_path: str | None, as_json: bool) -> None:
     """Generate an experimental genogram from relation:* assertions."""
     from .genogram import build_genogram
 
-    result = build_genogram(_root(archive_path), record_id)
+    result = build_genogram(_root(archive_path), record_id, at=at_value)
     if not as_json:
         for warning in result["warnings"]:
             click.echo(f"WARNING: {warning}", err=True)

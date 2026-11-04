@@ -117,3 +117,8 @@
 - Closed relations need filtering in genogram too. Adding relationship support without `superseded`/`archived`/`rejected` filtering would regress the same invariant already fixed for timelines.
 - Preserve existing genogram keys such as `assertion_id` when adding Relationship support; add `record_id`/`record_type` and a type-specific key instead of breaking consumers.
 - When a schema gains a capability, remove stale prompt text that says the capability is missing, even if the conservative generation guard remains.
+- Collection timelines need a membership convention because the Collection schema has no members. Using a `relation:member_of` Assertion keeps membership reviewable and avoids a schema migration.
+- Keep membership expansion one level deep unless nested collections are explicitly modelled; recursive expansion needs a cycle guard and a clear semantic decision.
+- `timeline --all` and a record ID must be mutually exclusive. A Click argument with `required=False` plus an explicit validation check prevents an accidental archive timeline.
+- An archive-level empty result is not an unknown record. Handle `--all` before the `_record_exists` lookup so an empty archive exits successfully.
+- Reuse the same closed-status filter for every timeline scope; adding a new scope must not bypass superseded/archived/rejected exclusion.

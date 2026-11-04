@@ -510,6 +510,7 @@ storygram get ID
 storygram list --type Person
 storygram search QUERY
 storygram timeline ID
+storygram timeline --all
 storygram genogram ID
 storygram conflicts [--status open]
 storygram export --format json

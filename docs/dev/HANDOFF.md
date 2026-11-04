@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-04
 Branch: `feature/agent-proposal-flow`
-Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, then endpoint-aware Relationship records on 2026-11-04. Use `git log --oneline -20`.
+Recent commits: API/provider/withdraw series, legacy command hardening, local GGUF helpers, export/import/capture units, endpoint-aware Relationship records, then collection/archive timeline scopes on 2026-11-04. Use `git log --oneline -20`.
 
 ## Compacted Context
 
@@ -10,7 +10,7 @@ Recent commits: API/provider/withdraw series, legacy command hardening, local GG
 - Implemented: all 15 schemas, registry-driven validation, atomic apply/rollback, CLI proposal lifecycle, web create/edit/generate/review, JSON API, and Ollama plus OpenAI-compatible providers.
 - Agent API can create/list/read/update/generate/reject/withdraw pending proposals. Approval is intentionally UI/CLI-only; there is no approve endpoint and no auto-approval path.
 - `withdrawn` is a terminal status alongside `rejected` and `applied`; closing a proposal archives it or marks it without touching canonical data.
-- Python baseline: `124 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
+- Python baseline: `129 passed`; ruff/format/mypy clean; Playwright edit/approve/reject flow passing.
 - Relationship records now carry an optional all-or-nothing `subject`/`predicate`/`object` triple, and `genogram` reads complete records alongside `relation:*` assertions. It remains experimental.
 - Export round-trips are implemented: JSON-LD/YAML/Markdown export plus reversible module parsers and tests. JSON/JSON-LD/YAML are lossless at record level; Markdown uses YAML front matter as source of truth.
 - Safe import is implemented: `storygram import FILE` wraps JSON/JSON-LD/YAML/Markdown exports in a schema-validated, create-only pending proposal. It runs the approval dry-run planner before writing and touches only `proposals/`; canonical data still requires human approval.
@@ -104,11 +104,20 @@ Results:
 - No canonical write path, approval gate or proposal behavior changed.
 - Checks in this unit: `124 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
 
+## Timeline Scopes Unit (2026-11-04)
+
+- `build_timeline(root)` now builds an archive-level timeline; `build_timeline(root, record_id)` still builds entity/place timelines.
+- `storygram timeline --all` exposes the archive-level scope. `--all` and a record ID are mutually exclusive and one is required.
+- A collection timeline includes assertions about the collection and about records that assert `relation:member_of` the collection. Membership is one level deep and is modelled with normal Assertions, so no schema change was needed.
+- Closed assertions stay excluded in every scope; sorting and evidence fields are unchanged.
+- Tests cover archive inclusion, collection members, closed membership, CLI scope validation and the empty-archive message.
+- Checks in this unit: `129 passed`, ruff/format/mypy clean, Playwright edit/approve/reject passed.
+
 ## Next Objective
 
 The legacy command audit is complete. Continue with the remaining product gaps without redesigning the approval gate.
 
-1. Extend timelines to collection/archive level (place timelines already match object-side assertions). Keep `genogram` experimental until reviewed against real fixtures.
+1. Keep `genogram` experimental until reviewed against real fixtures; timeline scopes are complete for the current model.
 2. Keep approval UI/CLI-only. An advisory, non-applying review endpoint is still open for discussion.
 3. Keep the local GGUF helpers honest: they wire inference only. The 1.5B model is a smoke test, the 3B model is impractical on 1 CPU, and qwen3-4b is the single quality reference. Always dry-run generated proposals.
 4. Keep bilingual docs in sync and re-run Python, lint, format, mypy and Playwright checks.

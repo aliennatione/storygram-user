@@ -5,7 +5,7 @@ Last updated: 2026-11-04
 ## Git
 
 - Branch: `feature/agent-proposal-flow`
-- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support on 2026-11-04; see `git log --oneline -20`.
+- Recent commits: prompt hardening, export round-trips (`ccb15ef`, `db9f54e`), JSON parser and safe import (`5524000`, `7dcc20d`, `90263a3`), checksummed capture metadata (`9e143df`, `23ea61b`), then endpoint-aware Relationship records and genogram support, followed by collection/archive timeline scopes on 2026-11-04; see `git log --oneline -20`.
 - Web generation, container files, bilingual docs, pending editing and the JSON API are implemented.
 - Proposal engine, CLI, local web UI, Playwright e2e tests, LLM adapter and container files are present.
 - The JSON API now supports generate, reject and withdraw; there is still no approve endpoint.
@@ -80,7 +80,7 @@ Last updated: 2026-11-04
 - `export` uses the registry, sorts by ID, fails on malformed JSON, adds `--archive`, excludes records without visibility when filtering, and emits a minimal JSON-LD `@id`/`@type` graph.
 - `rebuild` and `search` now use an idempotent SQLite/FTS5 index with a signature check, exact ID/type matching, content fallback, deterministic ordering and reports for malformed records.
 - `conflicts` merges explicit and assertion-derived contradictions, applies status filters to both, deduplicates unordered pairs and includes both assertion records plus evidence.
-- `timeline` excludes superseded/archived/rejected assertions, sorts by valid-time start, includes evidence fields and distinguishes unknown records from known records with no entries.
+- `timeline` excludes superseded/archived/rejected assertions, sorts by valid-time start, includes evidence fields and distinguishes unknown records from known records with no entries. It now supports entity, place, collection and archive scopes.
 - `genogram` is explicitly experimental, scopes relations to `relation:*` assertions for the requested person, marks unsupported predicates and ignores unscoped Relationship records.
 - `get` and `list` now accept `--archive`, matching the documented examples.
 - New tests: `test_ingest.py` CLI coverage, `test_export.py`, `test_search.py`, `test_conflicts.py`, `test_timeline.py`, `test_genogram.py`, `test_read_cli.py`.
@@ -93,12 +93,12 @@ Last updated: 2026-11-04
 - Model-quality unit: `qwen3-4b` is the single reference model. The prompt now produces dry-run-valid proposals for Italian, English and short captures. The local 1.5B model remains a smoke test; the local 3B model was stopped after it produced no tokens in more than 25 minutes on 1 CPU.
 - Export round-trip unit is implemented and documented: JSON/JSON-LD/YAML/Markdown exports plus reversible module parsers.
 - Safe import and capture metadata are implemented: an export becomes a validated create-only pending proposal, and `ingest` writes a checksummed inbox sidecar.
-- Relationship records now model optional `subject`/`predicate`/`object` endpoint triples, and `genogram` reads complete Relationship records as well as `relation:*` assertions. The next product work unit is higher-level place/collection/archive timelines.
+- Relationship records now model optional `subject`/`predicate`/`object` endpoint triples, and `genogram` reads complete Relationship records as well as `relation:*` assertions.
+- Timelines now support entity, place, collection and archive scopes. Collection timelines include direct `relation:member_of` members.
 
 ## Next Steps
 
-1. Extend timelines to collection/archive level (place timelines already match assertions whose object is the place).
-2. Keep `genogram` experimental until the endpoint-aware output is reviewed against real fixtures; keep approval UI/CLI-only and consider advisory (non-applying) model review later.
+1. Keep `genogram` experimental until the endpoint-aware output is reviewed against real fixtures; keep approval UI/CLI-only and consider advisory (non-applying) model review later.
 3. Re-run Python/lint/format/mypy and Playwright checks after any change; keep bilingual docs in sync.
 4. Keep `qwen3-4b` as the quality reference and do not switch models on the server during a review session. Always dry-run generated proposals before approval.
 5. Run the optional Ollama container profile only when network/time permit; it remains unverified.
@@ -154,6 +154,15 @@ Last updated: 2026-11-04
 - Inbox or metadata-directory preparation failures are reported as `CaptureError` instead of leaking a traceback.
 - MIME type is a best-effort guess from the filename and can be `null`.
 
+## Timeline Scopes (2026-11-04)
+
+- `build_timeline(root, None)` builds an archive-level timeline over every open assertion; `storygram timeline --all` exposes it.
+- A collection timeline includes assertions about the collection itself and about records that assert `relation:member_of` the collection. Membership is one level deep and is expressed as a normal Assertion, so no canonical schema change was needed.
+- `storygram timeline ID` still requires an ID; `--all` and an ID are mutually exclusive and one of them is required.
+- Closed assertions remain excluded in every scope. Sorting by valid-time start then assertion ID and evidence fields are unchanged.
+- Tests cover archive-level inclusion, collection membership, closed membership, CLI scope selection, conflicting/missing scope errors and the empty-archive message. Full suite is now `129 passed`.
+- This unit is read-only: no ingestion, proposal, approval or canonical write behavior changed.
+
 ## Relationship Endpoints (2026-11-04)
 
 - `schema/relationship.schema.json` and its root duplicate now model an optional endpoint triple: `subject`, `predicate` (`relation:*`) and `object`.
@@ -163,11 +172,11 @@ Last updated: 2026-11-04
 - Closed relations (`superseded`, `archived`, `rejected`) are skipped for both record kinds. Output keeps `assertion_id` for assertions, adds `relationship_id` for Relationships, and always includes `record_id`/`record_type`.
 - Generation still prefers Assertions; the prompt no longer claims the schema has no endpoints but keeps the `NEVER create Relationship records` guard for model output.
 - This unit is read-only for canonical data: no ingestion, proposal, approval or commit behavior changed.
-- Tests cover endpoint validation, complete/incomplete Relationship records, person scoping, closed relations and the CLI warning path. Full suite is now `124 passed`.
+- Tests cover endpoint validation, complete/incomplete Relationship records, person scoping, closed relations and the CLI warning path. Full suite was `124 passed` for that unit.
 
 ## Checks
 
-- `PYTHONPATH=/data/src python -m pytest`: `124 passed`.
+- `PYTHONPATH=/data/src python -m pytest`: `129 passed`.
 - `npm run test:e2e`: Playwright edit, approve and reject flows passed.
 - `ruff check src tests`: passed.
 - `ruff format --check src tests`: passed.
@@ -222,7 +231,7 @@ Last updated: 2026-11-04
 - `import` turns an export into a create-only pending proposal; it never writes canonical data. Records whose type requires evidence need either an imported Episode/Source/Annotation or `--evidence`; otherwise the import fails at validation.
 - `genogram` remains experimental: it now reads endpoint-aware Relationship records and `relation:*` assertions, but duplicate relation representations and real-fixture review are still open.
 - Relationship endpoints are optional as a group; bare legacy records remain valid but produce a genogram warning because they cannot be scoped.
-- `timeline` covers entity/place matches only; collection/archive-level timelines remain open.
+- Timeline collection membership is expressed through `relation:member_of` assertions, one level deep; nested collections and Collection `member_ids` are not modelled.
 - Browser testing on Alpine uses Node Playwright with system Chromium; Python Playwright wheels are not musllinux-compatible.
 - The web UI and JSON API have no authentication and bind to `0.0.0.0`; use only in the controlled container/host mapping.
 - The API cannot approve; approval remains UI/CLI only.

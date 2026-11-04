@@ -197,3 +197,13 @@
 - Genogram stays experimental. Endpoint modelling is a prerequisite, not a promotion: duplicate representations, temporal validity and real-fixture review remain open.
 - Generation continues to prefer Assertions. The prompt no longer states that Relationship has no endpoints, but still forbids model-generated Relationship records to keep the proposal path conservative.
 - This is a read-only product increment: no canonical write, proposal, approval or commit behavior changed.
+
+## Timeline Scopes (2026-11-04)
+
+- Timeline scope is selected by the existing record ID or by `--all`; the two are mutually exclusive and one is required. This keeps the documented `timeline ID` command while adding an explicit archive-level mode.
+- Entity and place timelines keep the existing subject/object match. A collection timeline additionally includes assertions about records that assert `relation:member_of` the collection.
+- Collection membership is expressed as a normal Assertion, not a new Collection schema field. Facts already belong in Assertions, and this avoids a schema migration while keeping membership reviewable through proposals.
+- Membership expansion is one level deep. Nested collections and Collection `member_ids` are intentionally out of scope for this unit.
+- Archive-level timelines include every open assertion. Closed assertions (`superseded`, `archived`, `rejected`) remain excluded in all scopes.
+- `timeline --all` succeeds on an empty archive and reports that there are no entries; an unknown record ID still fails with `Unknown record`.
+- This is a read-only product increment: no canonical write, proposal, approval or commit behavior changed.

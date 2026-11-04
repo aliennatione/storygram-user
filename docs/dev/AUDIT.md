@@ -395,3 +395,27 @@ Close the Relationship endpoint gap that blocks a real genogram, without changin
 1. Keep Relationship endpoints optional-but-complete so existing archives do not break while new records are fully modelled.
 2. Keep genogram experimental until duplicate representations and temporal validity are reviewed against real fixtures.
 3. Next product gap: collection/archive-level timelines; place timelines already work through object-side assertion matches.
+
+## 2026-11-04 - collection and archive timelines
+
+### Current objective
+
+Close FR-010 by extending the deterministic timeline from entity/place matches to collection and archive scopes, without changing canonical data or the approval gate.
+
+### Point of situation
+
+- `build_timeline(root, record_id)` already matched assertions on either side of the requested entity, so place timelines worked through object-side matches.
+- `build_timeline(root)` now builds an archive-level timeline over every open assertion; `storygram timeline --all` exposes it.
+- A collection timeline includes assertions about the collection and assertions about records that assert `relation:member_of` the collection. Membership is a normal Assertion, so no schema change was required.
+- Membership expansion is one level deep; nested collections remain open.
+- `--all` and a record ID are mutually exclusive and one is required. The empty archive case is handled separately from the unknown-record case.
+- Closed assertions remain excluded in all scopes; sorting by valid-time start then assertion ID and evidence fields are unchanged.
+- Tests cover archive inclusion, collection members, closed membership, CLI scope validation and the empty-archive message.
+- Full suite is `129 passed`; ruff, format, mypy and Playwright E2E pass.
+- No canonical write path, proposal flow, approval gate or commit behavior changed.
+
+### Calibration
+
+1. Keep collection membership in Assertions unless a reviewed Collection membership model is introduced.
+2. Keep all timeline scopes subject to the same closed-status filter and deterministic ordering.
+3. Next product gap: keep `genogram` experimental and review duplicate relationship representations; timelines are complete for the current model.

@@ -489,6 +489,13 @@ def render_home(root: Path) -> str:
 <input type="hidden" name="url" value="http://100.64.0.8:8080">
 <p><button class="primary" type="submit">{_t("Generate proposal")}</button></p>
 </form>
+<form method="post" action="/proposals/generate" style="margin-top:8px;">
+<input type="hidden" name="source" value="My grandmother lived near the station and worked at the factory.">
+<input type="hidden" name="provider" value="openai">
+<input type="hidden" name="model" value="qwen3-4b">
+<input type="hidden" name="url" value="http://100.64.0.8:8080">
+<button type="submit">{_t("Try with sample story")}</button>
+</form>
 </div>
 {status}
 <h2>{_t("Review queue")}</h2>

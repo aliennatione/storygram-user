@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storygram.local/schema/proposal.schema.json",
+  "title": "Storygram Proposal",
+  "description": "A reviewable set of explicit operations that can only mutate canonical data after human approval.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "status", "created_at", "updated_at", "operations"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^proposal:[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "type": {"const": "Proposal"},
+    "status": {"type": "string", "enum": ["draft", "proposed", "under_review", "approved", "rejected", "withdrawn", "merged", "archived"]},
+    "title": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "target_ids": {"type": "array", "items": {"$ref": "#/$defs/recordRef"}, "uniqueItems": true},
+    "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidenceRef"}, "uniqueItems": true},
+    "rationale": {"type": "string"},
+    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "approval_state": {"type": "string"},
+    "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/operation"}},
+    "applied_at": {"type": "string", "format": "date-time"},
+    "applied_commit": {"type": "string"},
+    "notes": {"type": "string"}
+  },
+  "$defs": {
+    "recordRef": {"type": "string", "pattern": "^(episode|assertion|person|organization|place|period|event|relationship|source|media|annotation|narrative|collection|proposal|conflict):[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "evidenceRef": {"type": "string", "pattern": "^(episode|source|annotation):[A-Za-z0-9][A-Za-z0-9._~-]*$"},
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "record_type"],
+      "properties": {
+        "op": {"type": "string", "enum": ["create", "update_metadata", "supersede", "archive"]},
+        "record_type": {"type": "string", "enum": ["Episode", "Assertion", "Person", "Organization", "Place", "Period", "Event", "Relationship", "Source", "MediaAsset", "Annotation", "Narrative", "Collection", "Conflict"]},
+        "target_id": {"$ref": "#/$defs/recordRef"},
+        "record": {
+          "type": "object",
+          "required": ["id", "type"],
+          "properties": {"id": {"type": "string"}, "type": {"type": "string"}}
+        },
+        "fields": {"type": "object", "minProperties": 1},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidenceRef"}, "uniqueItems": true},
+        "rationale": {"type": "string"}
+      },
+      "allOf": [
+        {"if": {"properties": {"op": {"const": "create"}}}, "then": {"required": ["record"], "not": {"anyOf": [{"required": ["target_id"]}, {"required": ["fields"]}]}}},
+        {"if": {"properties": {"op": {"const": "update_metadata"}}}, "then": {"required": ["target_id", "fields"], "not": {"required": ["record"]}}},
+        {"if": {"properties": {"op": {"const": "supersede"}}}, "then": {"required": ["target_id", "record"], "not": {"required": ["fields"]}}},
+        {"if": {"properties": {"op": {"const": "archive"}}}, "then": {"required": ["target_id"], "not": {"anyOf": [{"required": ["record"]}, {"required": ["fields"]}]}}}
+      ]
+    }
+  }
+}

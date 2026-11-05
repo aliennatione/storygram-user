@@ -2594,9 +2594,10 @@ def render_generate_form(
     model: str | None = None,
     base_url: str | None = None,
     provider: str | None = None,
+    api_key: str | None = None,
 ) -> str:
     try:
-        config = provider_config(provider, model, base_url)
+        config = provider_config(provider, model, base_url, api_key)
     except LLMAdapterError:
         config = ProviderConfig(provider=provider or "ollama")
     intro = _t(
@@ -2620,6 +2621,8 @@ def render_generate_form(
 <input name="model" value="{_esc(config.model)}" style="padding:6px"></label>
 <label>{_t("LLM URL")}
 <input name="url" value="{_esc(config.base_url)}" style="padding:6px; width:20rem"></label>
+<label>{_t("API key (optional)")}
+<input name="api_key" type="password" value="{_esc(api_key or config.api_key or '')}" style="padding:6px; width:20rem"></label>
 </p>
 <p>
   <button class="primary" type="submit">{_t("Generate pending proposal")}</button>
@@ -3493,20 +3496,21 @@ class StorygramHandler(BaseHTTPRequestHandler):
             model = (form.get("model") or [""])[0].strip() or None
             base_url = (form.get("url") or [""])[0].strip() or None
             base_url = base_url or (form.get("ollama_url") or [""])[0].strip() or None
+            api_key = (form.get("api_key") or [""])[0].strip() or None
             if not source.strip():
                 self._send(
                     400,
                     render_generate_form(
-                        source, [_t("Source text is empty")], model, base_url, provider_name
+                        source, [_t("Source text is empty")], model, base_url, provider_name, api_key
                     ),
                 )
                 return
             try:
-                config = provider_config(provider_name, model, base_url)
+                config = provider_config(provider_name, model, base_url, api_key)
             except LLMAdapterError as exc:
                 self._send(
                     400,
-                    render_generate_form(source, [str(exc)], model, base_url, provider_name),
+                    render_generate_form(source, [str(exc)], model, base_url, provider_name, api_key),
                 )
                 return
             factory = cast(StorygramServer, self.server).provider_factory
@@ -3518,7 +3522,7 @@ class StorygramHandler(BaseHTTPRequestHandler):
                 self._send(
                     502,
                     render_generate_form(
-                        source, [str(exc)], config.model, config.base_url, config.provider
+                        source, [str(exc)], config.model, config.base_url, config.provider, api_key
                     ),
                 )
                 return

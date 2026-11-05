@@ -480,9 +480,15 @@ def render_home(root: Path) -> str:
 <h1>Storygram</h1>
 <p class="muted">{_t("Local-first review surface. Canonical changes require approval.")}</p>
 <div class="card" style="margin:16px 0;">
-<h2>{_t("Start here")}</h2>
-<p>{_t("Paste a memory or interview and let AI create a reviewable proposal.")}</p>
-<a class="button primary" href="/proposals/generate">{_t("Generate with AI")}</a>
+<h2>{_t("Tell your story")}</h2>
+<p>{_t("Paste a memory or interview. AI will structure people, places, events, relationships and sources into a reviewable proposal.")}</p>
+<form method="post" action="/proposals/generate">
+<textarea name="source" placeholder="{_t("Paste an interview, note or memory...")}" style="min-height:180px;"></textarea>
+<input type="hidden" name="provider" value="openai">
+<input type="hidden" name="model" value="qwen3-4b">
+<input type="hidden" name="url" value="http://100.64.0.8:8080">
+<p><button class="primary" type="submit">{_t("Generate proposal")}</button></p>
+</form>
 </div>
 {status}
 <h2>{_t("Review queue")}</h2>

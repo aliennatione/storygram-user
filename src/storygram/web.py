@@ -169,6 +169,17 @@ th {{ background:#1f2937; }}
 button, .button {{ background:var(--accent); color:#052e16; border:none; border-radius:8px; padding:8px 14px; font-weight:600; }}
 .error {{ background:#7f1d1d; color:#fecaca; border-left:4px solid #ef4444; }}
 .ok {{ background:#14532d; color:#bbf7d0; border-left:4px solid #22c55e; }}
+body { max-width: 100%; }
+main { padding: 2rem; }
+header { position: sticky; top: 0; z-index: 10; }
+nav a { padding: 6px 10px; border-radius: 8px; transition: background .2s; }
+nav a:hover { background: #ffffff20; }
+.card, .panel { background: #ffffff10; border: 1px solid #ffffff20; border-radius: 16px; padding: 1.25rem; margin: 1rem 0; backdrop-filter: blur(6px); }
+table { border-radius: 12px; overflow: hidden; }
+th, td { padding: 12px; }
+button, .button { transition: transform .1s, opacity .2s; }
+button:hover, .button:hover { transform: translateY(-1px); opacity: .9; }
+form input, form select, textarea { border-radius: 10px; padding: 10px; }
 :root {{ color-scheme: light dark; --line:#d0d7de; --muted:#57606a; --accent:#0969da; }}
 * {{ box-sizing: border-box; }}
 body {{ margin:0; font-family: system-ui, sans-serif; line-height:1.45; }}

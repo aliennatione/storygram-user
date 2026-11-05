@@ -156,7 +156,7 @@ def _layout(title: str, body: str) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{_esc(title)} - Storygram</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <style>
 :root {{ color-scheme: light dark; --line:#d0d7de; --muted:#57606a; --accent:#0969da; }}
 * {{ box-sizing: border-box; }}

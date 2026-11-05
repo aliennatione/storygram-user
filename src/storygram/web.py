@@ -445,6 +445,11 @@ def render_home(root: Path) -> str:
     body = f"""
 <h1>Storygram</h1>
 <p class="muted">{_t("Local-first review surface. Canonical changes require approval.")}</p>
+<div class="card" style="margin:16px 0;">
+<h2>{_t("Start here")}</h2>
+<p>{_t("Paste a memory or interview and let AI create a reviewable proposal.")}</p>
+<a class="button primary" href="/proposals/generate">{_t("Generate with AI")}</a>
+</div>
 {status}
 <h2>{_t("Review queue")}</h2>
 <table><thead><tr><th>{_t("Pending")}</th><th>{_t("Merged")}</th>

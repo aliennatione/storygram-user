@@ -23,11 +23,11 @@ from . import proposals as proposals_mod
 from . import validate as validate_mod
 from .registry import TYPE_BY_NAME, iter_reference_strings
 
-DEFAULT_PROVIDER = "ollama"
+DEFAULT_PROVIDER = "openai"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_OPENAI_MODEL = "qwen3-4b"
-DEFAULT_OPENAI_URL = "http://127.0.0.1:8080"
+DEFAULT_OPENAI_URL = "http://100.64.0.8:8080"
 DEFAULT_LLAMACPP_MODEL = DEFAULT_OPENAI_MODEL
 DEFAULT_LLAMACPP_URL = DEFAULT_OPENAI_URL
 OPENAI_ALIASES = {

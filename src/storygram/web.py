@@ -156,8 +156,18 @@ def _layout(title: str, body: str) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{_esc(title)} - Storygram</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+
 <style>
+:root {{ --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#94a3b8; --accent:#22c55e; --line:#1f2937; }}
+body {{ background:linear-gradient(135deg,#0f172a,#111827); color:var(--text); font-family:Inter,system-ui,sans-serif; }}
+header {{ background:#111827cc; backdrop-filter:blur(8px); border-bottom:1px solid var(--line); }}
+main {{ max-width:1200px; }}
+.card {{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:0 10px 30px #0005; }}
+table {{ background:#111827; border-radius:10px; overflow:hidden; }}
+th {{ background:#1f2937; }}
+button, .button {{ background:var(--accent); color:#052e16; border:none; border-radius:8px; padding:8px 14px; font-weight:600; }}
+.error {{ background:#7f1d1d; color:#fecaca; border-left:4px solid #ef4444; }}
+.ok {{ background:#14532d; color:#bbf7d0; border-left:4px solid #22c55e; }}
 :root {{ color-scheme: light dark; --line:#d0d7de; --muted:#57606a; --accent:#0969da; }}
 * {{ box-sizing: border-box; }}
 body {{ margin:0; font-family: system-ui, sans-serif; line-height:1.45; }}

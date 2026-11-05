@@ -70,3 +70,6 @@ secrets/
 
 # Logs
 *.log
+
+archive/
+.venv/

@@ -150,6 +150,29 @@ def _layout(title: str, body: str) -> str:
         f'<a href="/lang/en?next={next_path}"{en_attr}>EN</a>'
         f'<a href="/lang/it?next={next_path}"{it_attr}>IT</a>'
     )
+    _theme_css = """
+<style>
+[data-theme="light"]{background:#f8fafc;color:#0f172a;}
+[data-theme="dark"]{background:#0f172a;color:#e5e7eb;}
+[data-theme="solarized"]{background:#fdf6e3;color:#657b83;}
+body{transition:background .2s,color .2s;}
+</style>
+"""
+    _theme_script = """<script>
+(function(){
+  const themes=['light','dark','solarized'];
+  const root=document.documentElement;
+  function apply(t){ root.setAttribute('data-theme',t); localStorage.setItem('theme',t); }
+  const saved=localStorage.getItem('theme')||'light';
+  apply(saved);
+  const btn=document.createElement('button');
+  btn.textContent='Theme';
+  btn.style.marginLeft='8px';
+  btn.onclick=function(){ const cur=root.getAttribute('data-theme'); const idx=themes.indexOf(cur); apply(themes[(idx+1)%themes.length]); };
+  const nav=document.querySelector('header nav:last-child');
+  if(nav) nav.prepend(btn);
+})();
+</script>"""
     return f"""<!doctype html>
 <html lang="{lang}">
 <head>
@@ -250,7 +273,7 @@ form input, form select {{
 </header>
 <main>{body}</main>
 </body>
-</html>"""
+</html>""" + _theme_css + _theme_script
 
 
 def _errors_block(errors: list[str]) -> str:

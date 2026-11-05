@@ -159,7 +159,8 @@ def _layout(title: str, body: str) -> str:
 
 <style>
 :root {{ --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#94a3b8; --accent:#22c55e; --line:#1f2937; }}
-body {{ background:linear-gradient(135deg,#0f172a,#111827); color:var(--text); font-family:Inter,system-ui,sans-serif; }}
+body {{ font-family:Inter,system-ui,sans-serif; }}
+@media (prefers-color-scheme: dark) {{ body {{ background:linear-gradient(135deg,#0f172a,#111827); color:#e5e7eb; }} }}
 header {{ background:#111827cc; backdrop-filter:blur(8px); border-bottom:1px solid var(--line); }}
 main {{ max-width:1200px; }}
 .card {{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:0 10px 30px #0005; }}
